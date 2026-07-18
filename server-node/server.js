@@ -61,7 +61,17 @@ function isValidNickname(name) {
 wss.on("connection", (ws) => {
   ws.clientId = "C" + nextClientId++;
   ws.roomId = null;
+  ws.isAlive = true; // Heartbeat용: 살아있는지 표시
   console.log("[connect] client connected:", ws.clientId);
+
+  // 접속하자마자 클라이언트에게 자신의 id를 알려준다.
+  // (클라이언트가 플레이어 목록에서 "나"와 "방장"을 구분하는 데 사용)
+  send(ws, "welcome", { clientId: ws.clientId });
+
+  // Heartbeat: 서버 ping에 대한 브라우저/Unity의 pong 응답을 받으면 살아있다고 표시
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
 
   ws.on("message", (raw) => {
     let msg;
@@ -101,7 +111,9 @@ wss.on("connection", (ws) => {
           break;
         }
         ws.roomId = room.roomId;
-        console.log("[room] created", room.roomId, "by", data.nickname);
+        // 빈자리를 봇으로 채워 항상 5명 유지 (방장 + 봇4)
+        rooms.fillWithBots(room);
+        console.log("[room] created", room.roomId, "by", data.nickname, "(봇으로 5명 채움)");
         // 본인에게만 방 코드 + 재접속 토큰 전달
         send(ws, "room_created", {
           roomId: room.roomId,
@@ -128,7 +140,19 @@ wss.on("connection", (ws) => {
           send(ws, "error_message", { message: "방 비밀번호가 틀렸습니다." });
           break;
         }
+        if (room.status !== "waiting") {
+          send(ws, "error_message", { message: "이미 시작된 방에는 입장할 수 없습니다." });
+          break;
+        }
+        // 사람이 이미 5명이면 봇을 뺄 자리도 없으니 가득 찬 것.
+        if (rooms.humanCount(room) >= 5) {
+          send(ws, "error_message", { message: "방이 가득 찼습니다. (사람 5명)" });
+          break;
+        }
         if (ws.roomId) leaveCurrentRoom(ws);
+
+        // 항상 5명 유지: 자리가 꽉 차 있으면 봇 하나를 빼서 사람이 들어올 자리를 만든다.
+        if (room.players.length >= 5) rooms.removeBot(room);
 
         const result = rooms.addPlayer(room, data.nickname.trim(), ws);
         if (result.error) {
@@ -136,7 +160,9 @@ wss.on("connection", (ws) => {
           break;
         }
         ws.roomId = room.roomId;
-        console.log("[room] joined", room.roomId, "by", data.nickname);
+        // 혹시 5명이 안 됐으면 봇으로 다시 채움 (안전장치)
+        rooms.fillWithBots(room);
+        console.log("[room] joined", room.roomId, "by", data.nickname, "(봇 1명 교체)");
         send(ws, "room_joined", {
           roomId: room.roomId,
           reconnectToken: result.player.reconnectToken,
@@ -149,6 +175,41 @@ wss.on("connection", (ws) => {
       case "leave_room":
         leaveCurrentRoom(ws);
         break;
+
+      // ---- 04단계: 준비 토글 ----
+      case "ready": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room) break;
+        if (room.status !== "waiting") {
+          send(ws, "error_message", { message: "이미 시작된 게임에서는 준비를 바꿀 수 없습니다." });
+          break;
+        }
+        const player = rooms.toggleReady(room, ws.clientId);
+        if (player) {
+          console.log("[ready]", ws.clientId, "=>", player.isReady);
+          broadcast(room, "game_state", rooms.publicState(room));
+        }
+        break;
+      }
+
+      // ---- 04단계: 게임 시작 (방장만, 5명 전원 준비 시) ----
+      case "start_game": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room) break;
+        if (!rooms.isHost(room, ws.clientId)) {
+          send(ws, "error_message", { message: "방장만 게임을 시작할 수 있습니다." });
+          break;
+        }
+        if (!rooms.canStart(room)) {
+          send(ws, "error_message", { message: "5명 전원이 준비해야 시작할 수 있습니다." });
+          break;
+        }
+        room.status = "playing";
+        console.log("[start] room", room.roomId, "게임 시작");
+        broadcast(room, "game_started", { roomId: room.roomId });
+        broadcast(room, "game_state", rooms.publicState(room));
+        break;
+      }
 
       default:
         console.log("[warn] 알 수 없는 type:", msg.type);
@@ -168,11 +229,31 @@ function leaveCurrentRoom(ws) {
   const leftRoomId = ws.roomId;
   ws.roomId = null;
   if (room) {
+    // 대기 중이면 빠진 사람 자리를 봇으로 채워 5명을 유지한다.
+    if (room.status === "waiting") rooms.fillWithBots(room);
     // 방에 사람이 남아있으면 갱신된 상태를 알려준다
     broadcast(room, "game_state", rooms.publicState(room));
   }
   console.log("[room] left", leftRoomId, "by", ws.clientId);
 }
+
+// ---- Heartbeat: 좀비 연결(조용히 끊긴 클라이언트) 감지 ----
+// 주기적으로 모든 클라이언트에 ping을 보낸다.
+// 지난 주기에 pong 응답이 없었던(isAlive=false) 연결은 죽은 것으로 보고 종료한다.
+// (브라우저/Unity의 WebSocket은 서버 ping에 자동으로 pong 응답한다)
+const HEARTBEAT_INTERVAL = 15000; // 15초
+const heartbeat = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      console.log("[heartbeat] 응답 없는 연결 종료:", ws.clientId);
+      return ws.terminate(); // close 이벤트 발생 -> leaveCurrentRoom 처리됨
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, HEARTBEAT_INTERVAL);
+
+wss.on("close", () => clearInterval(heartbeat));
 
 httpServer.listen(PORT, () => {
   console.log(`WebSocket server running on ws://localhost:${PORT}`);

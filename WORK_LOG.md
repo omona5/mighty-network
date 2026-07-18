@@ -122,3 +122,56 @@
     1) 방 생성+토큰 발급 O, 2) 4명 입장 목록 브로드캐스트, 3) 없는 방 에러, 4) 6번째 정원초과 에러(최대5명), 5) 퇴장 시 목록 갱신.
 - **미해결 이슈**: Unity 측 다중 접속 UI 테스트는 사용자가 에디터+브라우저 탭으로 확인 필요.
 - **다음 단계**: 사용자 Unity 확인 → 스텝3 커밋 → 스텝4(준비/게임시작 + Heartbeat).
+
+## 2026-07-18 14:26 (UTC+9)
+
+- **작업 요청**: 스텝4 - 준비 상태 + 5인 게임 시작. 방장 개념(혼합 방식: 방장 두되 전원준비+방장 시작버튼) + 방장 승계 + Heartbeat 보강.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 변경**:
+  - `src/RoomManager.js`: room.hostClientId 추가(첫 입장자=방장, 퇴장 시 players[0] 승계), toggleReady(), canStart()(5명 전원 준비), isHost(), publicState에 clientId/isHost/hostClientId/canStart 포함.
+  - `server.js`: 접속 시 `welcome{clientId}` 전송, `ready` 토글 처리, `start_game`(방장+canStart 검증) → `game_started`+`game_state` 브로드캐스트, playing 상태에선 ready 변경 차단.
+  - `server.js`: Heartbeat 추가 - 15초 주기 ws.ping(), 지난 주기 무응답(isAlive=false) 연결 terminate() → close로 자동 퇴장. (브라우저/Unity WebSocket은 ping에 자동 pong)
+  - `public/test.html`: welcome 처리, 방장 표시/‹나› 표시, 준비 버튼, 방장 전용 시작 버튼(canStart 시 활성), game_started 배너.
+- **Unity 변경**:
+  - `Assets/Scripts/NetworkManager.cs`: welcome로 myClientId 저장, PlayerInfo/GameState에 clientId/isHost/hostClientId/canStart 추가, 준비/시작 버튼(방장+canStart), 방장·나 표시, game_started 처리.
+- **검증(자동 테스트 통과)**: A)방장=첫입장자, B)비방장 시작 차단, C)미준비 시작 차단, D)4명 canStart=false, E)5명 canStart=true, F)방장 시작→전원 game_started+playing, G)방장 퇴장→자동 승계.
+- **계획 문서**: `md_files/04_ready_and_start_game.md`에 방장/시작조건/Heartbeat 수정 메모 추가.
+- **미해결 이슈**: 없음. Unity 다중 접속 UI 확인은 사용자 검증 예정.
+- **다음 단계**: 사용자 Unity 확인 → 스텝4 커밋 → 스텝5(카드 덱/셔플/배분).
+
+## 2026-07-18 14:36 (UTC+9)
+
+- **작업 요청**: 5명 미만(사람)일 때도 게임 시작 가능하도록 봇 도입. 사람 부족 시 봇이 빈자리 채움.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 변경**:
+  - `src/RoomManager.js`: player에 isBot 추가. addBot()(대기중+빈자리, 봇 항상 준비, ws=null, 닉네임 봇N), removeBot()(마지막 봇 제거). 방장 승계는 "사람"만 대상, 사람이 0명이면 방 삭제(봇만 남기지 않음). publicState에 isBot 포함.
+  - `server.js`: add_bot / remove_bot 처리(방장만, 대기 중). start_game은 기존 canStart(5명 전원 준비) 재사용 - 봇은 항상 준비라 사람만 준비하면 시작 가능.
+  - `public/test.html`: 봇 추가/제거 버튼(방장 전용), 플레이어 목록에 [봇] 표시.
+- **Unity 변경**:
+  - `Assets/Scripts/NetworkManager.cs`: add_bot/remove_bot 메시지, PlayerInfo.isBot, 방장 전용 봇 추가/제거 버튼, 목록에 [봇] 표시.
+- **검증(자동 테스트 통과)**: A)사람2명, B)봇3 추가→5명 완성(봇 자동준비), C)비방장 봇추가 차단, D)사람 미준비 시작불가, E)사람 전원준비 canStart=true, F)시작 성공 playing, G)봇 제거, H)방장 퇴장으로 봇만 남으면 방 삭제.
+- **계획 문서**: `md_files/04_ready_and_start_game.md`에 봇 도입 메모 추가.
+- **미해결/후속**: 봇의 실제 카드 플레이 AI는 스텝5~6(카드/턴) 이후 구현 예정.
+- **다음 단계**: 사용자 Unity 확인 → 스텝4(봇 포함) 커밋 → 스텝5(카드 덱/셔플/배분).
+
+## 2026-07-18 14:42 (UTC+9)
+
+- **작업 요청**: 봇 방식을 "수동 추가"에서 "항상 5명 자동 유지"로 변경. 방 생성 시 나+봇4, 사람 입장 시 봇 1명 제거, 사람 퇴장 시 봇 보충.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 변경**:
+  - `src/RoomManager.js`: humanCount(), fillWithBots()(대기 중 5명까지 봇 채움) 추가.
+  - `server.js`: create_room 후 fillWithBots (방장+봇4). join_room: status/humanCount(>=5 거절) 검증 → 자리 있으면 removeBot으로 봇 1명 빼고 사람 추가 후 fillWithBots. leaveCurrentRoom: 대기 중이면 fillWithBots로 봇 보충. 수동 add_bot/remove_bot 핸들러 제거.
+  - `public/test.html`: 봇 추가/제거 버튼 및 관련 로직 제거.
+- **Unity 변경**: `NetworkManager.cs`: AddBot/RemoveBot 메시지·메서드·버튼 제거 (자동이므로).
+- **검증(자동 테스트 통과)**: A)생성=사람1+봇4, B)입장→사람2봇3, C)사람3봇2, D)퇴장→봇보충 5유지, E)사람5봇0, F)6번째 사람 차단, G)사람 전원준비 canStart=true.
+- **계획 문서**: `md_files/04_ready_and_start_game.md` 봇 방식 "항상 5명 유지"로 갱신.
+- **미해결/후속**: 봇 카드 플레이 AI는 스텝5~6 이후.
+- **다음 단계**: 사용자 확인 → 스텝4 커밋 → 스텝5.
+
+## 2026-07-18 14:47 (UTC+9)
+
+- **작업 요청**: 플레이어 목록 정렬 개선 - 사람 입장 시 봇 뒤(3·4·5번 자리)로 밀리고 사람은 위쪽에 오도록.
+- **수정 파일**: `server-node/src/RoomManager.js` - addPlayer에서 사람을 `insertIndex = 사람 수` 위치에 splice 삽입(항상 [사람...][봇...] 순서 유지).
+- **검증**: 생성=오모나/봇1~4, 일모나 입장=오모나/일모나/봇1~3, 이모나 입장=오모나/일모나/이모나/봇1~2. 정상.
+- **주의(운영 메모)**: 테스트 중 `node ... &` 방식으로 서버를 띄웠다가 명령 종료 시 서버가 함께 종료됨 → 이후 block_until_ms:0 백그라운드로 재기동(PID 69109). 서버 정상 실행 확인.
+- **다음 단계**: 사용자 확인 → 스텝4 커밋 → 스텝5(카드 덱/셔플/배분).

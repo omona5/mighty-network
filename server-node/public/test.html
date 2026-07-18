@@ -59,7 +59,10 @@
         (상태: <span id="roomStatus"></span>)</div>
       <div>플레이어 (<span id="playerCount">0</span>/5):</div>
       <ul id="players"></ul>
-      <button id="pingBtn">Ping 보내기</button>
+      <div id="startedBanner" class="hidden" style="color:#06d6a0;font-weight:bold;">게임이 시작되었습니다!</div>
+      <button id="readyBtn">준비 / 준비취소</button>
+      <button id="startBtn" class="hidden">게임 시작 (방장)</button>
+      <button id="pingBtn">Ping</button>
       <button id="leaveBtn">방 나가기</button>
     </div>
 
@@ -74,6 +77,7 @@
 
       const socket = new WebSocket("ws://" + location.host);
       let myToken = null;
+      let myClientId = null;
 
       socket.addEventListener("open", () => { $("status").textContent = "연결 상태: 접속됨"; log("[open] 접속됨"); });
       socket.addEventListener("close", () => { $("status").textContent = "연결 상태: 끊김"; log("[close] 끊김"); });
@@ -82,8 +86,16 @@
       socket.addEventListener("message", (event) => {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
+          case "welcome":
+            myClientId = msg.data.clientId;
+            log("[welcome] 내 id: " + myClientId);
+            break;
           case "pong_from_server":
             log("[pong] " + JSON.stringify(msg.data));
+            break;
+          case "game_started":
+            log("[game_started] 게임 시작!");
+            $("startedBanner").classList.remove("hidden");
             break;
           case "room_created":
             myToken = msg.data.reconnectToken;
@@ -127,11 +139,25 @@
         $("players").innerHTML = "";
         state.players.forEach((p) => {
           const li = document.createElement("li");
-          li.textContent = p.nickname
+          const me = p.clientId === myClientId ? " ← 나" : "";
+          li.textContent = (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
             + (p.isReady ? " [준비]" : " [대기]")
-            + (p.connected ? "" : " (연결끊김)");
+            + (p.connected ? "" : " (연결끊김)")
+            + me;
           $("players").appendChild(li);
         });
+
+        // 방장 전용 버튼들: 내가 방장이고 대기 중일 때만 표시
+        const iAmHost = state.hostClientId === myClientId;
+        const waiting = state.status === "waiting";
+        const startBtn = $("startBtn");
+        if (iAmHost && waiting) {
+          startBtn.classList.remove("hidden");
+          startBtn.disabled = !state.canStart;
+        } else {
+          startBtn.classList.add("hidden");
+        }
+        $("readyBtn").disabled = !waiting;
       }
 
       $("createBtn").addEventListener("click", () => {
@@ -146,11 +172,14 @@
       });
       $("leaveBtn").addEventListener("click", () => {
         sendMsg("leave_room", {});
+        $("startedBanner").classList.add("hidden");
         exitRoomView();
       });
       $("pingBtn").addEventListener("click", () => {
         sendMsg("ping_from_client", { message: "hello from browser" });
       });
+      $("readyBtn").addEventListener("click", () => sendMsg("ready", {}));
+      $("startBtn").addEventListener("click", () => sendMsg("start_game", {}));
     </script>
   </body>
 </html>

@@ -31,6 +31,8 @@ public class NetworkManager : MonoBehaviour
     private bool inRoom = false;
     private string myRoomId = "";
     private GameState currentState;
+    private string myClientId = "";   // 서버가 알려준 내 식별자 (방장/나 구분용)
+    private bool gameStarted = false;
 
     // ---------- 서버와 주고받는 메시지 형식 (JSON) ----------
     // 공통: { "type": ..., "data": {...} }
@@ -48,13 +50,18 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class JoinRoomMsg { public string type = "join_room"; public JoinRoomData data; }
 
     [System.Serializable] private class LeaveRoomMsg { public string type = "leave_room"; public string data = ""; }
+    [System.Serializable] private class ReadyMsg { public string type = "ready"; public string data = ""; }
+    [System.Serializable] private class StartGameMsg { public string type = "start_game"; public string data = ""; }
 
     // 받는 메시지들
+    [System.Serializable] private class WelcomeData { public string clientId; }
+    [System.Serializable] private class WelcomeMsg { public string type; public WelcomeData data; }
+
     [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; }
     [System.Serializable] private class RoomAckMsg { public string type; public RoomAckData data; }
 
-    [System.Serializable] private class PlayerInfo { public string nickname; public bool isReady; public bool connected; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public PlayerInfo[] players; }
+    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
@@ -85,8 +92,21 @@ public class NetworkManager : MonoBehaviour
         TypeOnly head = JsonUtility.FromJson<TypeOnly>(json);
         switch (head.type)
         {
+            case "welcome":
+            {
+                WelcomeMsg m = JsonUtility.FromJson<WelcomeMsg>(json);
+                myClientId = m.data.clientId;
+                Log("[welcome] 내 id: " + myClientId);
+                break;
+            }
+
             case "pong_from_server":
                 Log("[pong] " + json);
+                break;
+
+            case "game_started":
+                gameStarted = true;
+                Log("[game_started] 게임이 시작되었습니다!");
                 break;
 
             case "room_created":
@@ -95,6 +115,7 @@ public class NetworkManager : MonoBehaviour
                 RoomAckMsg m = JsonUtility.FromJson<RoomAckMsg>(json);
                 myRoomId = m.data.roomId;
                 inRoom = true;
+                gameStarted = false;
                 // 재접속 토큰 저장 (11단계에서 사용)
                 PlayerPrefs.SetString("reconnectToken", m.data.reconnectToken);
                 PlayerPrefs.SetString("roomId", m.data.roomId);
@@ -160,8 +181,26 @@ public class NetworkManager : MonoBehaviour
     {
         Send(JsonUtility.ToJson(new LeaveRoomMsg()));
         inRoom = false;
+        gameStarted = false;
         currentState = null;
         Log("[leave_room] 전송");
+    }
+
+    private void ToggleReady()
+    {
+        Send(JsonUtility.ToJson(new ReadyMsg()));
+        Log("[ready] 전송");
+    }
+
+    private void StartGame()
+    {
+        Send(JsonUtility.ToJson(new StartGameMsg()));
+        Log("[start_game] 전송");
+    }
+
+    private bool IAmHost()
+    {
+        return currentState != null && currentState.hostClientId == myClientId;
     }
 
     private void Log(string line)
@@ -217,19 +256,41 @@ public class NetworkManager : MonoBehaviour
             GUILayout.Label("방 코드: " + myRoomId
                 + (currentState != null ? "   (상태: " + currentState.status + ")" : ""));
 
+            if (gameStarted)
+            {
+                GUILayout.Label(">>> 게임이 시작되었습니다! <<<");
+            }
+
             int count = (currentState != null && currentState.players != null) ? currentState.players.Length : 0;
             GUILayout.Label("플레이어 (" + count + "/5):");
             if (currentState != null && currentState.players != null)
             {
                 foreach (PlayerInfo p in currentState.players)
                 {
-                    GUILayout.Label("  - " + p.nickname
+                    GUILayout.Label("  " + (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
                         + (p.isReady ? " [준비]" : " [대기]")
-                        + (p.connected ? "" : " (연결끊김)"));
+                        + (p.connected ? "" : " (연결끊김)")
+                        + (p.clientId == myClientId ? "  <- 나" : ""));
                 }
             }
 
             GUILayout.Space(6);
+            bool waiting = currentState != null && currentState.status == "waiting";
+
+            GUILayout.BeginHorizontal();
+            GUI.enabled = waiting;
+            if (GUILayout.Button("준비 / 취소")) ToggleReady();
+            GUI.enabled = true;
+
+            // 방장에게만 시작 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
+            if (IAmHost() && waiting)
+            {
+                GUI.enabled = currentState.canStart; // 5명 전원 준비 시 활성화
+                if (GUILayout.Button("게임 시작(방장)")) StartGame();
+                GUI.enabled = true;
+            }
+            GUILayout.EndHorizontal();
+
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Ping")) SendPing();
             if (GUILayout.Button("방 나가기")) LeaveRoom();

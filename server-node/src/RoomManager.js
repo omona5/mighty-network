@@ -25,6 +25,9 @@ const crypto = require("crypto");
 
 const MAX_PLAYERS = 5;
 
+// 봇 clientId 중복 방지용 전역 카운터
+let botSeq = 0;
+
 // 4자리 대문자/숫자 방 코드 생성 (헷갈리는 0/O, 1/I 제외)
 function makeRoomId() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -61,6 +64,7 @@ class RoomManager {
       password: password || null,
       status: "waiting",
       players: [],
+      hostClientId: null, // 방장(호스트) - 첫 입장자가 됨, 나가면 다음 사람이 승계
     };
     this.rooms[roomId] = room;
     return room;
@@ -81,10 +85,87 @@ class RoomManager {
       isReady: false,
       reconnectToken: makeToken(),
       connected: true,
+      isBot: false,
       ws,
+    };
+    // 사람은 항상 봇들보다 앞에 배치한다. (사람들 다음, 첫 봇 앞에 삽입)
+    // 목록이 [사람...][봇...] 순서로 유지되도록 함.
+    const insertIndex = room.players.filter((p) => !p.isBot).length;
+    room.players.splice(insertIndex, 0, player);
+    // 방에 방장이 없으면(첫 입장자) 이 사람이 방장이 된다.
+    if (!room.hostClientId) {
+      room.hostClientId = player.clientId;
+    }
+    return { player };
+  }
+
+  // 봇(자동 플레이어)을 방에 추가한다. 빈자리를 채워 5명을 맞추는 용도.
+  // 봇은 항상 준비 상태이며 ws 연결이 없다.
+  addBot(room) {
+    if (room.status !== "waiting") {
+      return { error: "대기 중일 때만 봇을 추가할 수 있습니다." };
+    }
+    if (room.players.length >= MAX_PLAYERS) {
+      return { error: "자리가 가득 찼습니다. (최대 5명)" };
+    }
+    const botNumber = room.players.filter((p) => p.isBot).length + 1;
+    const player = {
+      clientId: "BOT" + ++botSeq,
+      nickname: "봇" + botNumber,
+      isReady: true, // 봇은 항상 준비 완료
+      reconnectToken: null,
+      connected: true,
+      isBot: true,
+      ws: null,
     };
     room.players.push(player);
     return { player };
+  }
+
+  // 방에서 마지막 봇 하나를 제거한다. 성공하면 true.
+  removeBot(room) {
+    if (room.status !== "waiting") return false;
+    for (let i = room.players.length - 1; i >= 0; i--) {
+      if (room.players[i].isBot) {
+        room.players.splice(i, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 방의 사람(비봇) 수
+  humanCount(room) {
+    return room.players.filter((p) => !p.isBot).length;
+  }
+
+  // 대기 중인 방을 봇으로 채워 항상 5명이 되도록 유지한다.
+  fillWithBots(room) {
+    while (room.status === "waiting" && room.players.length < MAX_PLAYERS) {
+      const result = this.addBot(room);
+      if (result.error) break;
+    }
+  }
+
+  // ready 상태를 토글한다. 대상 플레이어를 반환(없으면 null).
+  toggleReady(room, clientId) {
+    const player = room.players.find((p) => p.clientId === clientId);
+    if (!player) return null;
+    player.isReady = !player.isReady;
+    return player;
+  }
+
+  // 게임 시작 가능 여부: 정확히 5명 + 전원 준비 완료
+  canStart(room) {
+    return (
+      room.status === "waiting" &&
+      room.players.length === MAX_PLAYERS &&
+      room.players.every((p) => p.isReady)
+    );
+  }
+
+  isHost(room, clientId) {
+    return room.hostClientId === clientId;
   }
 
   // clientId로 플레이어를 찾아 방에서 제거한다.
@@ -94,10 +175,19 @@ class RoomManager {
       const room = this.rooms[roomId];
       const idx = room.players.findIndex((p) => p.clientId === clientId);
       if (idx !== -1) {
+        const wasHost = room.hostClientId === clientId;
         room.players.splice(idx, 1);
-        if (room.players.length === 0) {
+
+        // 사람(비봇)이 한 명도 안 남으면 방을 삭제한다. (봇만 남겨두지 않음)
+        const humans = room.players.filter((p) => !p.isBot);
+        if (humans.length === 0) {
           delete this.rooms[roomId];
-          return null; // 방 자체가 사라졌으니 브로드캐스트할 대상 없음
+          return null;
+        }
+
+        // 방장이 나갔으면 남은 "사람" 중 가장 오래된 사람이 방장을 승계한다.
+        if (wasHost) {
+          room.hostClientId = humans[0].clientId;
         }
         return room;
       }
@@ -110,10 +200,15 @@ class RoomManager {
     return {
       roomId: room.roomId,
       status: room.status,
+      hostClientId: room.hostClientId,
+      canStart: this.canStart(room),
       players: room.players.map((p) => ({
+        clientId: p.clientId, // 클라이언트가 "나"를 식별하는 용도 (비밀 아님)
         nickname: p.nickname,
         isReady: p.isReady,
         connected: p.connected,
+        isBot: p.isBot,
+        isHost: p.clientId === room.hostClientId,
       })),
     };
   }
