@@ -237,3 +237,16 @@
   - makeCardEl 공통화, exitRoomView에서 latestState/테이블 초기화.
 - **주의**: test.html은 서버가 매 요청마다 읽어 제공하므로 서버 재시작 불필요, 브라우저 강력 새로고침(Cmd+Shift+R)만 하면 됨.
 - **다음 단계**: 사용자 브라우저/Unity 확인 → 스텝6 커밋 → 스텝7(트릭 승자).
+
+## 2026-07-18 17:15 (UTC+9)
+
+- **작업 요청**: 스텝7(기본 트릭 승자 판정) 구현.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 변경**:
+  - `src/RoomManager.js`: rankValue(Card.RANKS 순서), determineTrickWinner(리드 무늬 중 최고 랭크). startPlay에서 trickHistory/lastTrickWinner/trickComplete/wonCards 초기화. playCard: 5장 완성 시 승자 판정→wonCards 적립→trickHistory 기록→lastTrickWinner 갱신→승자가 다음 리드(trickComplete=true, 다음 리드 때 테이블 비움). publicState에 lastTrickWinnerNickname, players.wonCount/trickCount 추가.
+  - `server.js`: play_card/봇 플레이에서 trickResult 승자 로그.
+- **Unity 변경**: `NetworkManager.cs`: GameState.lastTrickWinnerNickname, PlayerInfo.wonCount/trickCount 파싱. 게임 HUD에 현재차례/직전 트릭 승자/각 플레이어 남은·획득트릭 표시(패널 340x400).
+- **test.html**: 직전 트릭 승자(trickWinner), 플레이어별 남은·획득트릭 표시.
+- **검증(자동 ws_test)**: 한 판 진행 중 트릭#1~4 승자 판정·wonCount 누적(5→20)·승자 리드 확인. (봇 딜레이로 12초 내 4트릭)
+- **미해결/후속**: 특수룰(기루다/마이티/조커/조커콜)은 스텝8. 판 종료(10트릭)/점수는 스텝10.
+- **다음 단계**: 사용자 확인 → 스텝7 커밋 → 스텝8(마이티 룰).

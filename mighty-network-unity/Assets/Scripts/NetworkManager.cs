@@ -69,9 +69,9 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; }
     [System.Serializable] private class RoomAckMsg { public string type; public RoomAckData data; }
 
-    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; }
+    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
@@ -285,8 +285,8 @@ public class NetworkManager : MonoBehaviour
 
         bool inGame = gameStarted || (currentState != null && currentState.status == "playing");
         // 게임 중에는 오버레이를 작게(왼쪽 위 HUD), 대기/로비에서는 넓게 표시
-        float panelW = inGame ? 320f : 500f;
-        float panelH = inGame ? 320f : 560f;
+        float panelW = inGame ? 340f : 500f;
+        float panelH = inGame ? 400f : 560f;
         GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
 
         GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
@@ -384,15 +384,21 @@ public class NetworkManager : MonoBehaviour
             bool myTurn = currentState.currentTurnClientId == myClientId;
             GUILayout.Label("현재 차례: " + currentState.currentTurnNickname
                 + (myTurn ? "  << 내 차례! (카드 클릭)" : ""));
+
+            if (!string.IsNullOrEmpty(currentState.lastTrickWinnerNickname))
+            {
+                GUILayout.Label("직전 트릭 승자: " + currentState.lastTrickWinnerNickname);
+            }
         }
 
-        GUILayout.Label("상대들 남은 카드:");
+        GUILayout.Label("플레이어 (남은/획득트릭):");
         if (currentState != null && currentState.players != null)
         {
             foreach (PlayerInfo p in currentState.players)
             {
-                if (p.clientId == myClientId) continue; // 내 손패는 아래 카드로 보임
-                GUILayout.Label("  " + (p.isBot ? "[봇] " : "") + p.nickname + " : " + p.handCount + "장");
+                string me = p.clientId == myClientId ? " <- 나" : "";
+                GUILayout.Label("  " + (p.isBot ? "[봇] " : "") + p.nickname
+                    + " : 남은 " + p.handCount + "장, 획득 " + p.trickCount + "트릭" + me);
             }
         }
 

@@ -9,6 +9,7 @@
 //   04)    ready / start_game -> game_started
 //   05)    카드 배분 -> your_hand (본인 손패만), game_state에 handCount 포함
 //   06)    play_card -> 턴 검증 후 테이블에 표시, 봇은 자동으로 냄
+//   07)    트릭 5장 완성 시 승자 판정(리드 무늬 최고 랭크), 승자가 다음 리드
 
 const http = require("http");
 const fs = require("fs");
@@ -237,6 +238,9 @@ wss.on("connection", (ws) => {
           break;
         }
         console.log("[play]", ws.clientId, data.cardId);
+        if (result.trickResult) {
+          console.log("[trick] 승자:", result.trickResult.winnerNickname);
+        }
         broadcast(room, "game_state", rooms.publicState(room));
         // 카드를 낸 본인에게 갱신된 손패 전송
         send(ws, "your_hand", { cards: result.player.hand });
@@ -279,6 +283,9 @@ function maybeBotPlay(room) {
       return;
     }
     console.log("[bot]", bot.nickname, "냄:", cardId);
+    if (result.trickResult) {
+      console.log("[trick] 승자:", result.trickResult.winnerNickname);
+    }
     broadcast(r, "game_state", rooms.publicState(r));
     maybeBotPlay(r); // 다음도 봇이면 계속
   }, BOT_PLAY_DELAY);

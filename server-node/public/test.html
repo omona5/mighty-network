@@ -79,6 +79,7 @@
       <div id="startedBanner" class="hidden" style="color:#06d6a0;font-weight:bold;">게임이 시작되었습니다!</div>
       <div id="tableArea" class="hidden">
         <div id="turnInfo"></div>
+        <div id="trickWinner" style="color:#06d6a0;"></div>
         <div>테이블에 낸 카드:</div>
         <div id="table"></div>
       </div>
@@ -213,6 +214,9 @@
         $("turnInfo").textContent = playing
           ? ("현재 차례: " + (state.currentTurnNickname || "-") + (myTurn ? "  << 내 차례! (카드 클릭)" : ""))
           : "";
+        // 직전 트릭 승자
+        $("trickWinner").textContent = (playing && state.lastTrickWinnerNickname)
+          ? ("직전 트릭 승자: " + state.lastTrickWinnerNickname) : "";
         // 내 차례일 때만 손패를 클릭 가능하게 강조
         $("hand").classList.toggle("myturn", playing && myTurn);
         // 테이블에 낸 카드들
@@ -237,9 +241,11 @@
         state.players.forEach((p) => {
           const li = document.createElement("li");
           const me = p.clientId === myClientId ? " ← 나" : "";
-          const cnt = state.status !== "waiting" ? " (" + (p.handCount || 0) + "장)" : "";
+          const playing = state.status === "playing";
+          const cnt = playing
+            ? " (남은 " + (p.handCount || 0) + "장, 획득 " + (p.trickCount || 0) + "트릭)"
+            : (p.isReady ? " [준비]" : " [대기]");
           li.textContent = (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
-            + (p.isReady ? " [준비]" : " [대기]")
             + cnt
             + (p.connected ? "" : " (연결끊김)")
             + me;

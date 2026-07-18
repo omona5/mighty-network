@@ -23,8 +23,15 @@
 
 const crypto = require("crypto");
 const Deck = require("./game/Deck");
+const Card = require("./game/Card");
 
 const MAX_PLAYERS = 5;
+
+// 랭크 서열 (숫자가 클수록 높음). 07단계 기본 룰용.
+// Card.RANKS = ["2".."10","J","Q","K","A"] 순서를 그대로 사용.
+function rankValue(rank) {
+  return Card.RANKS.indexOf(rank); // 없는 값(JOKER 등)은 -1
+}
 
 // 봇 clientId 중복 방지용 전역 카운터
 let botSeq = 0;
@@ -163,6 +170,12 @@ class RoomManager {
   startPlay(room) {
     room.currentTurnIndex = 0; // 첫 번째 플레이어(방장)부터
     room.tableCards = []; // 이번 트릭에 나온 카드들
+    room.trickComplete = false; // 방금 트릭이 완성되었는지(다음 리드 때 테이블 비움)
+    room.trickHistory = []; // 완료된 트릭들의 기록
+    room.lastTrickWinner = null; // { clientId, nickname }
+    room.players.forEach((p) => {
+      p.wonCards = []; // 이 판에서 획득한 카드들
+    });
   }
 
   // 현재 차례인 플레이어
@@ -171,16 +184,34 @@ class RoomManager {
     return room.players[room.currentTurnIndex] || null;
   }
 
-  // 카드 제출 처리. 성공 { card, player }, 실패 { error }.
+  // 07단계: 트릭 승자 판정 (기본 룰)
+  //   - leadSuit = 첫 카드의 무늬
+  //   - leadSuit와 같은 무늬 중 랭크가 가장 높은 카드를 낸 사람이 승자
+  //   - trump/joker/mighty는 아직 미적용
+  determineTrickWinner(tableCards, leadSuit) {
+    let best = null;
+    for (const t of tableCards) {
+      if (t.card.suit !== leadSuit) continue; // 리드 무늬만 후보
+      if (!best || rankValue(t.card.rank) > rankValue(best.card.rank)) best = t;
+    }
+    // 첫 카드가 항상 leadSuit이므로 best는 반드시 존재
+    return best ? best.clientId : tableCards[0].clientId;
+  }
+
+  // 카드 제출 처리. 성공 { card, player, trickResult }, 실패 { error }.
+  // trickResult: 트릭이 완성됐으면 { winnerClientId, winnerNickname }, 아니면 null.
   playCard(room, clientId, cardId) {
     if (room.status !== "playing") return { error: "게임 중이 아닙니다." };
+
+    // 직전 트릭이 완성된 상태면(테이블에 5장) 새 리드 전에 비운다.
+    if (room.trickComplete) {
+      room.tableCards = [];
+      room.trickComplete = false;
+    }
+
     const player = room.players[room.currentTurnIndex];
     if (!player || player.clientId !== clientId) {
       return { error: "당신의 차례가 아닙니다." };
-    }
-    // 새 트릭 시작: 이전 트릭 카드가 5장 차 있으면 비운다. (승자 판정은 스텝7)
-    if (room.tableCards && room.tableCards.length >= room.players.length) {
-      room.tableCards = [];
     }
     const hand = player.hand || [];
     const idx = hand.findIndex((c) => c.id === cardId);
@@ -192,9 +223,31 @@ class RoomManager {
       playerNickname: player.nickname,
       card,
     });
-    // 다음 플레이어로 턴 넘김 (순환)
-    room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
-    return { card, player };
+
+    let trickResult = null;
+    if (room.tableCards.length === room.players.length) {
+      // ---- 트릭 완성: 승자 판정 ----
+      const leadSuit = room.tableCards[0].card.suit;
+      const winnerClientId = this.determineTrickWinner(room.tableCards, leadSuit);
+      const winnerIndex = room.players.findIndex((p) => p.clientId === winnerClientId);
+      const winner = room.players[winnerIndex];
+      const cards = room.tableCards.map((t) => t.card);
+
+      winner.wonCards = (winner.wonCards || []).concat(cards);
+      room.trickHistory.push({
+        winnerClientId,
+        winnerNickname: winner.nickname,
+        cards,
+      });
+      room.lastTrickWinner = { clientId: winnerClientId, nickname: winner.nickname };
+      room.trickComplete = true; // 테이블은 다음 리드 때 비움 (화면에 잠시 보이도록)
+      room.currentTurnIndex = winnerIndex; // 승자가 다음 트릭 리드
+      trickResult = { winnerClientId, winnerNickname: winner.nickname };
+    } else {
+      // 다음 플레이어로 턴 넘김 (순환)
+      room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+    }
+    return { card, player, trickResult };
   }
 
   // 봇이 낼 카드 id를 고른다. (스텝6: 규칙 없이 무작위)
@@ -262,6 +315,7 @@ class RoomManager {
       canStart: this.canStart(room),
       currentTurnClientId: turnP ? turnP.clientId : null,
       currentTurnNickname: turnP ? turnP.nickname : null,
+      lastTrickWinnerNickname: room.lastTrickWinner ? room.lastTrickWinner.nickname : null,
       tableCards: (room.tableCards || []).map((t) => ({
         playerNickname: t.playerNickname,
         card: t.card,
@@ -274,6 +328,8 @@ class RoomManager {
         isBot: p.isBot,
         isHost: p.clientId === room.hostClientId,
         handCount: p.hand ? p.hand.length : 0, // 남은 카드 수 (내용은 비공개)
+        wonCount: p.wonCards ? p.wonCards.length : 0, // 획득한 카드 수
+        trickCount: p.wonCards ? Math.floor(p.wonCards.length / MAX_PLAYERS) : 0, // 이긴 트릭 수
       })),
     };
   }
