@@ -22,6 +22,7 @@
 //   }
 
 const crypto = require("crypto");
+const Deck = require("./game/Deck");
 
 const MAX_PLAYERS = 5;
 
@@ -147,6 +148,62 @@ class RoomManager {
     }
   }
 
+  // 카드를 섞어 방의 5명에게 10장씩 배분하고, 바닥패 3장을 방에 보관한다.
+  // 각 플레이어에는 p.hand(카드 배열)가 채워진다.
+  dealCards(room) {
+    const { hands, kitty } = Deck.createShuffledDeal();
+    room.players.forEach((p, i) => {
+      p.hand = hands[i] || [];
+    });
+    room.kitty = kitty; // 바닥패 (아직 아무에게도 공개 안 함)
+    return { hands, kitty };
+  }
+
+  // 06단계: 플레이 시작 준비 - 첫 턴/빈 테이블 세팅
+  startPlay(room) {
+    room.currentTurnIndex = 0; // 첫 번째 플레이어(방장)부터
+    room.tableCards = []; // 이번 트릭에 나온 카드들
+  }
+
+  // 현재 차례인 플레이어
+  currentTurnPlayer(room) {
+    if (room.currentTurnIndex == null) return null;
+    return room.players[room.currentTurnIndex] || null;
+  }
+
+  // 카드 제출 처리. 성공 { card, player }, 실패 { error }.
+  playCard(room, clientId, cardId) {
+    if (room.status !== "playing") return { error: "게임 중이 아닙니다." };
+    const player = room.players[room.currentTurnIndex];
+    if (!player || player.clientId !== clientId) {
+      return { error: "당신의 차례가 아닙니다." };
+    }
+    // 새 트릭 시작: 이전 트릭 카드가 5장 차 있으면 비운다. (승자 판정은 스텝7)
+    if (room.tableCards && room.tableCards.length >= room.players.length) {
+      room.tableCards = [];
+    }
+    const hand = player.hand || [];
+    const idx = hand.findIndex((c) => c.id === cardId);
+    if (idx === -1) return { error: "손패에 없는 카드입니다: " + cardId };
+
+    const [card] = hand.splice(idx, 1);
+    room.tableCards.push({
+      clientId: player.clientId,
+      playerNickname: player.nickname,
+      card,
+    });
+    // 다음 플레이어로 턴 넘김 (순환)
+    room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+    return { card, player };
+  }
+
+  // 봇이 낼 카드 id를 고른다. (스텝6: 규칙 없이 무작위)
+  botPickCardId(player) {
+    if (!player.hand || player.hand.length === 0) return null;
+    const i = Math.floor(Math.random() * player.hand.length);
+    return player.hand[i].id;
+  }
+
   // ready 상태를 토글한다. 대상 플레이어를 반환(없으면 null).
   toggleReady(room, clientId) {
     const player = room.players.find((p) => p.clientId === clientId);
@@ -197,11 +254,18 @@ class RoomManager {
 
   // 모두에게 공개 가능한 방 상태 (비밀 정보 제외: password, reconnectToken, ws)
   publicState(room) {
+    const turnP = this.currentTurnPlayer(room);
     return {
       roomId: room.roomId,
       status: room.status,
       hostClientId: room.hostClientId,
       canStart: this.canStart(room),
+      currentTurnClientId: turnP ? turnP.clientId : null,
+      currentTurnNickname: turnP ? turnP.nickname : null,
+      tableCards: (room.tableCards || []).map((t) => ({
+        playerNickname: t.playerNickname,
+        card: t.card,
+      })),
       players: room.players.map((p) => ({
         clientId: p.clientId, // 클라이언트가 "나"를 식별하는 용도 (비밀 아님)
         nickname: p.nickname,
@@ -209,6 +273,7 @@ class RoomManager {
         connected: p.connected,
         isBot: p.isBot,
         isHost: p.clientId === room.hostClientId,
+        handCount: p.hand ? p.hand.length : 0, // 남은 카드 수 (내용은 비공개)
       })),
     };
   }

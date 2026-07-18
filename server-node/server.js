@@ -6,6 +6,9 @@
 // 현재 지원 단계:
 //   01~02) ping_from_client -> pong_from_server
 //   03)    create_room / join_room / leave_room -> room_created / room_joined / game_state / error_message
+//   04)    ready / start_game -> game_started
+//   05)    카드 배분 -> your_hand (본인 손패만), game_state에 handCount 포함
+//   06)    play_card -> 턴 검증 후 테이블에 표시, 봇은 자동으로 냄
 
 const http = require("http");
 const fs = require("fs");
@@ -205,9 +208,40 @@ wss.on("connection", (ws) => {
           break;
         }
         room.status = "playing";
-        console.log("[start] room", room.roomId, "게임 시작");
+        // 05단계: 카드 셔플 + 배분 (5명에게 10장씩, 바닥패 3장)
+        rooms.dealCards(room);
+        // 06단계: 첫 턴/빈 테이블 세팅
+        rooms.startPlay(room);
+        console.log("[start] room", room.roomId, "게임 시작 + 카드 배분");
         broadcast(room, "game_started", { roomId: room.roomId });
+        // 각 사람에게 "본인 손패"만 개별 전송 (남의 손패 내용은 비공개)
+        for (const p of room.players) {
+          if (!p.isBot && p.ws) {
+            send(p.ws, "your_hand", { cards: p.hand });
+          }
+        }
+        // 공개 상태에는 각자 남은 카드 수(handCount)만 포함됨
         broadcast(room, "game_state", rooms.publicState(room));
+        // 첫 차례가 봇이면 봇이 자동으로 낸다. (보통은 방장=사람이 먼저)
+        maybeBotPlay(room);
+        break;
+      }
+
+      // ---- 06단계: 카드 내기 ----
+      case "play_card": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room) break;
+        const result = rooms.playCard(room, ws.clientId, data.cardId);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[play]", ws.clientId, data.cardId);
+        broadcast(room, "game_state", rooms.publicState(room));
+        // 카드를 낸 본인에게 갱신된 손패 전송
+        send(ws, "your_hand", { cards: result.player.hand });
+        // 다음 차례가 봇이면 이어서 자동으로 낸다.
+        maybeBotPlay(room);
         break;
       }
 
@@ -221,6 +255,34 @@ wss.on("connection", (ws) => {
     leaveCurrentRoom(ws);
   });
 });
+
+// 현재 차례가 봇이면 잠시 후 자동으로 카드를 낸다.
+// 다음 차례도 봇이면 계속 이어진다(사람 차례가 오거나 게임이 끝날 때까지).
+const BOT_PLAY_DELAY = 700; // ms
+function maybeBotPlay(room) {
+  if (!room || room.status !== "playing") return;
+  const player = rooms.currentTurnPlayer(room);
+  if (!player || !player.isBot) return;
+
+  setTimeout(() => {
+    // 시간이 지나는 사이 방 상태가 바뀔 수 있으니 다시 확인
+    const r = rooms.getRoom(room.roomId);
+    if (!r || r.status !== "playing") return;
+    const bot = rooms.currentTurnPlayer(r);
+    if (!bot || !bot.isBot) return;
+
+    const cardId = rooms.botPickCardId(bot);
+    if (!cardId) return;
+    const result = rooms.playCard(r, bot.clientId, cardId);
+    if (result.error) {
+      console.log("[bot] play error:", result.error);
+      return;
+    }
+    console.log("[bot]", bot.nickname, "냄:", cardId);
+    broadcast(r, "game_state", rooms.publicState(r));
+    maybeBotPlay(r); // 다음도 봇이면 계속
+  }, BOT_PLAY_DELAY);
+}
 
 // 현재 방에서 플레이어를 빼고, 남은 사람들에게 상태를 갱신해준다.
 function leaveCurrentRoom(ws) {

@@ -17,6 +17,12 @@ public class NetworkManager : MonoBehaviour
     [Header("서버 주소 (개발용: localhost)")]
     public string serverUrl = "ws://localhost:3000";
 
+    [Header("손패 표시 (Inspector에서 연결)")]
+    public HandView handView; // 05단계: your_hand를 받아 카드를 그림
+
+    [Header("테이블(낸 카드) 표시 (Inspector에서 연결)")]
+    public HandView tableView; // 06단계: 낸 카드들을 화면 중앙에 그림
+
     private WebSocket websocket;
     private string status = "대기 중...";
     private readonly List<string> logLines = new List<string>();
@@ -53,6 +59,9 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class ReadyMsg { public string type = "ready"; public string data = ""; }
     [System.Serializable] private class StartGameMsg { public string type = "start_game"; public string data = ""; }
 
+    [System.Serializable] private class PlayCardData { public string cardId; }
+    [System.Serializable] private class PlayCardMsg { public string type = "play_card"; public PlayCardData data; }
+
     // 받는 메시지들
     [System.Serializable] private class WelcomeData { public string clientId; }
     [System.Serializable] private class WelcomeMsg { public string type; public WelcomeData data; }
@@ -60,15 +69,22 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; }
     [System.Serializable] private class RoomAckMsg { public string type; public RoomAckData data; }
 
-    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public PlayerInfo[] players; }
+    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; }
+    [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
     [System.Serializable] private class ErrorMsg { public string type; public ErrorData data; }
 
+    [System.Serializable] private class YourHandData { public CardData[] cards; }
+    [System.Serializable] private class YourHandMsg { public string type; public YourHandData data; }
+
     private async void Start()
     {
+        // 손패 카드를 클릭하면 그 카드를 서버에 낸다.
+        if (handView != null) handView.onCardClicked = OnHandCardClicked;
+
         Log("서버에 접속 시도: " + serverUrl);
         websocket = new WebSocket(serverUrl);
 
@@ -109,6 +125,15 @@ public class NetworkManager : MonoBehaviour
                 Log("[game_started] 게임이 시작되었습니다!");
                 break;
 
+            case "your_hand":
+            {
+                YourHandMsg m = JsonUtility.FromJson<YourHandMsg>(json);
+                int n = (m.data != null && m.data.cards != null) ? m.data.cards.Length : 0;
+                Log("[your_hand] 손패 " + n + "장 받음");
+                if (handView != null) handView.ShowHand(m.data.cards);
+                break;
+            }
+
             case "room_created":
             case "room_joined":
             {
@@ -128,7 +153,7 @@ public class NetworkManager : MonoBehaviour
             {
                 GameStateMsg m = JsonUtility.FromJson<GameStateMsg>(json);
                 currentState = m.data;
-                Log("[game_state] 인원 " + (m.data.players != null ? m.data.players.Length : 0) + "명");
+                UpdateTable(m.data);
                 break;
             }
 
@@ -183,6 +208,8 @@ public class NetworkManager : MonoBehaviour
         inRoom = false;
         gameStarted = false;
         currentState = null;
+        if (handView != null) handView.Clear();
+        if (tableView != null) tableView.Clear();
         Log("[leave_room] 전송");
     }
 
@@ -196,6 +223,39 @@ public class NetworkManager : MonoBehaviour
     {
         Send(JsonUtility.ToJson(new StartGameMsg()));
         Log("[start_game] 전송");
+    }
+
+    // 손패 카드 클릭 시 호출됨
+    private void OnHandCardClicked(CardData card)
+    {
+        if (card == null) return;
+        // 내 차례가 아니면 서버가 거부하지만, 미리 안내만 한다.
+        if (currentState != null && currentState.currentTurnClientId != myClientId)
+        {
+            Log("아직 내 차례가 아닙니다. (현재: " + currentState.currentTurnNickname + ")");
+            return;
+        }
+        PlayCard(card.id);
+    }
+
+    private void PlayCard(string cardId)
+    {
+        Send(JsonUtility.ToJson(new PlayCardMsg { data = new PlayCardData { cardId = cardId } }));
+        Log("[play_card] 전송: " + cardId);
+    }
+
+    // 테이블(낸 카드)을 화면 중앙에 갱신한다.
+    private void UpdateTable(GameState state)
+    {
+        if (tableView == null) return;
+        if (state == null || state.tableCards == null)
+        {
+            tableView.ShowHand(new CardData[0]);
+            return;
+        }
+        CardData[] cards = new CardData[state.tableCards.Length];
+        for (int i = 0; i < state.tableCards.Length; i++) cards[i] = state.tableCards[i].card;
+        tableView.ShowHand(cards);
     }
 
     private bool IAmHost()
@@ -223,9 +283,13 @@ public class NetworkManager : MonoBehaviour
         GUI.skin.button.fontSize = 15;
         GUI.skin.textField.fontSize = 15;
 
-        GUILayout.BeginArea(new Rect(20, 20, 500, 560), GUI.skin.box);
+        bool inGame = gameStarted || (currentState != null && currentState.status == "playing");
+        // 게임 중에는 오버레이를 작게(왼쪽 위 HUD), 대기/로비에서는 넓게 표시
+        float panelW = inGame ? 320f : 500f;
+        float panelH = inGame ? 320f : 560f;
+        GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
 
-        GUILayout.Label("Mighty - 방 테스트");
+        GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
         GUILayout.Label("연결 상태: " + status);
         GUILayout.Space(6);
 
@@ -252,57 +316,87 @@ public class NetworkManager : MonoBehaviour
         }
         else
         {
-            // ---- 방 안 화면 ----
-            GUILayout.Label("방 코드: " + myRoomId
-                + (currentState != null ? "   (상태: " + currentState.status + ")" : ""));
-
-            if (gameStarted)
+            bool playing = gameStarted || (currentState != null && currentState.status == "playing");
+            if (playing)
             {
-                GUILayout.Label(">>> 게임이 시작되었습니다! <<<");
+                DrawGameHud();
             }
-
-            int count = (currentState != null && currentState.players != null) ? currentState.players.Length : 0;
-            GUILayout.Label("플레이어 (" + count + "/5):");
-            if (currentState != null && currentState.players != null)
+            else
             {
-                foreach (PlayerInfo p in currentState.players)
-                {
-                    GUILayout.Label("  " + (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
-                        + (p.isReady ? " [준비]" : " [대기]")
-                        + (p.connected ? "" : " (연결끊김)")
-                        + (p.clientId == myClientId ? "  <- 나" : ""));
-                }
+                DrawWaitingRoom();
             }
-
-            GUILayout.Space(6);
-            bool waiting = currentState != null && currentState.status == "waiting";
-
-            GUILayout.BeginHorizontal();
-            GUI.enabled = waiting;
-            if (GUILayout.Button("준비 / 취소")) ToggleReady();
-            GUI.enabled = true;
-
-            // 방장에게만 시작 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
-            if (IAmHost() && waiting)
-            {
-                GUI.enabled = currentState.canStart; // 5명 전원 준비 시 활성화
-                if (GUILayout.Button("게임 시작(방장)")) StartGame();
-                GUI.enabled = true;
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Ping")) SendPing();
-            if (GUILayout.Button("방 나가기")) LeaveRoom();
-            GUILayout.EndHorizontal();
         }
 
         GUILayout.Space(8);
         GUILayout.Label("로그:");
-        scroll = GUILayout.BeginScrollView(scroll, GUI.skin.box, GUILayout.Height(240));
+        scroll = GUILayout.BeginScrollView(scroll, GUI.skin.box, GUILayout.Height(inGame ? 90 : 240));
         foreach (string line in logLines) GUILayout.Label(line);
         GUILayout.EndScrollView();
 
         GUILayout.EndArea();
+    }
+
+    // ---- 대기방 화면 (게임 시작 전) ----
+    private void DrawWaitingRoom()
+    {
+        GUILayout.Label("방 코드: " + myRoomId
+            + (currentState != null ? "   (상태: " + currentState.status + ")" : ""));
+
+        int count = (currentState != null && currentState.players != null) ? currentState.players.Length : 0;
+        GUILayout.Label("플레이어 (" + count + "/5):");
+        if (currentState != null && currentState.players != null)
+        {
+            foreach (PlayerInfo p in currentState.players)
+            {
+                GUILayout.Label("  " + (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
+                    + (p.isReady ? " [준비]" : " [대기]")
+                    + (p.connected ? "" : " (연결끊김)")
+                    + (p.clientId == myClientId ? "  <- 나" : ""));
+            }
+        }
+
+        GUILayout.Space(6);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("준비 / 취소")) ToggleReady();
+
+        // 방장에게만 시작 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
+        if (IAmHost())
+        {
+            GUI.enabled = currentState != null && currentState.canStart; // 5명 전원 준비 시 활성화
+            if (GUILayout.Button("게임 시작(방장)")) StartGame();
+            GUI.enabled = true;
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Ping")) SendPing();
+        if (GUILayout.Button("방 나가기")) LeaveRoom();
+        GUILayout.EndHorizontal();
+    }
+
+    // ---- 게임 화면 HUD (게임 시작 후) ----
+    private void DrawGameHud()
+    {
+        GUILayout.Label("방 코드: " + myRoomId);
+
+        if (currentState != null)
+        {
+            bool myTurn = currentState.currentTurnClientId == myClientId;
+            GUILayout.Label("현재 차례: " + currentState.currentTurnNickname
+                + (myTurn ? "  << 내 차례! (카드 클릭)" : ""));
+        }
+
+        GUILayout.Label("상대들 남은 카드:");
+        if (currentState != null && currentState.players != null)
+        {
+            foreach (PlayerInfo p in currentState.players)
+            {
+                if (p.clientId == myClientId) continue; // 내 손패는 아래 카드로 보임
+                GUILayout.Label("  " + (p.isBot ? "[봇] " : "") + p.nickname + " : " + p.handCount + "장");
+            }
+        }
+
+        GUILayout.Space(6);
+        if (GUILayout.Button("방 나가기")) LeaveRoom();
     }
 }

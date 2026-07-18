@@ -32,6 +32,23 @@
       }
       .hidden { display: none; }
       .roomcode { font-size: 24px; letter-spacing: 4px; color: #ffd166; }
+      #hand, #table { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 62px; }
+      #table { background: #0f1626; border-radius: 8px; padding: 6px; }
+      .card {
+        width: 42px; height: 60px; border-radius: 6px; background: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 15px; font-weight: bold; color: #111;
+      }
+      .card.red { color: #d00; }
+      .card.joker { background: #333; color: #ffd166; font-size: 11px; }
+      #hand.myturn .card { cursor: pointer; }
+      #hand.myturn .card:hover { outline: 3px solid #ffd166; transform: translateY(-4px); }
+      .tcard { position: relative; }
+      .tcard .who {
+        position: absolute; top: -16px; left: 0; right: 0; text-align: center;
+        font-size: 10px; color: #9ad; white-space: nowrap;
+      }
+      #turnInfo { font-weight: bold; color: #ffd166; margin-top: 6px; }
     </style>
   </head>
   <body>
@@ -60,6 +77,15 @@
       <div>플레이어 (<span id="playerCount">0</span>/5):</div>
       <ul id="players"></ul>
       <div id="startedBanner" class="hidden" style="color:#06d6a0;font-weight:bold;">게임이 시작되었습니다!</div>
+      <div id="tableArea" class="hidden">
+        <div id="turnInfo"></div>
+        <div>테이블에 낸 카드:</div>
+        <div id="table"></div>
+      </div>
+      <div id="handArea" class="hidden">
+        <div>내 손패 (<span id="handCount">0</span>장):</div>
+        <div id="hand"></div>
+      </div>
       <button id="readyBtn">준비 / 준비취소</button>
       <button id="startBtn" class="hidden">게임 시작 (방장)</button>
       <button id="pingBtn">Ping</button>
@@ -78,6 +104,7 @@
       const socket = new WebSocket("ws://" + location.host);
       let myToken = null;
       let myClientId = null;
+      let latestState = null; // 최근 game_state (내 차례 판정용)
 
       socket.addEventListener("open", () => { $("status").textContent = "연결 상태: 접속됨"; log("[open] 접속됨"); });
       socket.addEventListener("close", () => { $("status").textContent = "연결 상태: 끊김"; log("[close] 끊김"); });
@@ -96,6 +123,10 @@
           case "game_started":
             log("[game_started] 게임 시작!");
             $("startedBanner").classList.remove("hidden");
+            break;
+          case "your_hand":
+            log("[your_hand] " + msg.data.cards.length + "장 받음");
+            renderHand(msg.data.cards);
             break;
           case "room_created":
             myToken = msg.data.reconnectToken;
@@ -129,19 +160,87 @@
         $("roomCodeView").textContent = roomId;
       }
       function exitRoomView() {
+        latestState = null;
         $("room").classList.add("hidden");
         $("lobby").classList.remove("hidden");
         $("players").innerHTML = "";
+        $("handArea").classList.add("hidden");
+        $("hand").innerHTML = "";
+        $("tableArea").classList.add("hidden");
+        $("table").innerHTML = "";
+      }
+      // 무늬 기호와 색상
+      const SUIT_SYMBOL = { SPADE: "♠", HEART: "♥", DIAMOND: "♦", CLUB: "♣" };
+      // 카드 한 장 DOM 생성 (공통)
+      function makeCardEl(c) {
+        const div = document.createElement("div");
+        div.className = "card";
+        if (c.suit === "JOKER") {
+          div.classList.add("joker");
+          div.textContent = "JOKER";
+        } else {
+          if (c.suit === "HEART" || c.suit === "DIAMOND") div.classList.add("red");
+          div.textContent = SUIT_SYMBOL[c.suit] + c.rank;
+        }
+        return div;
+      }
+      function renderHand(cards) {
+        $("handArea").classList.remove("hidden");
+        $("handCount").textContent = cards.length;
+        const hand = $("hand");
+        hand.innerHTML = "";
+        cards.forEach((c) => {
+          const div = makeCardEl(c);
+          // 카드 클릭 시 서버로 낸다. (내 차례가 아니면 서버가 거부)
+          div.addEventListener("click", () => onCardClick(c));
+          hand.appendChild(div);
+        });
+      }
+      function onCardClick(card) {
+        if (!latestState || latestState.status !== "playing") return;
+        if (latestState.currentTurnClientId !== myClientId) {
+          log("아직 내 차례가 아닙니다. (현재: " + latestState.currentTurnNickname + ")");
+          return;
+        }
+        sendMsg("play_card", { cardId: card.id });
+        log("[play_card] 전송: " + card.id);
+      }
+      function renderTable(state) {
+        const playing = state.status === "playing";
+        $("tableArea").classList.toggle("hidden", !playing);
+        // 현재 차례 표시
+        const myTurn = state.currentTurnClientId === myClientId;
+        $("turnInfo").textContent = playing
+          ? ("현재 차례: " + (state.currentTurnNickname || "-") + (myTurn ? "  << 내 차례! (카드 클릭)" : ""))
+          : "";
+        // 내 차례일 때만 손패를 클릭 가능하게 강조
+        $("hand").classList.toggle("myturn", playing && myTurn);
+        // 테이블에 낸 카드들
+        const table = $("table");
+        table.innerHTML = "";
+        (state.tableCards || []).forEach((t) => {
+          const el = makeCardEl(t.card);
+          el.classList.add("tcard");
+          const who = document.createElement("div");
+          who.className = "who";
+          who.textContent = t.playerNickname;
+          el.appendChild(who);
+          table.appendChild(el);
+        });
       }
       function renderState(state) {
+        latestState = state;
+        renderTable(state);
         $("roomStatus").textContent = state.status;
         $("playerCount").textContent = state.players.length;
         $("players").innerHTML = "";
         state.players.forEach((p) => {
           const li = document.createElement("li");
           const me = p.clientId === myClientId ? " ← 나" : "";
+          const cnt = state.status !== "waiting" ? " (" + (p.handCount || 0) + "장)" : "";
           li.textContent = (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
             + (p.isReady ? " [준비]" : " [대기]")
+            + cnt
             + (p.connected ? "" : " (연결끊김)")
             + me;
           $("players").appendChild(li);

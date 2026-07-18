@@ -76,6 +76,10 @@ InitTestScene*.unity*
 # Visual Scripting auto-generated files
 /[Aa]ssets/Unity.VisualScripting.Generated/
 
+# Unity crash/auto recovery (임시 복구 폴더)
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
+
 # OS
 .DS_Store
 Thumbs.db

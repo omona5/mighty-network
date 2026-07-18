@@ -175,3 +175,65 @@
 - **검증**: 생성=오모나/봇1~4, 일모나 입장=오모나/일모나/봇1~3, 이모나 입장=오모나/일모나/이모나/봇1~2. 정상.
 - **주의(운영 메모)**: 테스트 중 `node ... &` 방식으로 서버를 띄웠다가 명령 종료 시 서버가 함께 종료됨 → 이후 block_until_ms:0 백그라운드로 재기동(PID 69109). 서버 정상 실행 확인.
 - **다음 단계**: 사용자 확인 → 스텝4 커밋 → 스텝5(카드 덱/셔플/배분).
+
+## 2026-07-18 15:30 (UTC+9)
+
+- **작업 요청**: 개발 방향 A(Unity 본격 사용) 확정 → 스텝5-1 서버 카드 배분 구현.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 신규/변경**:
+  - `src/game/Card.js`(신규): 카드 데이터 구조(id/suit/rank/point), 52장 + 조커, 점수카드(10·J·Q·K·A) point=1.
+  - `src/game/Deck.js`(신규): createDeck(53장), Fisher-Yates shuffle, deal(5명×10장 + 바닥패3장), createShuffledDeal.
+  - `src/RoomManager.js`: dealCards(room) 추가(섞어 배분, room.kitty 보관, p.hand 설정), publicState에 handCount 추가.
+  - `server.js`: start_game 시 dealCards → 각 사람에게 your_hand(본인 손패만) 개별 전송, 이후 game_state 브로드캐스트(handCount 포함).
+  - `public/test.html`: your_hand 수신 시 카드 UI 렌더(무늬 기호/색/조커), 목록에 (N장) 표시.
+- **검증(자동 테스트 통과, ws_test.js)**: 방 생성→준비→canStart→start_game→your_hand 10장 수신, 시작 후 handCounts=10,10,10,10,10. 바닥패 3장 서버 보관.
+- **미해결/후속**: 스텝5-2 Unity 화면에 실제 카드 렌더(본격 Unity 시작). 바닥패는 스텝9(입찰/주공) 때 주공에게 전달 예정.
+- **다음 단계**: Unity 손패 시각화(Canvas/카드 오브젝트).
+
+## 2026-07-18 15:45 (UTC+9)
+
+- **작업 요청**: 스텝5-2 Unity 손패 시각화. 방식은 editor_guided(정석 워크플로우: Canvas/프리팹/Inspector 연결을 사용자가 직접).
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **Unity(mighty-network-unity) 신규/변경**:
+  - `Assets/Scripts/CardData.cs`(신규): 서버 카드와 동일한 직렬화 클래스(id/suit/rank/point).
+  - `Assets/Scripts/CardView.cs`(신규): 카드 프리팹용. background(Image)/label(Text) 연결, SetCard(CardData)로 무늬 기호·색·조커 표시.
+  - `Assets/Scripts/HandView.cs`(신규): cardPrefab/cardContainer 연결, ShowHand(cards)로 프리팹 생성, Clear()로 정리.
+  - `Assets/Scripts/NetworkManager.cs`: public HandView handView 필드, YourHandMsg 파싱, your_hand 수신 시 handView.ShowHand, 방 나갈 때 Clear.
+- **미해결/후속**: 사용자가 에디터에서 Canvas + Card 프리팹 + HandContainer 제작 및 Inspector 연결 필요(가이드 제공). 스프라이트는 추후 프리팹 교체로 반영.
+- **다음 단계**: 사용자 에디터 세팅 → Play로 손패 렌더 확인 → 확인되면 스텝5 커밋.
+
+## 2026-07-18 16:35 (UTC+9)
+
+- **작업 요청**: Unity에서 카드는 뜨는데 게임 시작 후에도 대기방 UI(플레이어 리스트/준비 버튼)가 남아있음 → 게임 화면으로 전환 필요.
+- **수정 파일**: `mighty-network-unity/Assets/Scripts/NetworkManager.cs`
+  - OnGUI 방 화면을 DrawWaitingRoom()/DrawGameHud()로 분리. status=="playing"(또는 gameStarted) 시 게임 HUD로 전환.
+  - 게임 중에는 오버레이 패널 축소(320x320), 로그 높이 축소(90), 제목 "게임 중"으로 변경.
+  - DrawGameHud: 방 코드 + 상대들 남은 카드 수 + 방 나가기만 표시(준비/시작/Ping 제거). 내 손패는 Canvas 카드로 표시됨.
+  - PlayerInfo에 handCount 필드 추가(game_state 파싱).
+- **검증**: 린트 통과. 사용자 Play 확인 예정.
+- **다음 단계**: 사용자 확인 → 스텝5 커밋.
+
+## 2026-07-18 16:55 (UTC+9)
+
+- **작업 요청**: 계획상 다음 단계 스텝6(턴 기반 카드 내기) 구현.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 변경**:
+  - `src/RoomManager.js`: startPlay(첫턴/빈테이블), currentTurnPlayer, playCard(턴·손패 검증→테이블 push→턴 순환, 5장차면 새 트릭으로 비움), botPickCardId(무작위) 추가. publicState에 currentTurnClientId/Nickname, tableCards 추가.
+  - `server.js`: start_game 시 startPlay+maybeBotPlay. play_card 핸들러(검증→game_state 브로드캐스트→본인 your_hand→maybeBotPlay). maybeBotPlay(700ms 후 봇이 자동으로 냄, 연쇄).
+- **Unity 변경**:
+  - `CardView.cs`: IPointerClickHandler, Card 프로퍼티, Clicked 콜백.
+  - `HandView.cs`: onCardClicked 콜백을 각 카드에 연결.
+  - `NetworkManager.cs`: tableView(HandView) 필드, PlayCardMsg, OnHandCardClicked/PlayCard, GameState에 currentTurn·tableCards(TableCardInfo) 파싱, UpdateTable로 테이블 렌더, HUD에 현재 차례 표시. 방 나갈 때 tableView.Clear.
+- **검증(자동 ws_test)**: 방 생성→시작→내가 S_Q 냄→봇1~4 자동으로 순서대로 냄→테이블 5장 후 턴 복귀. 정상.
+- **미해결/후속**: 스텝7(트릭 승자 판정) 전까지 테이블은 다음 리드 때 비워짐(임시). 마이티 카드내기 규칙(문양 따라내기 등) 미적용.
+- **다음 단계**: 사용자 에디터에서 TableContainer/TableView 추가 후 Play 확인 → 스텝6 커밋.
+
+## 2026-07-18 16:52 (UTC+9)
+
+- **작업 요청**: 브라우저(localhost) 테스트 페이지에서 카드가 안 눌림 → test.html에도 스텝6 카드 내기 반영.
+- **수정 파일**: `server-node/public/test.html`
+  - 손패 카드 클릭 시 play_card 전송(onCardClick, 내 차례 아닐 때 안내). 내 차례일 때만 #hand.myturn으로 클릭 강조.
+  - 테이블 영역(#tableArea) 추가: 현재 차례(turnInfo) + 낸 카드 목록(카드 위 닉네임 표시).
+  - makeCardEl 공통화, exitRoomView에서 latestState/테이블 초기화.
+- **주의**: test.html은 서버가 매 요청마다 읽어 제공하므로 서버 재시작 불필요, 브라우저 강력 새로고침(Cmd+Shift+R)만 하면 됨.
+- **다음 단계**: 사용자 브라우저/Unity 확인 → 스텝6 커밋 → 스텝7(트릭 승자).
