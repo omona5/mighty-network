@@ -1,29 +1,33 @@
-// Mighty 게임 서버 - 1단계: ping-pong 테스트
+// Mighty 게임 서버 - 순수 WebSocket 버전 (1~2단계: ping-pong)
+//
+// 통신 방식:
+//   Unity(에디터/WebGL)와 브라우저 모두 "순수 WebSocket"으로 접속한다.
+//   메시지는 JSON 문자열로 주고받으며, 규칙은 아래와 같다.
+//
+//   { "type": "이벤트이름", "data": { ... } }
+//
+//   type 을 보고 어떤 요청인지 구분한다. (socket.io의 이벤트 이름 역할)
 //
 // 이 서버가 하는 일:
-//   1) 3000번 포트에서 실행된다.
-//   2) 클라이언트(브라우저/Unity)가 접속하면 콘솔에 socket.id를 찍는다.
-//   3) 클라이언트가 "ping_from_client" 이벤트를 보내면
-//      "pong_from_server" 이벤트로 응답한다.
-//
-// http 서버를 함께 두는 이유:
-//   Unity가 아직 없어도 브라우저로 접속해서 테스트할 수 있도록
-//   간단한 테스트 페이지(public/test.html)를 제공하기 위함이다.
+//   1) 3000번 포트에서 HTTP(테스트 페이지) + WebSocket 을 함께 제공한다.
+//   2) 클라이언트가 접속하면 콘솔에 로그를 남긴다.
+//   3) type이 "ping_from_client" 인 메시지를 받으면
+//      type "pong_from_server" 메시지로 응답한다.
 
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { Server } = require("socket.io");
+const { WebSocketServer } = require("ws");
 
 const PORT = 3000;
 
-// 1) 기본 HTTP 서버: 테스트용 HTML 페이지만 제공한다.
+// 접속한 클라이언트에게 부여할 간단한 id 카운터 (socket.id 대용)
+let nextClientId = 1;
+
+// 1) HTTP 서버: 브라우저 테스트 페이지(public/test.html) 제공
 const httpServer = http.createServer((req, res) => {
-  // 접속 주소가 "/" 이면 test.html을 돌려준다.
-  const filePath =
-    req.url === "/" || req.url === "/index.html"
-      ? path.join(__dirname, "public", "test.html")
-      : path.join(__dirname, "public", req.url);
+  const urlPath = req.url === "/" ? "/test.html" : req.url;
+  const filePath = path.join(__dirname, "public", urlPath);
 
   fs.readFile(filePath, (err, content) => {
     if (err) {
@@ -36,37 +40,53 @@ const httpServer = http.createServer((req, res) => {
   });
 });
 
-// 2) socket.io 서버를 위 HTTP 서버에 붙인다.
-//    CORS는 개발 편의를 위해 모든 origin을 허용한다.
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-  },
-});
+// 2) WebSocket 서버를 위 HTTP 서버에 붙인다. (같은 3000 포트 공유)
+const wss = new WebSocketServer({ server: httpServer });
+
+// 클라이언트에게 JSON 메시지를 보내는 헬퍼
+function send(ws, type, data) {
+  ws.send(JSON.stringify({ type, data }));
+}
 
 // 3) 클라이언트가 접속할 때마다 실행된다.
-io.on("connection", (socket) => {
-  console.log("[connect] client connected:", socket.id);
+wss.on("connection", (ws) => {
+  ws.clientId = "C" + nextClientId++;
+  console.log("[connect] client connected:", ws.clientId);
 
-  // 클라이언트가 ping_from_client 를 보내면
-  socket.on("ping_from_client", (data) => {
-    console.log("[ping] ping_from_client:", data);
+  // 클라이언트가 메시지를 보내면 실행된다.
+  ws.on("message", (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch (e) {
+      console.log("[warn] JSON 파싱 실패:", raw.toString());
+      return;
+    }
 
-    // 보낸 그 클라이언트에게만 pong_from_server 로 응답한다.
-    socket.emit("pong_from_server", {
-      message: "pong",
-      serverTime: new Date().toISOString(),
-      youSent: data, // 무엇을 받았는지 되돌려줘서 확인하기 쉽게 함
-    });
+    // type 으로 어떤 요청인지 구분한다.
+    switch (msg.type) {
+      case "ping_from_client":
+        console.log("[ping] from", ws.clientId, ":", msg.data);
+        // 보낸 그 클라이언트에게만 pong 으로 응답한다.
+        send(ws, "pong_from_server", {
+          message: "pong",
+          serverTime: new Date().toISOString(),
+          youSent: msg.data,
+        });
+        break;
+
+      default:
+        console.log("[warn] 알 수 없는 type:", msg.type);
+    }
   });
 
   // 접속이 끊기면 로그를 남긴다.
-  socket.on("disconnect", () => {
-    console.log("[disconnect] client disconnected:", socket.id);
+  ws.on("close", () => {
+    console.log("[disconnect] client disconnected:", ws.clientId);
   });
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`socket.io server running on http://localhost:${PORT}`);
+  console.log(`WebSocket server running on ws://localhost:${PORT}`);
   console.log(`테스트 페이지: 브라우저에서 http://localhost:${PORT} 접속`);
 });

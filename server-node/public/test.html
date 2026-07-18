@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mighty 서버 Ping-Pong 테스트</title>
+    <title>Mighty 서버 Ping-Pong 테스트 (WebSocket)</title>
     <style>
       body {
         font-family: -apple-system, sans-serif;
@@ -48,13 +48,11 @@
     </style>
   </head>
   <body>
-    <h1>Mighty 서버 Ping-Pong 테스트</h1>
+    <h1>Mighty 서버 Ping-Pong 테스트 (WebSocket)</h1>
     <div id="status">연결 상태: 대기 중...</div>
     <button id="pingBtn">Ping 보내기</button>
     <div id="log"></div>
 
-    <!-- 서버가 제공하는 socket.io 클라이언트 라이브러리 -->
-    <script src="/socket.io/socket.io.js"></script>
     <script>
       const statusEl = document.getElementById("status");
       const logEl = document.getElementById("log");
@@ -65,28 +63,45 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
-      // 같은 주소(localhost:3000)의 서버에 접속한다.
-      const socket = io();
+      // 순수 WebSocket으로 같은 서버에 접속한다. (http -> ws)
+      const wsUrl = "ws://" + location.host;
+      const socket = new WebSocket(wsUrl);
 
-      socket.on("connect", () => {
-        statusEl.textContent = "연결 상태: 접속됨 (id: " + socket.id + ")";
-        log("[connect] 서버에 접속했습니다.");
+      socket.addEventListener("open", () => {
+        statusEl.textContent = "연결 상태: 접속됨";
+        log("[open] 서버에 접속했습니다: " + wsUrl);
       });
 
-      socket.on("disconnect", () => {
+      socket.addEventListener("close", () => {
         statusEl.textContent = "연결 상태: 끊김";
-        log("[disconnect] 연결이 끊겼습니다.");
+        log("[close] 연결이 끊겼습니다.");
       });
 
-      // 서버가 보내는 pong_from_server 를 받는다.
-      socket.on("pong_from_server", (data) => {
-        log("[pong] 서버 응답: " + JSON.stringify(data));
+      socket.addEventListener("error", () => {
+        log("[error] 연결 오류. 서버가 켜져 있는지 확인하세요.");
       });
 
-      // 버튼을 누르면 ping_from_client 를 보낸다.
+      // 서버가 보내는 메시지를 받는다.
+      socket.addEventListener("message", (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "pong_from_server") {
+          log("[pong] 서버 응답: " + JSON.stringify(msg.data));
+        } else {
+          log("[recv] " + event.data);
+        }
+      });
+
+      // 버튼을 누르면 ping 메시지를 보낸다.
       pingBtn.addEventListener("click", () => {
-        const payload = { message: "hello from browser" };
-        socket.emit("ping_from_client", payload);
+        if (socket.readyState !== WebSocket.OPEN) {
+          log("아직 접속되지 않았습니다.");
+          return;
+        }
+        const payload = {
+          type: "ping_from_client",
+          data: { message: "hello from browser" },
+        };
+        socket.send(JSON.stringify(payload));
         log("[ping] 서버로 전송: " + JSON.stringify(payload));
       });
     </script>

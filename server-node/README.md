@@ -1,11 +1,15 @@
 # Mighty 게임 서버 (server-node)
 
-Unity WebGL 클라이언트와 통신하는 Node.js + socket.io 게임 서버.
+Unity 클라이언트와 통신하는 Node.js + **순수 WebSocket(ws)** 게임 서버.
+
+> 통신 방식: socket.io 대신 순수 WebSocket을 사용한다.
+> 이유는 Unity 에디터 Play 모드와 WebGL 빌드 양쪽에서 동일하게 동작해
+> 개발/테스트가 빠르기 때문. 메시지는 `{ "type": ..., "data": ... }` JSON 규칙을 따른다.
 
 ## 현재 단계
 
-**01단계: Ping-Pong 테스트** 완료.
-클라이언트가 `ping_from_client`를 보내면 서버가 `pong_from_server`로 응답한다.
+**01~02단계: Ping-Pong 테스트** 완료.
+클라이언트가 `type: ping_from_client` 메시지를 보내면 서버가 `type: pong_from_server`로 응답한다.
 
 ## 폴더 구조
 
@@ -39,13 +43,15 @@ socket.io server running on http://localhost:3000
 3. **[Ping 보내기]** 버튼 클릭.
 4. 화면 로그에 서버의 `pong` 응답이 뜨고, 서버 콘솔에도 접속/ping 로그가 찍히면 성공.
 
-## 이벤트 약속 (01단계)
+## 메시지 약속 (01~02단계)
 
-| 방향 | 이벤트 | 데이터 |
+모든 메시지는 `{ "type": ..., "data": ... }` JSON 형식.
+
+| 방향 | type | data |
 |------|--------|--------|
 | Client → Server | `ping_from_client` | `{ message }` |
 | Server → Client | `pong_from_server` | `{ message, serverTime, youSent }` |
 
 ## 다음 단계
 
-02단계: Unity 클라이언트(`client-unity/`)에서 이 서버에 접속하는 NetworkManager 구현.
+03단계: 방 생성/입장 (RoomManager). 순수 WebSocket이므로 방 관리는 서버에서 직접 구현한다.

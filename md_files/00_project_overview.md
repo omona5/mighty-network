@@ -56,27 +56,36 @@ Unity는 서버 상태를 화면에 보여주고 사용자 입력만 서버로 �
 ## 추천 기술 스택
 
 ```text
-Client: Unity WebGL, C#
-Server: Node.js, socket.io
+Client: Unity WebGL, C# (NativeWebSocket)
+Server: Node.js, 순수 WebSocket(ws)
 Deploy: Raspberry Pi, Nginx, PM2
 External Access: Cloudflare Tunnel 또는 Tailscale
 Optional DB: SQLite
 ```
 
+> [계획 수정 2026-07-18] 통신은 socket.io 대신 **순수 WebSocket(ws)** 사용.
+> 이유: Unity 에디터 Play 모드와 WebGL 빌드 양쪽에서 동일 동작 → 개발/테스트가 빠름.
+> 메시지는 `{ "type": ..., "data": ... }` JSON 규칙을 따른다. (socket.io의 이벤트 이름 = type)
+
 ## 전체 개발 단계
 
-1. Node.js + socket.io 서버 초기화
+1. Node.js + WebSocket 서버 초기화
 2. Unity와 서버 연결 테스트
-3. 방 생성/입장/플레이어 목록
-4. 준비 상태 및 5인 게임 시작
+3. 방 생성/입장/플레이어 목록 (+ reconnectToken 발급 조기 도입)
+4. 준비 상태 및 5인 게임 시작 (+ Heartbeat 연결 감지 보강)
 5. 서버 카드 덱/셔플/배분
 6. Unity 손패 표시
 7. 턴 기반 카드 제출
 8. 트릭 승자 판정
 9. 마이티 특수 룰 추가
 10. 점수 계산 및 게임 종료
-11. 재접속/방 비밀번호/기본 보안
+11. 재접속/방 비밀번호/기본 보안 (자동 재접속 + 상태 전체 재전송)
 12. Unity WebGL 빌드 및 라즈베리파이 배포
+
+> [계획 수정 2026-07-18] 재접속 관련 4기능 배치 조정:
+> - 세션 토큰(reconnectToken) 발급 → 3단계로 앞당김 (나중에 끼워넣기 어려우므로)
+> - Heartbeat(연결 살아있는지 확인) → 3~4단계에 보강 (WebSocket 전환으로 필요, 좀비 연결 감지)
+> - 자동 재접속 + 게임 상태 전체 재전송 → 11단계 유지 (게임 로직 완성 후 붙이는 게 맞음)
 
 ## 개발 원칙
 
