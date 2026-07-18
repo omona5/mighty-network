@@ -1,0 +1,16 @@
+{
+  "name": "server-node",
+  "version": "1.0.0",
+  "description": "Mighty card game server (Node.js + socket.io)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "socket.io": "^4.8.3"
+  }
+}

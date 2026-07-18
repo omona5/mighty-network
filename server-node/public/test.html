@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mighty 서버 Ping-Pong 테스트</title>
+    <style>
+      body {
+        font-family: -apple-system, sans-serif;
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 0 20px;
+        background: #1a1a2e;
+        color: #eee;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      #status {
+        padding: 10px;
+        border-radius: 8px;
+        background: #16213e;
+        margin: 10px 0;
+      }
+      button {
+        font-size: 16px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        background: #0f3460;
+        color: #fff;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #533483;
+      }
+      #log {
+        margin-top: 16px;
+        padding: 10px;
+        background: #0f1626;
+        border-radius: 8px;
+        height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 13px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mighty 서버 Ping-Pong 테스트</h1>
+    <div id="status">연결 상태: 대기 중...</div>
+    <button id="pingBtn">Ping 보내기</button>
+    <div id="log"></div>
+
+    <!-- 서버가 제공하는 socket.io 클라이언트 라이브러리 -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const statusEl = document.getElementById("status");
+      const logEl = document.getElementById("log");
+      const pingBtn = document.getElementById("pingBtn");
+
+      function log(msg) {
+        logEl.textContent += msg + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // 같은 주소(localhost:3000)의 서버에 접속한다.
+      const socket = io();
+
+      socket.on("connect", () => {
+        statusEl.textContent = "연결 상태: 접속됨 (id: " + socket.id + ")";
+        log("[connect] 서버에 접속했습니다.");
+      });
+
+      socket.on("disconnect", () => {
+        statusEl.textContent = "연결 상태: 끊김";
+        log("[disconnect] 연결이 끊겼습니다.");
+      });
+
+      // 서버가 보내는 pong_from_server 를 받는다.
+      socket.on("pong_from_server", (data) => {
+        log("[pong] 서버 응답: " + JSON.stringify(data));
+      });
+
+      // 버튼을 누르면 ping_from_client 를 보낸다.
+      pingBtn.addEventListener("click", () => {
+        const payload = { message: "hello from browser" };
+        socket.emit("ping_from_client", payload);
+        log("[ping] 서버로 전송: " + JSON.stringify(payload));
+      });
+    </script>
+  </body>
+</html>

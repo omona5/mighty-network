@@ -1,0 +1,91 @@
+# 11. 재접속 및 개인서버 안정화
+
+## 목표
+
+친구끼리 하는 개인서버로서 최소한의 안정성과 접근 제한을 추가한다.
+
+## 구현 범위
+
+- 방 비밀번호
+- 닉네임 중복 처리
+- 접속 끊김 감지
+- 일정 시간 내 재접속 허용
+- 플레이어 식별용 reconnectToken
+- 관전자 차단 또는 허용 옵션
+- 서버 로그
+
+## 왜 필요한가
+
+모바일 WebGL에서는 사용자가 카카오톡을 보거나 브라우저가 백그라운드로 가면 연결이 끊길 수 있다.
+
+따라서 재접속 처리가 중요하다.
+
+## 추천 구조
+
+```javascript
+player = {
+  socketId: "...",
+  nickname: "동건",
+  reconnectToken: "random-token",
+  connected: true,
+  disconnectedAt: null,
+  hand: []
+}
+```
+
+## 이벤트 약속
+
+### Unity → Server
+
+```text
+reconnect
+```
+
+### Server → Unity
+
+```text
+reconnected
+your_hand
+game_state
+error_message
+```
+
+## Cursor 서버 프롬프트
+
+```text
+마이티 개인서버에 재접속과 방 비밀번호 기능을 추가해줘.
+
+요구사항:
+1. create_room 시 선택적으로 roomPassword를 받을 수 있게 한다.
+2. join_room 시 비밀번호가 있는 방이면 검증한다.
+3. 플레이어 입장 시 reconnectToken을 발급한다.
+4. Unity에는 reconnectToken을 전달한다.
+5. disconnect 이벤트 발생 시 플레이어를 즉시 삭제하지 않고 connected=false로 표시한다.
+6. 일정 시간 내 같은 reconnectToken으로 reconnect 이벤트를 보내면 기존 플레이어로 복구한다.
+7. 재접속 성공 시 your_hand와 game_state를 다시 전송한다.
+8. 닉네임 중복 입장은 막거나 자동 번호를 붙인다.
+9. 서버 주요 이벤트는 console.log로 남긴다.
+```
+
+## Cursor Unity 프롬프트
+
+```text
+Unity 클라이언트에 reconnectToken 저장과 재접속 요청 기능을 추가해줘.
+
+요구사항:
+1. 서버에서 받은 reconnectToken을 PlayerPrefs에 저장한다.
+2. 서버 연결이 끊겼다가 다시 연결되면 reconnect 이벤트를 보낸다.
+3. reconnect 성공 시 game_state와 your_hand를 받아 화면을 복구한다.
+4. 재접속 실패 시 방 입장 화면으로 보낸다.
+5. 방 비밀번호 입력 UI를 추가한다.
+```
+
+## 완료 기준
+
+- 방 비밀번호가 있는 방은 비밀번호 없이는 입장할 수 없다.
+- 모바일/브라우저 새로고침 후에도 일정 시간 내 재접속 가능하다.
+- 재접속 시 손패와 현재 게임 상태가 복구된다.
+
+## 다음 단계
+
+Unity WebGL 빌드와 라즈베리파이 배포를 진행한다.
