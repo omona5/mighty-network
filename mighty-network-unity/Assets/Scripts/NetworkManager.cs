@@ -71,7 +71,7 @@ public class NetworkManager : MonoBehaviour
 
     [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public string mightyCardId; public string jokerCallCardId; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
@@ -263,6 +263,32 @@ public class NetworkManager : MonoBehaviour
         return currentState != null && currentState.hostClientId == myClientId;
     }
 
+    // 무늬 코드를 기호로 (SPADE -> ♠)
+    private static string SuitKor(string suit)
+    {
+        switch (suit)
+        {
+            case "SPADE": return "♠";
+            case "HEART": return "♥";
+            case "DIAMOND": return "♦";
+            case "CLUB": return "♣";
+            default: return "노기루";
+        }
+    }
+
+    // 카드 id를 짧게 (S_A -> ♠A, JOKER -> 조커)
+    private static string CardKor(string cardId)
+    {
+        if (string.IsNullOrEmpty(cardId)) return "-";
+        if (cardId == "JOKER") return "조커";
+        int us = cardId.IndexOf('_');
+        if (us < 0) return cardId;
+        string suit = cardId.Substring(0, us);
+        string rank = cardId.Substring(us + 1);
+        string sym = suit == "S" ? "♠" : suit == "H" ? "♥" : suit == "D" ? "♦" : suit == "C" ? "♣" : suit;
+        return sym + rank;
+    }
+
     private void Log(string line)
     {
         Debug.Log("[NetworkManager] " + line);
@@ -285,8 +311,8 @@ public class NetworkManager : MonoBehaviour
 
         bool inGame = gameStarted || (currentState != null && currentState.status == "playing");
         // 게임 중에는 오버레이를 작게(왼쪽 위 HUD), 대기/로비에서는 넓게 표시
-        float panelW = inGame ? 340f : 500f;
-        float panelH = inGame ? 400f : 560f;
+        float panelW = inGame ? 360f : 500f;
+        float panelH = inGame ? 460f : 560f;
         GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
 
         GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
@@ -381,6 +407,12 @@ public class NetworkManager : MonoBehaviour
 
         if (currentState != null)
         {
+            // 룰 정보 (기루다/마이티/조커콜)
+            GUILayout.Label("기루다: " + SuitKor(currentState.trumpSuit)
+                + "  |  마이티: " + CardKor(currentState.mightyCardId)
+                + "  |  조커콜: " + CardKor(currentState.jokerCallCardId));
+            GUILayout.Label("트릭 " + currentState.trickNumber + " / 10");
+
             bool myTurn = currentState.currentTurnClientId == myClientId;
             GUILayout.Label("현재 차례: " + currentState.currentTurnNickname
                 + (myTurn ? "  << 내 차례! (카드 클릭)" : ""));

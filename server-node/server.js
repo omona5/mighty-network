@@ -10,6 +10,7 @@
 //   05)    카드 배분 -> your_hand (본인 손패만), game_state에 handCount 포함
 //   06)    play_card -> 턴 검증 후 테이블에 표시, 봇은 자동으로 냄
 //   07)    트릭 5장 완성 시 승자 판정(리드 무늬 최고 랭크), 승자가 다음 리드
+//   08)    마이티 룰(기루다/마이티/조커/조커콜/따라내기) - RuleEngine 적용
 
 const http = require("http");
 const fs = require("fs");
@@ -275,7 +276,7 @@ function maybeBotPlay(room) {
     const bot = rooms.currentTurnPlayer(r);
     if (!bot || !bot.isBot) return;
 
-    const cardId = rooms.botPickCardId(bot);
+    const cardId = rooms.botPickCardId(r, bot);
     if (!cardId) return;
     const result = rooms.playCard(r, bot.clientId, cardId);
     if (result.error) {

@@ -250,3 +250,18 @@
 - **검증(자동 ws_test)**: 한 판 진행 중 트릭#1~4 승자 판정·wonCount 누적(5→20)·승자 리드 확인. (봇 딜레이로 12초 내 4트릭)
 - **미해결/후속**: 특수룰(기루다/마이티/조커/조커콜)은 스텝8. 판 종료(10트릭)/점수는 스텝10.
 - **다음 단계**: 사용자 확인 → 스텝7 커밋 → 스텝8(마이티 룰).
+
+## 2026-07-18 17:40 (UTC+9)
+
+- **작업 요청**: 스텝8(마이티 특수 룰) 구현. 룰은 표준룰로 확정.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **서버(server-node) 신규/변경**:
+  - `src/game/RuleEngine.js`(신규): makeRuleConfig(trumpSuit,noTrump), canPlayCard(따라내기 강제), determineTrickWinner(마이티>조커>기루다>리드무늬), leadSuitOf. 마이티=기루SPADE면 D_A 아니면 S_A, 조커콜=기루CLUB면 S_3 아니면 C_3, 조커는 첫/마지막 트릭·조커콜 리드 시 무효.
+  - `test/ruleEngine.test.js`(신규): 14개 케이스(설정/따라내기/기루다>리드/마이티>기루다/조커 서열/첫트릭 조커무효/조커콜) 전부 통과.
+  - `src/RoomManager.js`: 기존 determineTrickWinner/rankValue 제거, RuleEngine 사용. startPlay에서 ruleConfig(임시 기루다 HEART)·trickNumber 설정. playCard에 따라내기 검증, 트릭 완성 시 RuleEngine.determineTrickWinner(trickNumber 반영). botPickCardId(room,player)=합법 카드 중 무작위. publicState에 trumpSuit/mightyCardId/jokerCallCardId/trickNumber 추가.
+  - `server.js`: botPickCardId 호출 시 room 전달.
+- **Unity 변경**: `NetworkManager.cs`: GameState에 trickNumber/trumpSuit/mightyCardId/jokerCallCardId 파싱. HUD에 기루다·마이티·조커콜·트릭번호 표시(SuitKor/CardKor 헬퍼). 패널 360x460.
+- **test.html**: 룰 정보(기루다/마이티/조커콜/트릭번호) 표시.
+- **검증**: 유닛테스트 14/14 통과. ws_test로 한 판 10트릭 완주, 마이티/기루다/따라내기 정상 확인.
+- **임시/후속**: 기루다는 스텝8 임시 HEART 고정 → 스텝9 입찰에서 실제 선언으로 대체. 노기루/조커 리드 선언은 단순화 상태. 프렌드 공개(revealFriendWhenPlayed)는 구조만.
+- **다음 단계**: 사용자 확인 → 스텝8 커밋 → 스텝9(입찰/주공/프렌드).

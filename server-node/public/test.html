@@ -78,6 +78,7 @@
       <ul id="players"></ul>
       <div id="startedBanner" class="hidden" style="color:#06d6a0;font-weight:bold;">게임이 시작되었습니다!</div>
       <div id="tableArea" class="hidden">
+        <div id="ruleInfo" style="color:#9ad;"></div>
         <div id="turnInfo"></div>
         <div id="trickWinner" style="color:#06d6a0;"></div>
         <div>테이블에 낸 카드:</div>
@@ -206,9 +207,23 @@
         sendMsg("play_card", { cardId: card.id });
         log("[play_card] 전송: " + card.id);
       }
+      // 무늬 기호 / 카드 id를 짧게
+      function suitSym(s) { return SUIT_SYMBOL[s] || (s ? s : "노기루"); }
+      function cardShort(id) {
+        if (!id) return "-";
+        if (id === "JOKER") return "조커";
+        const [s, r] = id.split("_");
+        const m = { S: "♠", H: "♥", D: "♦", C: "♣" };
+        return (m[s] || s) + r;
+      }
       function renderTable(state) {
         const playing = state.status === "playing";
         $("tableArea").classList.toggle("hidden", !playing);
+        // 룰 정보
+        $("ruleInfo").textContent = playing
+          ? ("기루다: " + suitSym(state.trumpSuit) + "  |  마이티: " + cardShort(state.mightyCardId)
+             + "  |  조커콜: " + cardShort(state.jokerCallCardId) + "  |  트릭 " + state.trickNumber + "/10")
+          : "";
         // 현재 차례 표시
         const myTurn = state.currentTurnClientId === myClientId;
         $("turnInfo").textContent = playing

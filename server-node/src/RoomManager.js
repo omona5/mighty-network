@@ -23,15 +23,14 @@
 
 const crypto = require("crypto");
 const Deck = require("./game/Deck");
-const Card = require("./game/Card");
+const RuleEngine = require("./game/RuleEngine");
 
 const MAX_PLAYERS = 5;
+const NUM_TRICKS = 10;
 
-// 랭크 서열 (숫자가 클수록 높음). 07단계 기본 룰용.
-// Card.RANKS = ["2".."10","J","Q","K","A"] 순서를 그대로 사용.
-function rankValue(rank) {
-  return Card.RANKS.indexOf(rank); // 없는 값(JOKER 등)은 -1
-}
+// 임시 기루다: 입찰(스텝9) 전까지 사용할 기본 으뜸패.
+// 스텝9에서 입찰로 결정되면 이 값 대신 선언된 기루다를 쓴다.
+const TEMP_TRUMP_SUIT = "HEART";
 
 // 봇 clientId 중복 방지용 전역 카운터
 let botSeq = 0;
@@ -173,6 +172,9 @@ class RoomManager {
     room.trickComplete = false; // 방금 트릭이 완성되었는지(다음 리드 때 테이블 비움)
     room.trickHistory = []; // 완료된 트릭들의 기록
     room.lastTrickWinner = null; // { clientId, nickname }
+    room.trickNumber = 1; // 현재 트릭 번호 (1~10)
+    // 08단계: 룰 설정. (임시 기루다 - 스텝9 입찰로 대체 예정)
+    room.ruleConfig = RuleEngine.makeRuleConfig(TEMP_TRUMP_SUIT, false);
     room.players.forEach((p) => {
       p.wonCards = []; // 이 판에서 획득한 카드들
     });
@@ -182,20 +184,6 @@ class RoomManager {
   currentTurnPlayer(room) {
     if (room.currentTurnIndex == null) return null;
     return room.players[room.currentTurnIndex] || null;
-  }
-
-  // 07단계: 트릭 승자 판정 (기본 룰)
-  //   - leadSuit = 첫 카드의 무늬
-  //   - leadSuit와 같은 무늬 중 랭크가 가장 높은 카드를 낸 사람이 승자
-  //   - trump/joker/mighty는 아직 미적용
-  determineTrickWinner(tableCards, leadSuit) {
-    let best = null;
-    for (const t of tableCards) {
-      if (t.card.suit !== leadSuit) continue; // 리드 무늬만 후보
-      if (!best || rankValue(t.card.rank) > rankValue(best.card.rank)) best = t;
-    }
-    // 첫 카드가 항상 leadSuit이므로 best는 반드시 존재
-    return best ? best.clientId : tableCards[0].clientId;
   }
 
   // 카드 제출 처리. 성공 { card, player, trickResult }, 실패 { error }.
@@ -217,7 +205,20 @@ class RoomManager {
     const idx = hand.findIndex((c) => c.id === cardId);
     if (idx === -1) return { error: "손패에 없는 카드입니다: " + cardId };
 
-    const [card] = hand.splice(idx, 1);
+    // 08단계: 따라내기 강제 검증
+    const card = hand[idx];
+    const legal = RuleEngine.canPlayCard({
+      playerHand: hand,
+      card,
+      tableCards: room.tableCards,
+      ruleConfig: room.ruleConfig,
+    });
+    if (!legal) {
+      const leadSuit = RuleEngine.leadSuitOf(room.tableCards, room.ruleConfig);
+      return { error: "리드 무늬(" + leadSuit + ")를 따라내야 합니다." };
+    }
+
+    hand.splice(idx, 1); // 검증 통과 후 실제 제거
     room.tableCards.push({
       clientId: player.clientId,
       playerNickname: player.nickname,
@@ -226,9 +227,13 @@ class RoomManager {
 
     let trickResult = null;
     if (room.tableCards.length === room.players.length) {
-      // ---- 트릭 완성: 승자 판정 ----
-      const leadSuit = room.tableCards[0].card.suit;
-      const winnerClientId = this.determineTrickWinner(room.tableCards, leadSuit);
+      // ---- 트릭 완성: 승자 판정 (08단계 룰 적용) ----
+      const winnerClientId = RuleEngine.determineTrickWinner({
+        tableCards: room.tableCards,
+        ruleConfig: room.ruleConfig,
+        trickNumber: room.trickNumber,
+        numTricks: NUM_TRICKS,
+      });
       const winnerIndex = room.players.findIndex((p) => p.clientId === winnerClientId);
       const winner = room.players[winnerIndex];
       const cards = room.tableCards.map((t) => t.card);
@@ -242,6 +247,7 @@ class RoomManager {
       room.lastTrickWinner = { clientId: winnerClientId, nickname: winner.nickname };
       room.trickComplete = true; // 테이블은 다음 리드 때 비움 (화면에 잠시 보이도록)
       room.currentTurnIndex = winnerIndex; // 승자가 다음 트릭 리드
+      if (room.trickNumber < NUM_TRICKS) room.trickNumber++;
       trickResult = { winnerClientId, winnerNickname: winner.nickname };
     } else {
       // 다음 플레이어로 턴 넘김 (순환)
@@ -250,11 +256,19 @@ class RoomManager {
     return { card, player, trickResult };
   }
 
-  // 봇이 낼 카드 id를 고른다. (스텝6: 규칙 없이 무작위)
-  botPickCardId(player) {
+  // 봇이 낼 카드 id를 고른다. (08단계: 따라내기 규칙을 지키는 합법 카드 중 무작위)
+  botPickCardId(room, player) {
     if (!player.hand || player.hand.length === 0) return null;
-    const i = Math.floor(Math.random() * player.hand.length);
-    return player.hand[i].id;
+    const legal = player.hand.filter((c) =>
+      RuleEngine.canPlayCard({
+        playerHand: player.hand,
+        card: c,
+        tableCards: room.tableCards,
+        ruleConfig: room.ruleConfig,
+      })
+    );
+    const pool = legal.length ? legal : player.hand;
+    return pool[Math.floor(Math.random() * pool.length)].id;
   }
 
   // ready 상태를 토글한다. 대상 플레이어를 반환(없으면 null).
@@ -316,6 +330,10 @@ class RoomManager {
       currentTurnClientId: turnP ? turnP.clientId : null,
       currentTurnNickname: turnP ? turnP.nickname : null,
       lastTrickWinnerNickname: room.lastTrickWinner ? room.lastTrickWinner.nickname : null,
+      trickNumber: room.trickNumber || 0,
+      trumpSuit: room.ruleConfig ? room.ruleConfig.trumpSuit : null,
+      mightyCardId: room.ruleConfig ? room.ruleConfig.mightyCardId : null,
+      jokerCallCardId: room.ruleConfig ? room.ruleConfig.jokerCallCardId : null,
       tableCards: (room.tableCards || []).map((t) => ({
         playerNickname: t.playerNickname,
         card: t.card,
