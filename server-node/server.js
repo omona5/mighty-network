@@ -1,34 +1,27 @@
-// Mighty 게임 서버 - 순수 WebSocket 버전 (1~2단계: ping-pong)
+// Mighty 게임 서버 - 순수 WebSocket 버전
 //
-// 통신 방식:
-//   Unity(에디터/WebGL)와 브라우저 모두 "순수 WebSocket"으로 접속한다.
-//   메시지는 JSON 문자열로 주고받으며, 규칙은 아래와 같다.
-//
+// 통신 규칙: 모든 메시지는 JSON 문자열
 //   { "type": "이벤트이름", "data": { ... } }
 //
-//   type 을 보고 어떤 요청인지 구분한다. (socket.io의 이벤트 이름 역할)
-//
-// 이 서버가 하는 일:
-//   1) 3000번 포트에서 HTTP(테스트 페이지) + WebSocket 을 함께 제공한다.
-//   2) 클라이언트가 접속하면 콘솔에 로그를 남긴다.
-//   3) type이 "ping_from_client" 인 메시지를 받으면
-//      type "pong_from_server" 메시지로 응답한다.
+// 현재 지원 단계:
+//   01~02) ping_from_client -> pong_from_server
+//   03)    create_room / join_room / leave_room -> room_created / room_joined / game_state / error_message
 
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const RoomManager = require("./src/RoomManager");
 
 const PORT = 3000;
 
-// 접속한 클라이언트에게 부여할 간단한 id 카운터 (socket.id 대용)
 let nextClientId = 1;
+const rooms = new RoomManager();
 
-// 1) HTTP 서버: 브라우저 테스트 페이지(public/test.html) 제공
+// 1) HTTP 서버: 브라우저 테스트 페이지 제공
 const httpServer = http.createServer((req, res) => {
   const urlPath = req.url === "/" ? "/test.html" : req.url;
   const filePath = path.join(__dirname, "public", urlPath);
-
   fs.readFile(filePath, (err, content) => {
     if (err) {
       res.writeHead(404);
@@ -40,20 +33,36 @@ const httpServer = http.createServer((req, res) => {
   });
 });
 
-// 2) WebSocket 서버를 위 HTTP 서버에 붙인다. (같은 3000 포트 공유)
+// 2) WebSocket 서버 (같은 3000 포트)
 const wss = new WebSocketServer({ server: httpServer });
 
-// 클라이언트에게 JSON 메시지를 보내는 헬퍼
+// 한 클라이언트에게 보내기
 function send(ws, type, data) {
-  ws.send(JSON.stringify({ type, data }));
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({ type, data }));
+  }
 }
 
-// 3) 클라이언트가 접속할 때마다 실행된다.
+// 방 안 모든 플레이어에게 보내기 (방 브로드캐스트)
+function broadcast(room, type, data) {
+  for (const p of room.players) {
+    if (p.ws && p.ws.readyState === p.ws.OPEN) {
+      p.ws.send(JSON.stringify({ type, data }));
+    }
+  }
+}
+
+// 닉네임 유효성 검사
+function isValidNickname(name) {
+  return typeof name === "string" && name.trim().length > 0 && name.length <= 12;
+}
+
+// 3) 접속 처리
 wss.on("connection", (ws) => {
   ws.clientId = "C" + nextClientId++;
+  ws.roomId = null;
   console.log("[connect] client connected:", ws.clientId);
 
-  // 클라이언트가 메시지를 보내면 실행된다.
   ws.on("message", (raw) => {
     let msg;
     try {
@@ -62,17 +71,83 @@ wss.on("connection", (ws) => {
       console.log("[warn] JSON 파싱 실패:", raw.toString());
       return;
     }
+    const data = msg.data || {};
 
-    // type 으로 어떤 요청인지 구분한다.
     switch (msg.type) {
+      // ---- 01~02단계: ping-pong ----
       case "ping_from_client":
-        console.log("[ping] from", ws.clientId, ":", msg.data);
-        // 보낸 그 클라이언트에게만 pong 으로 응답한다.
+        console.log("[ping] from", ws.clientId, ":", data);
         send(ws, "pong_from_server", {
           message: "pong",
           serverTime: new Date().toISOString(),
-          youSent: msg.data,
+          youSent: data,
         });
+        break;
+
+      // ---- 03단계: 방 생성 ----
+      case "create_room": {
+        if (!isValidNickname(data.nickname)) {
+          send(ws, "error_message", { message: "닉네임을 입력하세요. (1~12자)" });
+          break;
+        }
+        // 이미 방에 있으면 먼저 나가게 처리
+        if (ws.roomId) leaveCurrentRoom(ws);
+
+        const room = rooms.createRoom(data.password);
+        const result = rooms.addPlayer(room, data.nickname.trim(), ws);
+        // 방금 만든 방이라 실패할 일은 거의 없지만 방어적으로 처리
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        ws.roomId = room.roomId;
+        console.log("[room] created", room.roomId, "by", data.nickname);
+        // 본인에게만 방 코드 + 재접속 토큰 전달
+        send(ws, "room_created", {
+          roomId: room.roomId,
+          reconnectToken: result.player.reconnectToken,
+        });
+        // 방 전체에 현재 상태 전송
+        broadcast(room, "game_state", rooms.publicState(room));
+        break;
+      }
+
+      // ---- 03단계: 방 입장 ----
+      case "join_room": {
+        if (!isValidNickname(data.nickname)) {
+          send(ws, "error_message", { message: "닉네임을 입력하세요. (1~12자)" });
+          break;
+        }
+        const roomId = (data.roomId || "").toUpperCase();
+        const room = rooms.getRoom(roomId);
+        if (!room) {
+          send(ws, "error_message", { message: "방을 찾을 수 없습니다: " + roomId });
+          break;
+        }
+        if (room.password && room.password !== data.password) {
+          send(ws, "error_message", { message: "방 비밀번호가 틀렸습니다." });
+          break;
+        }
+        if (ws.roomId) leaveCurrentRoom(ws);
+
+        const result = rooms.addPlayer(room, data.nickname.trim(), ws);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        ws.roomId = room.roomId;
+        console.log("[room] joined", room.roomId, "by", data.nickname);
+        send(ws, "room_joined", {
+          roomId: room.roomId,
+          reconnectToken: result.player.reconnectToken,
+        });
+        broadcast(room, "game_state", rooms.publicState(room));
+        break;
+      }
+
+      // ---- 03단계: 방 나가기 ----
+      case "leave_room":
+        leaveCurrentRoom(ws);
         break;
 
       default:
@@ -80,11 +155,24 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // 접속이 끊기면 로그를 남긴다.
   ws.on("close", () => {
     console.log("[disconnect] client disconnected:", ws.clientId);
+    leaveCurrentRoom(ws);
   });
 });
+
+// 현재 방에서 플레이어를 빼고, 남은 사람들에게 상태를 갱신해준다.
+function leaveCurrentRoom(ws) {
+  if (!ws.roomId) return;
+  const room = rooms.removePlayerByClientId(ws.clientId);
+  const leftRoomId = ws.roomId;
+  ws.roomId = null;
+  if (room) {
+    // 방에 사람이 남아있으면 갱신된 상태를 알려준다
+    broadcast(room, "game_state", rooms.publicState(room));
+  }
+  console.log("[room] left", leftRoomId, "by", ws.clientId);
+}
 
 httpServer.listen(PORT, () => {
   console.log(`WebSocket server running on ws://localhost:${PORT}`);

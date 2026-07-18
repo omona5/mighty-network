@@ -8,8 +8,9 @@ Unity 클라이언트와 통신하는 Node.js + **순수 WebSocket(ws)** 게임 
 
 ## 현재 단계
 
-**01~02단계: Ping-Pong 테스트** 완료.
-클라이언트가 `type: ping_from_client` 메시지를 보내면 서버가 `type: pong_from_server`로 응답한다.
+**01~03단계** 완료.
+- 01~02: ping-pong (`ping_from_client` → `pong_from_server`)
+- 03: 방 생성/입장/퇴장 + 플레이어 목록 브로드캐스트 + reconnectToken 발급
 
 ## 폴더 구조
 
@@ -43,15 +44,33 @@ socket.io server running on http://localhost:3000
 3. **[Ping 보내기]** 버튼 클릭.
 4. 화면 로그에 서버의 `pong` 응답이 뜨고, 서버 콘솔에도 접속/ping 로그가 찍히면 성공.
 
-## 메시지 약속 (01~02단계)
+## 메시지 약속
 
 모든 메시지는 `{ "type": ..., "data": ... }` JSON 형식.
 
 | 방향 | type | data |
 |------|--------|--------|
-| Client → Server | `ping_from_client` | `{ message }` |
-| Server → Client | `pong_from_server` | `{ message, serverTime, youSent }` |
+| C → S | `ping_from_client` | `{ message }` |
+| S → C | `pong_from_server` | `{ message, serverTime, youSent }` |
+| C → S | `create_room` | `{ nickname, password? }` |
+| C → S | `join_room` | `{ roomId, nickname, password? }` |
+| C → S | `leave_room` | `{}` |
+| S → C (본인) | `room_created` | `{ roomId, reconnectToken }` |
+| S → C (본인) | `room_joined` | `{ roomId, reconnectToken }` |
+| S → C (방 전체) | `game_state` | `{ roomId, status, players[] }` |
+| S → C (본인) | `error_message` | `{ message }` |
+
+- `players[]` 항목: `{ nickname, isReady, connected }` (비공개 정보 제외)
+- 방 최대 5명. 방이 비면 자동 삭제.
+
+## 파일 구조
+
+```text
+server.js            # 진입점: HTTP + WebSocket, 메시지 라우팅
+src/RoomManager.js   # 방 목록 관리 (생성/입장/퇴장, 토큰 발급)
+public/test.html     # 브라우저 테스트 페이지 (방 UI 포함)
+```
 
 ## 다음 단계
 
-03단계: 방 생성/입장 (RoomManager). 순수 WebSocket이므로 방 관리는 서버에서 직접 구현한다.
+04단계: 준비 상태 + 5인 게임 시작. (+ Heartbeat 연결 감지 보강)
