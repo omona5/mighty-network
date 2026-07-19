@@ -40,6 +40,14 @@ public class NetworkManager : MonoBehaviour
     private string myClientId = "";   // 서버가 알려준 내 식별자 (방장/나 구분용)
     private bool gameStarted = false;
 
+    // 입찰 UI 입력값
+    private string bidScoreInput = "13";
+    private readonly string[] trumpOptions = { "SPADE", "HEART", "DIAMOND", "CLUB", "NT" };
+    private readonly string[] trumpLabels = { "♠", "♥", "♦", "♣", "노기루" };
+    private int trumpIndex = 0;
+    private string friendCardInput = "";
+    private bool myCanDealMiss = false; // your_hand로 수신한 딜미스 가능 여부
+
     // ---------- 서버와 주고받는 메시지 형식 (JSON) ----------
     // 공통: { "type": ..., "data": {...} }
 
@@ -62,6 +70,12 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class PlayCardData { public string cardId; }
     [System.Serializable] private class PlayCardMsg { public string type = "play_card"; public PlayCardData data; }
 
+    [System.Serializable] private class BidData { public int targetScore; public string trumpSuit; public bool noTrump; }
+    [System.Serializable] private class BidMsg { public string type = "bid"; public BidData data; }
+    [System.Serializable] private class PassBidMsg { public string type = "pass_bid"; public string data = ""; }
+    [System.Serializable] private class FriendData { public string friendCardId; }
+    [System.Serializable] private class ChooseFriendMsg { public string type = "choose_friend"; public FriendData data; }
+
     // 받는 메시지들
     [System.Serializable] private class WelcomeData { public string clientId; }
     [System.Serializable] private class WelcomeMsg { public string type; public WelcomeData data; }
@@ -71,14 +85,16 @@ public class NetworkManager : MonoBehaviour
 
     [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public string mightyCardId; public string jokerCallCardId; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public bool friendChosen; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
     [System.Serializable] private class ErrorMsg { public string type; public ErrorData data; }
 
-    [System.Serializable] private class YourHandData { public CardData[] cards; }
+    [System.Serializable] private class YourHandData { public CardData[] cards; public bool canDealMiss; }
     [System.Serializable] private class YourHandMsg { public string type; public YourHandData data; }
+    [System.Serializable] private class DealMissMsg { public string type = "declare_deal_miss"; public string data = ""; }
 
     private async void Start()
     {
@@ -131,6 +147,7 @@ public class NetworkManager : MonoBehaviour
                 int n = (m.data != null && m.data.cards != null) ? m.data.cards.Length : 0;
                 Log("[your_hand] 손패 " + n + "장 받음");
                 if (handView != null) handView.ShowHand(m.data.cards);
+                myCanDealMiss = (m.data != null && m.data.canDealMiss);
                 break;
             }
 
@@ -229,6 +246,11 @@ public class NetworkManager : MonoBehaviour
     private void OnHandCardClicked(CardData card)
     {
         if (card == null) return;
+        if (currentState != null && currentState.status != "playing")
+        {
+            Log("지금은 카드를 낼 수 없습니다. (" + currentState.status + ")");
+            return;
+        }
         // 내 차례가 아니면 서버가 거부하지만, 미리 안내만 한다.
         if (currentState != null && currentState.currentTurnClientId != myClientId)
         {
@@ -242,6 +264,37 @@ public class NetworkManager : MonoBehaviour
     {
         Send(JsonUtility.ToJson(new PlayCardMsg { data = new PlayCardData { cardId = cardId } }));
         Log("[play_card] 전송: " + cardId);
+    }
+
+    private void SendBid()
+    {
+        int score;
+        if (!int.TryParse(bidScoreInput, out score)) { Log("공약 숫자를 확인하세요."); return; }
+        bool noTrump = trumpOptions[trumpIndex] == "NT";
+        Send(JsonUtility.ToJson(new BidMsg { data = new BidData {
+            targetScore = score,
+            trumpSuit = noTrump ? null : trumpOptions[trumpIndex],
+            noTrump = noTrump,
+        } }));
+        Log("[bid] 전송: " + score + " " + trumpLabels[trumpIndex]);
+    }
+
+    private void PassBid()
+    {
+        Send(JsonUtility.ToJson(new PassBidMsg()));
+        Log("[pass_bid] 전송");
+    }
+
+    private void DeclareDealMiss()
+    {
+        Send(JsonUtility.ToJson(new DealMissMsg()));
+        Log("[declare_deal_miss] 전송");
+    }
+
+    private void ChooseFriend(string friendCardId)
+    {
+        Send(JsonUtility.ToJson(new ChooseFriendMsg { data = new FriendData { friendCardId = friendCardId } }));
+        Log("[choose_friend] 전송: " + friendCardId);
     }
 
     // 테이블(낸 카드)을 화면 중앙에 갱신한다.
@@ -309,10 +362,11 @@ public class NetworkManager : MonoBehaviour
         GUI.skin.button.fontSize = 15;
         GUI.skin.textField.fontSize = 15;
 
-        bool inGame = gameStarted || (currentState != null && currentState.status == "playing");
+        string phase = currentState != null ? currentState.status : "waiting";
+        bool inGame = inRoom && phase != "waiting";
         // 게임 중에는 오버레이를 작게(왼쪽 위 HUD), 대기/로비에서는 넓게 표시
-        float panelW = inGame ? 360f : 500f;
-        float panelH = inGame ? 460f : 560f;
+        float panelW = inGame ? 380f : 500f;
+        float panelH = inGame ? 470f : 560f;
         GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
 
         GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
@@ -342,14 +396,12 @@ public class NetworkManager : MonoBehaviour
         }
         else
         {
-            bool playing = gameStarted || (currentState != null && currentState.status == "playing");
-            if (playing)
+            switch (phase)
             {
-                DrawGameHud();
-            }
-            else
-            {
-                DrawWaitingRoom();
+                case "bidding": DrawBidding(); break;
+                case "choosing_friend": DrawChoosingFriend(); break;
+                case "playing": DrawGameHud(); break;
+                default: DrawWaitingRoom(); break;
             }
         }
 
@@ -400,6 +452,89 @@ public class NetworkManager : MonoBehaviour
         GUILayout.EndHorizontal();
     }
 
+    // ---- 입찰 단계 화면 ----
+    private void DrawBidding()
+    {
+        GUILayout.Label("입찰 단계");
+        if (currentState == null) return;
+
+        if (currentState.highestBid != null)
+        {
+            HighestBid h = currentState.highestBid;
+            GUILayout.Label("최고 공약: " + h.nickname + " " + h.targetScore
+                + " " + (h.noTrump ? "노기루" : SuitKor(h.trumpSuit)));
+        }
+        else GUILayout.Label("아직 공약 없음");
+
+        int minBid = currentState.minBid > 0 ? currentState.minBid : 13;
+        GUILayout.Label("최소 공약: " + minBid);
+
+        bool myBidTurn = currentState.currentBidderClientId == myClientId;
+        GUILayout.Label("입찰 차례: " + currentState.currentBidderNickname
+            + (myBidTurn ? "  << 내 차례!" : ""));
+
+        if (myBidTurn)
+        {
+            int cur;
+            if (!int.TryParse(bidScoreInput, out cur) || cur < minBid) bidScoreInput = minBid.ToString();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("공약:", GUILayout.Width(45));
+            bidScoreInput = GUILayout.TextField(bidScoreInput, 2, GUILayout.Width(50));
+            GUILayout.Label("기루다:", GUILayout.Width(55));
+            trumpIndex = GUILayout.Toolbar(trumpIndex, trumpLabels, GUILayout.Width(220));
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("공약 제출")) SendBid();
+            if (GUILayout.Button("패스")) PassBid();
+            GUILayout.EndHorizontal();
+        }
+        else GUILayout.Label("(다른 사람 입찰을 기다리는 중...)");
+
+        if (myCanDealMiss)
+        {
+            GUILayout.Space(4);
+            GUI.color = new Color(1f, 0.5f, 0.5f);
+            if (GUILayout.Button("딜미스 (노게임 · 다시 돌리기)")) DeclareDealMiss();
+            GUI.color = Color.white;
+        }
+
+        GUILayout.Space(6);
+        if (GUILayout.Button("방 나가기")) LeaveRoom();
+    }
+
+    // ---- 프렌드 선택 단계 화면 ----
+    private void DrawChoosingFriend()
+    {
+        GUILayout.Label("프렌드 선택 단계");
+        if (currentState == null) return;
+
+        GUILayout.Label("주공: " + currentState.declarerNickname
+            + " / 공약 " + currentState.targetScore
+            + " / 기루다 " + (currentState.noTrump ? "노기루" : SuitKor(currentState.trumpSuit)));
+
+        bool iAmDeclarer = currentState.declarerClientId == myClientId;
+        if (iAmDeclarer)
+        {
+            GUILayout.Label("프렌드를 지정하세요:");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("마이티 프렌드 (" + CardKor(currentState.mightyCardId) + ")"))
+                ChooseFriend(currentState.mightyCardId);
+            if (GUILayout.Button("노프렌드")) ChooseFriend("NONE");
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("직접(id):", GUILayout.Width(70));
+            friendCardInput = GUILayout.TextField(friendCardInput, 6, GUILayout.Width(80));
+            if (GUILayout.Button("지정")) ChooseFriend(friendCardInput.ToUpper());
+            GUILayout.EndHorizontal();
+        }
+        else GUILayout.Label("(주공이 프렌드를 고르는 중...)");
+
+        GUILayout.Space(6);
+        if (GUILayout.Button("방 나가기")) LeaveRoom();
+    }
+
     // ---- 게임 화면 HUD (게임 시작 후) ----
     private void DrawGameHud()
     {
@@ -407,8 +542,14 @@ public class NetworkManager : MonoBehaviour
 
         if (currentState != null)
         {
+            // 주공/공약/프렌드
+            GUILayout.Label("주공: " + currentState.declarerNickname + " / 공약 " + currentState.targetScore);
+            if (currentState.friendRevealed)
+                GUILayout.Label("프렌드: " + currentState.friendNickname);
+            else if (currentState.friendChosen)
+                GUILayout.Label("프렌드: 지정됨(비공개)");
             // 룰 정보 (기루다/마이티/조커콜)
-            GUILayout.Label("기루다: " + SuitKor(currentState.trumpSuit)
+            GUILayout.Label("기루다: " + (currentState.noTrump ? "노기루" : SuitKor(currentState.trumpSuit))
                 + "  |  마이티: " + CardKor(currentState.mightyCardId)
                 + "  |  조커콜: " + CardKor(currentState.jokerCallCardId));
             GUILayout.Label("트릭 " + currentState.trickNumber + " / 10");

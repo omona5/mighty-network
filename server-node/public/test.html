@@ -77,6 +77,38 @@
       <div>플레이어 (<span id="playerCount">0</span>/5):</div>
       <ul id="players"></ul>
       <div id="startedBanner" class="hidden" style="color:#06d6a0;font-weight:bold;">게임이 시작되었습니다!</div>
+
+      <!-- 입찰 단계 -->
+      <div id="bidArea" class="hidden" style="background:#0f1626;border-radius:8px;padding:8px;margin:8px 0;">
+        <div id="bidStatus" style="color:#ffd166;"></div>
+        <div id="bidControls" class="hidden">
+          공약:
+          <input id="bidScore" type="number" min="13" max="20" value="13" style="width:60px;" />
+          기루다:
+          <select id="bidTrump" style="width:110px;">
+            <option value="SPADE">♠ 스페이드</option>
+            <option value="HEART">♥ 하트</option>
+            <option value="DIAMOND">♦ 다이아</option>
+            <option value="CLUB">♣ 클로버</option>
+            <option value="NT">노기루</option>
+          </select>
+          <button id="bidBtn">공약</button>
+          <button id="passBidBtn">패스</button>
+        </div>
+        <button id="dealMissBtn" class="hidden" style="margin-top:6px;background:#ef476f;">딜미스 (노게임 · 다시 돌리기)</button>
+      </div>
+
+      <!-- 프렌드 선택 단계 (주공만) -->
+      <div id="friendArea" class="hidden" style="background:#0f1626;border-radius:8px;padding:8px;margin:8px 0;">
+        <div style="color:#ffd166;">프렌드를 지정하세요 (주공)</div>
+        <div>
+          <button id="friendMightyBtn">마이티 프렌드</button>
+          <button id="friendNoneBtn">노프렌드</button>
+          <input id="friendCard" placeholder="카드id 예: S_A" style="width:110px;" />
+          <button id="friendCustomBtn">지정</button>
+        </div>
+      </div>
+
       <div id="tableArea" class="hidden">
         <div id="ruleInfo" style="color:#9ad;"></div>
         <div id="turnInfo"></div>
@@ -107,6 +139,7 @@
       let myToken = null;
       let myClientId = null;
       let latestState = null; // 최근 game_state (내 차례 판정용)
+      let myCanDealMiss = false; // 딜미스 선언 가능 여부(your_hand로 수신)
 
       socket.addEventListener("open", () => { $("status").textContent = "연결 상태: 접속됨"; log("[open] 접속됨"); });
       socket.addEventListener("close", () => { $("status").textContent = "연결 상태: 끊김"; log("[close] 끊김"); });
@@ -129,6 +162,20 @@
           case "your_hand":
             log("[your_hand] " + msg.data.cards.length + "장 받음");
             renderHand(msg.data.cards);
+            myCanDealMiss = !!msg.data.canDealMiss;
+            updateDealMissBtn();
+            break;
+          case "deal_miss":
+            log("[deal_miss] " + msg.data.nickname + " 딜미스 → 다시 돌립니다");
+            break;
+          case "bid_lowered":
+            log("[bid_lowered] 전원 패스 → 최소공약 " + msg.data.minBid + "로 낮춰 재입찰");
+            break;
+          case "bid_result":
+            log("[bid_result] 주공 " + msg.data.declarerNickname + " / 공약 " + msg.data.targetScore);
+            break;
+          case "friend_chosen":
+            log("[friend_chosen] 프렌드 지정 완료");
             break;
           case "room_created":
             myToken = msg.data.reconnectToken;
@@ -170,6 +217,9 @@
         $("hand").innerHTML = "";
         $("tableArea").classList.add("hidden");
         $("table").innerHTML = "";
+        $("bidArea").classList.add("hidden");
+        $("friendArea").classList.add("hidden");
+        myCanDealMiss = false;
       }
       // 무늬 기호와 색상
       const SUIT_SYMBOL = { SPADE: "♠", HEART: "♥", DIAMOND: "♦", CLUB: "♣" };
@@ -216,13 +266,51 @@
         const m = { S: "♠", H: "♥", D: "♦", C: "♣" };
         return (m[s] || s) + r;
       }
+      function renderBidding(state) {
+        const bidding = state.status === "bidding";
+        $("bidArea").classList.toggle("hidden", !bidding);
+        if (bidding) {
+          const hi = state.highestBid
+            ? `최고공약: ${state.highestBid.nickname} ${state.highestBid.targetScore} ${state.highestBid.noTrump ? "노기루" : suitSym(state.highestBid.trumpSuit)}`
+            : "아직 공약 없음";
+          const myBidTurn = state.currentBidderClientId === myClientId;
+          const minBid = state.minBid || 13;
+          $("bidStatus").textContent = `입찰 차례: ${state.currentBidderNickname || "-"}`
+            + (myBidTurn ? "  << 내 차례!" : "") + `  |  최소공약 ${minBid}  |  ` + hi;
+          $("bidControls").classList.toggle("hidden", !myBidTurn);
+          const scoreInput = $("bidScore");
+          scoreInput.min = minBid;
+          if (myBidTurn && (scoreInput.value === "" || parseInt(scoreInput.value, 10) < minBid)) {
+            scoreInput.value = minBid;
+          }
+        }
+        updateDealMissBtn();
+      }
+      function updateDealMissBtn() {
+        const show = latestState && latestState.status === "bidding" && myCanDealMiss;
+        $("dealMissBtn").classList.toggle("hidden", !show);
+      }
+      function renderFriend(state) {
+        const choosing = state.status === "choosing_friend";
+        const iAmDeclarer = state.declarerClientId === myClientId;
+        $("friendArea").classList.toggle("hidden", !(choosing && iAmDeclarer));
+      }
       function renderTable(state) {
+        renderBidding(state);
+        renderFriend(state);
         const playing = state.status === "playing";
         $("tableArea").classList.toggle("hidden", !playing);
         // 룰 정보
-        $("ruleInfo").textContent = playing
-          ? ("기루다: " + suitSym(state.trumpSuit) + "  |  마이티: " + cardShort(state.mightyCardId)
-             + "  |  조커콜: " + cardShort(state.jokerCallCardId) + "  |  트릭 " + state.trickNumber + "/10")
+        const friendTxt = state.friendRevealed
+          ? ("프렌드: " + state.friendNickname)
+          : (state.friendChosen ? "프렌드: 지정됨(비공개)" : "");
+        $("ruleInfo").innerHTML = playing
+          ? ("주공: " + (state.declarerNickname || "-") + " / 공약 " + (state.targetScore || "-")
+             + "<br>기루다: " + (state.noTrump ? "노기루" : suitSym(state.trumpSuit))
+             + "  |  마이티: " + cardShort(state.mightyCardId)
+             + "  |  조커콜: " + cardShort(state.jokerCallCardId)
+             + "  |  트릭 " + state.trickNumber + "/10"
+             + (friendTxt ? ("<br>" + friendTxt) : ""))
           : "";
         // 현재 차례 표시
         const myTurn = state.currentTurnClientId === myClientId;
@@ -300,6 +388,27 @@
       });
       $("readyBtn").addEventListener("click", () => sendMsg("ready", {}));
       $("startBtn").addEventListener("click", () => sendMsg("start_game", {}));
+
+      // 입찰
+      $("bidBtn").addEventListener("click", () => {
+        const trump = $("bidTrump").value;
+        const noTrump = trump === "NT";
+        sendMsg("bid", {
+          targetScore: parseInt($("bidScore").value, 10),
+          trumpSuit: noTrump ? null : trump,
+          noTrump,
+        });
+      });
+      $("passBidBtn").addEventListener("click", () => sendMsg("pass_bid", {}));
+      $("dealMissBtn").addEventListener("click", () => sendMsg("declare_deal_miss", {}));
+
+      // 프렌드 선택
+      $("friendMightyBtn").addEventListener("click", () =>
+        sendMsg("choose_friend", { friendCardId: latestState ? latestState.mightyCardId : "S_A" }));
+      $("friendNoneBtn").addEventListener("click", () =>
+        sendMsg("choose_friend", { friendCardId: "NONE" }));
+      $("friendCustomBtn").addEventListener("click", () =>
+        sendMsg("choose_friend", { friendCardId: $("friendCard").value.toUpperCase() }));
     </script>
   </body>
 </html>

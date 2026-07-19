@@ -265,3 +265,66 @@
 - **검증**: 유닛테스트 14/14 통과. ws_test로 한 판 10트릭 완주, 마이티/기루다/따라내기 정상 확인.
 - **임시/후속**: 기루다는 스텝8 임시 HEART 고정 → 스텝9 입찰에서 실제 선언으로 대체. 노기루/조커 리드 선언은 단순화 상태. 프렌드 공개(revealFriendWhenPlayed)는 구조만.
 - **다음 단계**: 사용자 확인 → 스텝8 커밋 → 스텝9(입찰/주공/프렌드).
+
+## 2026-07-19 23:20 (UTC+9)
+
+- **작업 요청**: 서버 가동 후 스텝9(입찰/주공/프렌드) 구현.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **게임 흐름 변경**: `start_game` 시 바로 `playing`이 아니라 `bidding` → `choosing_friend` → `playing` 단계로 진행.
+- **서버(server-node) 변경**:
+  - `src/RoomManager.js`: 상수 MIN_BID(13)/MAX_BID(20)/SUITS, TEMP_TRUMP_SUIT→FALLBACK_TRUMP_SUIT. 신규 메서드 startBidding/currentBidder/_advanceBidder/placeBid/passBid(단판 한 바퀴 입찰)/resolveBidding(최고공약자=주공, 기루다·목표점 확정, ruleConfig 생성; 전원패스면 redeal)/chooseFriend(주공만, NONE=노프렌드, 소유자 비공개 저장)/botFriendCardId(봇=마이티). startPlay: 주공이 첫 리드(currentTurnIndex=주공), ruleConfig 없으면 폴백. playCard: 프렌드 카드가 나오면 friendRevealed=true 공개. publicState: noTrump/입찰(currentBidder·highestBid)/주공(declarer·targetScore)/프렌드(friendChosen·friendRevealed·friendNickname) 추가.
+  - `server.js`: bid/pass_bid/choose_friend 핸들러. sendHandsToHumans/handleBidStep(마감 시 resolve→choosing_friend 전이, redeal 시 재배분)/maybeBotBid(봇 자동 패스, 600ms)/maybeBotChooseFriend/startPlaying 헬퍼. start_game이 dealCards→startBidding→game_state→maybeBotBid로 진행.
+- **클라이언트 변경**:
+  - `public/test.html`: 입찰 영역(#bidArea: 공약 입력·기루다 select·공약/패스 버튼) + 프렌드 영역(#friendArea: 마이티/노프렌드/직접지정). renderBidding/renderFriend, ruleInfo에 주공·공약·프렌드 표시, bid/pass_bid/choose_friend 전송 핸들러.
+  - `Assets/Scripts/NetworkManager.cs`: GameState 확장(noTrump/입찰·주공·프렌드 필드, HighestBid). Bid/PassBid/ChooseFriend 메시지 클래스·전송 메서드. OnGUI를 phase별(bidding→DrawBidding, choosing_friend→DrawChoosingFriend, playing→DrawGameHud)로 분기. DrawGameHud에 주공·공약·프렌드 추가. 손패 클릭은 status=="playing"에서만.
+- **검증**:
+  - `ws_test.js`(스텝9용 재작성): 입찰(14 SPADE)→봇 패스→주공 확정→프렌드(마이티 D_A)→본게임 진행 확인. 기루다 SPADE→마이티 D_A 자동 변경 확인.
+  - 브라우저(test.html): 방생성→준비→시작→bidding(공약14 ♥)→봇 패스→choosing_friend(마이티 프렌드)→playing. ruleInfo "주공 오모나/공약14/기루다♥/마이티♠A/조커콜♣3/프렌드 지정됨(비공개)", 주공이 첫 리드 확인.
+- **미해결/후속**: 입찰은 단판 한 바퀴(정식 오름차순 다회전 아님), 봇은 항상 패스(테스트 편의). 점수계산·승패판정은 스텝10.
+- **Unity 에디터 작업 필요**: 없음(NetworkManager.cs 스크립트만 갱신, 기존 씬 구성 그대로 동작). Play로 실행하면 입찰/프렌드 UI가 OnGUI에 표시됨.
+- **다음 단계**: 사용자 확인 → 스텝9 커밋 → 스텝10(점수 계산/승패 판정).
+
+## 2026-07-19 23:55 (UTC+9)
+
+- **작업 요청**: 딜미스(노게임) 규칙 추가 — 점수카드가 적게 들어오면 다시 돌리기.
+- **규칙 확정(사용자 선택)**: 표준 조건 + 수동 선언.
+  - 조건: 점수카드(A·K·Q·J·10) 0장, 또는 점수카드가 마이티(♠A) 1장뿐이고 조커도 없을 때. (기루다 결정 전이라 마이티는 기본값 ♠A로 판정)
+  - 방식: 조건 맞는 사람이 '딜미스' 버튼으로 선언 → 전원 재배분 후 재입찰.
+- **서버 변경**:
+  - `src/RoomManager.js`: POINT_RANKS 상수, canDeclareDealMiss(hand), declareDealMiss(room,clientId) 추가.
+  - `server.js`: `declare_deal_miss` 핸들러. sendHandsToHumans가 입찰 단계면 your_hand에 canDealMiss 동봉. 재배분 로직을 redealAndRestartBidding(room) 헬퍼로 통합(전원 패스/딜미스 공용). broadcast "deal_miss".
+- **클라이언트 변경**:
+  - `public/test.html`: #dealMissBtn(조건 충족 시 노출), your_hand.canDealMiss 수신→updateDealMissBtn, declare_deal_miss 전송. deal_miss/bid_result/friend_chosen 로그 추가.
+  - `Assets/Scripts/NetworkManager.cs`: YourHandData.canDealMiss 파싱, myCanDealMiss 보관, DrawBidding에 딜미스 버튼(조건 충족 시), DeclareDealMiss() 전송.
+- **검증**: canDeclareDealMiss 단위 테스트 5케이스 통과(0장/마이티만=true, 마이티+조커/타A만/KQ=false). 랭크 "10" 표기 Card.js와 일치.
+- **다음 단계**: 사용자 확인 → 스텝9(입찰/프렌드/딜미스) 커밋 → 스텝10(점수 계산/승패 판정).
+
+## 2026-07-20 00:15 (UTC+9)
+
+- **작업 요청**: 봇 입찰 로직 부재 지적("봇이 어떻게 공약을 내는지"). 기존엔 봇이 무조건 패스였음.
+- **서버 변경(`src/RoomManager.js`)**:
+  - `_evaluateHandForBid(hand)`: 무늬별 기루다 가정 손패 평가. tricks = 9 + 기루다장수*0.7 + 높은끗(A/K/Q)*0.7 + 오프수트A*0.9 + 마이티(1.5) + 조커(1.3). 최고 무늬를 기루다 후보로.
+  - `botDecideBid(room, player)`: 추정치(floor, ≤20)가 13 미만이면 패스, 현재최고+1(minAllowed)을 못 넘기면 패스, 이길 수 있으면 minAllowed만 보수적으로 공약.
+  - `botFriendCardId(room)`: 자기가 안 가진 카드 중 마이티>조커>에이스 순 선택(주공 자기자신 프렌드 방지).
+- **서버 변경(`server.js`)**: `maybeBotBid`가 botDecideBid로 공약/패스 결정(검증 실패 시 패스 폴백).
+- **휴리스틱 튜닝 검증(2000판 시뮬)**: 평균 개인추정 12.98, 판당 누군가 13+ 가능 100%, 판별 최고추정 분포 대부분 14~15(16+ 소수). → 매 판 주공이 나오되 과도한 공약은 드묾.
+- **통합 검증(ws_test)**:
+  - 사람 패스 시: 봇2가 13 SPADE로 주공 → 봇이 프렌드 지정 → 10트릭 완주.
+  - 사람 14 SPADE 시: 테스터 주공, 프렌드(D_A) 소유자 봇4로 트릭1에서 공개(프렌드=타인 정상).
+- **미해결/후속**: 봇 입찰은 단순 휴리스틱(오름차순 다회전 아님, 노기루 미사용). 점수계산(스텝10) 붙으면 공약 성공/실패 판정으로 튜닝 필요.
+- **다음 단계**: 사용자 확인 → 스텝9 커밋 → 스텝10.
+
+## 2026-07-20 00:35 (UTC+9)
+
+- **작업 요청**: "전원 패스 시 공약 수치가 줄어드는 룰" 확인 요청.
+- **규칙 조사(웹)**: 나무위키/위키백과/우만위키 확인 — 표준은 "전원 패스 → 재딜", 최소공약 13(5마, 지역따라 14/12). "전원 패스 시 공약 하향"은 표준 문서엔 없고 하우스룰/일부 구현 방식. 사용자 선택: **변형(하향)** 적용.
+- **적용 규칙**: 전원 패스 시 같은 패로 **최소공약을 1 낮춰 재입찰**, 바닥(11)까지 내려가도 전원 패스면 그때 **재딜**.
+- **서버 변경**:
+  - `src/RoomManager.js`: BID_FLOOR(11) 상수. startBidding(room, startMinBid=13)로 room.minBid 세팅. placeBid/botDecideBid가 room.minBid 기준으로 검증/결정. resolveBidding: 전원 패스 시 minBid>11이면 {lowerBid,newMin}, 아니면 {redeal}. publicState에 minBid 추가.
+  - `server.js`: handleBidStep에 lowerBid 분기(재배분 없이 startBidding(newMin)→재입찰), broadcast "bid_lowered".
+- **클라이언트 변경**:
+  - `public/test.html`: bidStatus에 "최소공약 N" 표시, 입력 min/기본값을 minBid로, bid_lowered 로그.
+  - `Assets/Scripts/NetworkManager.cs`: GameState.minBid 파싱, DrawBidding에 "최소 공약" 표시 및 입력 하한 보정.
+- **검증(단위)**: resolveBidding 하향(13→12→11) 및 바닥 재딜, 봇이 최소11에서 약패(추정11)로 11 공약하는지 확인. 일반 ws_test 흐름 회귀 없음.
+- **미해결/후속**: 최소공약 시작 13/바닥 11은 상수(원하면 방 옵션화 가능).
+- **다음 단계**: 사용자 확인 → 스텝9 커밋 → 스텝10.

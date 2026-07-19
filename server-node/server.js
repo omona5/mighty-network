@@ -11,6 +11,7 @@
 //   06)    play_card -> 턴 검증 후 테이블에 표시, 봇은 자동으로 냄
 //   07)    트릭 5장 완성 시 승자 판정(리드 무늬 최고 랭크), 승자가 다음 리드
 //   08)    마이티 룰(기루다/마이티/조커/조커콜/따라내기) - RuleEngine 적용
+//   09)    입찰(bid/pass_bid) → 주공/기루다 확정 → 프렌드(choose_friend) → playing
 
 const http = require("http");
 const fs = require("fs");
@@ -209,23 +210,77 @@ wss.on("connection", (ws) => {
           send(ws, "error_message", { message: "5명 전원이 준비해야 시작할 수 있습니다." });
           break;
         }
-        room.status = "playing";
+        // 09단계: 바로 playing이 아니라 입찰(bidding) 단계로 진입
+        room.status = "bidding";
         // 05단계: 카드 셔플 + 배분 (5명에게 10장씩, 바닥패 3장)
         rooms.dealCards(room);
-        // 06단계: 첫 턴/빈 테이블 세팅
-        rooms.startPlay(room);
-        console.log("[start] room", room.roomId, "게임 시작 + 카드 배분");
+        // 09단계: 입찰 세팅
+        rooms.startBidding(room);
+        console.log("[start] room", room.roomId, "게임 시작 + 카드 배분 + 입찰 시작");
         broadcast(room, "game_started", { roomId: room.roomId });
-        // 각 사람에게 "본인 손패"만 개별 전송 (남의 손패 내용은 비공개)
-        for (const p of room.players) {
-          if (!p.isBot && p.ws) {
-            send(p.ws, "your_hand", { cards: p.hand });
-          }
-        }
-        // 공개 상태에는 각자 남은 카드 수(handCount)만 포함됨
+        // 각 사람에게 "본인 손패"만 개별 전송 (입찰 판단에 필요)
+        sendHandsToHumans(room);
         broadcast(room, "game_state", rooms.publicState(room));
-        // 첫 차례가 봇이면 봇이 자동으로 낸다. (보통은 방장=사람이 먼저)
-        maybeBotPlay(room);
+        // 첫 입찰자가 봇이면 자동 패스
+        maybeBotBid(room);
+        break;
+      }
+
+      // ---- 09단계: 입찰 (공약) ----
+      case "bid": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room || room.status !== "bidding") break;
+        const result = rooms.placeBid(room, ws.clientId, data);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[bid]", ws.clientId, data.targetScore, data.noTrump ? "노기루" : data.trumpSuit);
+        handleBidStep(room, result.complete);
+        break;
+      }
+
+      // ---- 09단계: 입찰 패스 ----
+      case "pass_bid": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room || room.status !== "bidding") break;
+        const result = rooms.passBid(room, ws.clientId);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[pass_bid]", ws.clientId);
+        handleBidStep(room, result.complete);
+        break;
+      }
+
+      // ---- 09단계: 딜미스(노게임) 선언 ----
+      case "declare_deal_miss": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room || room.status !== "bidding") break;
+        const result = rooms.declareDealMiss(room, ws.clientId);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[deal_miss] 딜미스 선언:", result.nickname, "→ 재배분/재입찰");
+        broadcast(room, "deal_miss", { nickname: result.nickname });
+        redealAndRestartBidding(room);
+        break;
+      }
+
+      // ---- 09단계: 프렌드 선택 (주공만) ----
+      case "choose_friend": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room || room.status !== "choosing_friend") break;
+        const result = rooms.chooseFriend(room, ws.clientId, data.friendCardId);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[choose_friend]", ws.clientId, data.friendCardId);
+        broadcast(room, "friend_chosen", { friendChosen: true });
+        startPlaying(room);
         break;
       }
 
@@ -260,6 +315,124 @@ wss.on("connection", (ws) => {
     leaveCurrentRoom(ws);
   });
 });
+
+// 각 사람에게 본인 손패를 개별 전송 (입찰 단계면 딜미스 가능 여부도 함께)
+function sendHandsToHumans(room) {
+  const bidding = room.status === "bidding";
+  for (const p of room.players) {
+    if (!p.isBot && p.ws) {
+      send(p.ws, "your_hand", {
+        cards: p.hand,
+        canDealMiss: bidding && rooms.canDeclareDealMiss(p.hand),
+      });
+    }
+  }
+}
+
+// 재배분 후 재입찰 (딜미스 / 전원 패스 공통)
+function redealAndRestartBidding(room) {
+  rooms.dealCards(room);
+  rooms.startBidding(room);
+  sendHandsToHumans(room);
+  broadcast(room, "game_state", rooms.publicState(room));
+  maybeBotBid(room);
+}
+
+// 09단계: 입찰 한 스텝 후 처리 (완료면 마감, 아니면 다음 봇 자동 진행)
+function handleBidStep(room, complete) {
+  broadcast(room, "game_state", rooms.publicState(room));
+  if (!complete) {
+    maybeBotBid(room);
+    return;
+  }
+  // 입찰 마감
+  const result = rooms.resolveBidding(room);
+  if (result.lowerBid) {
+    // 전원 패스 → 같은 패로 최소공약 1 낮춰 재입찰
+    console.log("[bid] 전원 패스 → 최소공약", result.newMin, "로 낮춰 재입찰");
+    broadcast(room, "bid_lowered", { minBid: result.newMin });
+    rooms.startBidding(room, result.newMin); // 재배분 없이 최소공약만 하향
+    sendHandsToHumans(room);
+    broadcast(room, "game_state", rooms.publicState(room));
+    maybeBotBid(room);
+    return;
+  }
+  if (result.redeal) {
+    // 바닥까지 내려도 전원 패스 → 재배분 후 재입찰
+    console.log("[bid] 바닥 공약에서도 전원 패스 → 재배분/재입찰");
+    redealAndRestartBidding(room);
+    return;
+  }
+  // 주공 결정 → 프렌드 선택 단계로
+  room.status = "choosing_friend";
+  console.log("[bid] 주공:", result.declarerNickname, "공약:", result.targetScore,
+    "기루다:", result.noTrump ? "노기루" : result.trumpSuit);
+  broadcast(room, "bid_result", {
+    declarerNickname: result.declarerNickname,
+    targetScore: result.targetScore,
+    trumpSuit: result.trumpSuit,
+    noTrump: result.noTrump,
+  });
+  broadcast(room, "game_state", rooms.publicState(room));
+  // 주공이 봇이면 자동으로 프렌드 지정
+  maybeBotChooseFriend(room);
+}
+
+// 09단계: 입찰 차례가 봇이면 잠시 후 자동 패스
+const BOT_BID_DELAY = 600;
+function maybeBotBid(room) {
+  if (!room || room.status !== "bidding") return;
+  const bidder = rooms.currentBidder(room);
+  if (!bidder || !bidder.isBot) return;
+  setTimeout(() => {
+    const r = rooms.getRoom(room.roomId);
+    if (!r || r.status !== "bidding") return;
+    const b = rooms.currentBidder(r);
+    if (!b || !b.isBot) return;
+    // 손패 평가로 공약할지 패스할지 결정
+    const decision = rooms.botDecideBid(r, b);
+    let result;
+    if (decision) {
+      result = rooms.placeBid(r, b.clientId, decision);
+      if (result.error) {
+        result = rooms.passBid(r, b.clientId); // 혹시 검증 실패하면 패스
+        console.log("[bot] 패스:", b.nickname, "(" + result.error + ")");
+      } else {
+        console.log("[bot] 공약:", b.nickname, decision.targetScore, decision.trumpSuit);
+      }
+    } else {
+      result = rooms.passBid(r, b.clientId);
+      console.log("[bot] 패스:", b.nickname);
+    }
+    if (result.error) return;
+    handleBidStep(r, result.complete);
+  }, BOT_BID_DELAY);
+}
+
+// 09단계: 주공이 봇이면 자동 프렌드 지정
+function maybeBotChooseFriend(room) {
+  if (!room || room.status !== "choosing_friend") return;
+  const decl = room.players.find((p) => p.clientId === room.declarerClientId);
+  if (!decl || !decl.isBot) return;
+  setTimeout(() => {
+    const r = rooms.getRoom(room.roomId);
+    if (!r || r.status !== "choosing_friend") return;
+    const cardId = rooms.botFriendCardId(r);
+    rooms.chooseFriend(r, r.declarerClientId, cardId);
+    console.log("[bot] 프렌드 지정:", cardId);
+    broadcast(r, "friend_chosen", { friendChosen: true });
+    startPlaying(r);
+  }, BOT_BID_DELAY);
+}
+
+// 09단계: 프렌드 선택 완료 → 본게임 시작
+function startPlaying(room) {
+  room.status = "playing";
+  rooms.startPlay(room);
+  console.log("[play] room", room.roomId, "본게임 시작");
+  broadcast(room, "game_state", rooms.publicState(room));
+  maybeBotPlay(room);
+}
 
 // 현재 차례가 봇이면 잠시 후 자동으로 카드를 낸다.
 // 다음 차례도 봇이면 계속 이어진다(사람 차례가 오거나 게임이 끝날 때까지).
