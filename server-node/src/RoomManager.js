@@ -24,6 +24,8 @@
 const crypto = require("crypto");
 const Deck = require("./game/Deck");
 const RuleEngine = require("./game/RuleEngine");
+const Scoring = require("./game/Scoring");
+const { sortHand } = require("./game/Card");
 
 const MAX_PLAYERS = 5;
 const NUM_TRICKS = 10;
@@ -166,7 +168,7 @@ class RoomManager {
   dealCards(room) {
     const { hands, kitty } = Deck.createShuffledDeal();
     room.players.forEach((p, i) => {
-      p.hand = hands[i] || [];
+      p.hand = sortHand(hands[i] || []);
     });
     room.kitty = kitty; // 바닥패 (아직 아무에게도 공개 안 함)
     return { hands, kitty };
@@ -189,6 +191,71 @@ class RoomManager {
     room.friendClientId = null;
     room.friendType = undefined; // 지정 전 undefined, "card"|"player"|"none"
     room.friendRevealed = false;
+    room.discardedKitty = null; // 주공이 버린 3장 (점수 = 주공팀)
+  }
+
+  // ===================== 바닥패 교환 =====================
+
+  // 주공 손패에 바닥패 3장을 합친다. (10 → 13장)
+  startKittyExchange(room) {
+    const decl = room.players.find((p) => p.clientId === room.declarerClientId);
+    if (!decl) return { error: "주공을 찾을 수 없습니다." };
+    const kitty = room.kitty || [];
+    decl.hand = sortHand((decl.hand || []).concat(kitty));
+    room.kitty = []; // 교환 중에는 손패로 이동
+    room.discardedKitty = null;
+    return { ok: true, handCount: decl.hand.length };
+  }
+
+  // 주공이 손패에서 3장을 버린다. 버린 카드의 점수는 주공팀 점수에 포함.
+  discardKitty(room, clientId, cardIds) {
+    if (room.status !== "exchanging_kitty") {
+      return { error: "지금은 바닥패를 버릴 수 없습니다." };
+    }
+    if (clientId !== room.declarerClientId) {
+      return { error: "주공만 바닥패를 버릴 수 있습니다." };
+    }
+    const ids = Array.isArray(cardIds) ? cardIds.map((x) => String(x).trim().toUpperCase()) : [];
+    if (ids.length !== 3) return { error: "정확히 3장을 버려야 합니다." };
+    if (new Set(ids).size !== 3) return { error: "서로 다른 카드 3장을 선택하세요." };
+
+    const decl = room.players.find((p) => p.clientId === clientId);
+    if (!decl || !decl.hand) return { error: "주공 손패를 찾을 수 없습니다." };
+
+    const discarded = [];
+    for (const id of ids) {
+      const idx = decl.hand.findIndex((c) => c.id === id);
+      if (idx === -1) return { error: "손패에 없는 카드입니다: " + id };
+      discarded.push(decl.hand[idx]);
+      decl.hand.splice(idx, 1);
+    }
+    if (decl.hand.length !== 10) {
+      return { error: "버리기 후 손패는 10장이어야 합니다. (현재 " + decl.hand.length + ")" };
+    }
+    room.discardedKitty = discarded;
+    room.kitty = discarded; // 점수 계산용 (묻힌 카드)
+    sortHand(decl.hand);
+    return { ok: true, discarded, hand: decl.hand };
+  }
+
+  // 봇이 버릴 3장 선택: 기루다/마이티/조커/점수카드를 최대한 남기고 약한 카드부터
+  botPickDiscardIds(room) {
+    const decl = room.players.find((p) => p.clientId === room.declarerClientId);
+    if (!decl || !decl.hand) return [];
+    const trump = room.declaredTrump;
+    const mighty = room.ruleConfig ? room.ruleConfig.mightyCardId : "S_A";
+    const scored = decl.hand.map((c) => {
+      let score = 0;
+      if (c.id === mighty) score += 100;
+      if (c.suit === "JOKER") score += 90;
+      if (trump && c.suit === trump) score += 40;
+      if (c.point) score += 20;
+      const rankOrder = { "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6, "8": 7, "9": 8, "10": 9, J: 10, Q: 11, K: 12, A: 13, JOKER: 14 };
+      score += (rankOrder[c.rank] || 0) * 0.1;
+      return { id: c.id, score };
+    });
+    scored.sort((a, b) => a.score - b.score);
+    return scored.slice(0, 3).map((x) => x.id);
   }
 
   currentBidder(room) {
@@ -459,6 +526,7 @@ class RoomManager {
     }
 
     hand.splice(idx, 1); // 검증 통과 후 실제 제거
+    sortHand(hand);
     room.tableCards.push({
       clientId: player.clientId,
       playerNickname: player.nickname,
@@ -493,13 +561,65 @@ class RoomManager {
       room.lastTrickWinner = { clientId: winnerClientId, nickname: winner.nickname };
       room.trickComplete = true; // 테이블은 다음 리드 때 비움 (화면에 잠시 보이도록)
       room.currentTurnIndex = winnerIndex; // 승자가 다음 트릭 리드
-      if (room.trickNumber < NUM_TRICKS) room.trickNumber++;
-      trickResult = { winnerClientId, winnerNickname: winner.nickname };
+      const wasLastTrick = room.trickNumber >= NUM_TRICKS;
+      if (!wasLastTrick) room.trickNumber++;
+      trickResult = {
+        winnerClientId,
+        winnerNickname: winner.nickname,
+        handOver: wasLastTrick,
+      };
     } else {
       // 다음 플레이어로 턴 넘김 (순환)
       room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
     }
     return { card, player, trickResult };
+  }
+
+  // 10트릭 완료 여부
+  isHandOver(room) {
+    return room.status === "playing" && room.trickComplete && room.trickNumber >= NUM_TRICKS;
+  }
+
+  // 한 판 종료: 점수 계산 + finished 상태
+  finishGame(room) {
+    const result = Scoring.calculateResult(room);
+    room.status = "finished";
+    room.lastResult = result;
+    room.currentTurnIndex = null;
+    return result;
+  }
+
+  // 결과 확인 후 대기방으로 복귀 (다음 판 준비)
+  returnToWaiting(room) {
+    room.status = "waiting";
+    room.lastResult = null;
+    room.kitty = undefined;
+    room.discardedKitty = null;
+    room.tableCards = [];
+    room.trickHistory = [];
+    room.lastTrickWinner = null;
+    room.trickComplete = false;
+    room.trickNumber = 0;
+    room.currentTurnIndex = null;
+    room.ruleConfig = undefined;
+    room.declarerClientId = null;
+    room.declaredTrump = undefined;
+    room.noTrump = false;
+    room.targetScore = null;
+    room.friendCardId = undefined;
+    room.friendClientId = null;
+    room.friendType = undefined;
+    room.friendRevealed = false;
+    room.highestBid = null;
+    room.bids = [];
+    room.minBid = undefined;
+    room.currentBidderIndex = null;
+    room.players.forEach((p) => {
+      p.hand = [];
+      p.wonCards = [];
+      p.isReady = !!p.isBot; // 봇은 항상 준비
+    });
+    this.fillWithBots(room);
   }
 
   // 봇이 낼 카드 id를 고른다. (08단계: 따라내기 규칙을 지키는 합법 카드 중 무작위)
@@ -611,6 +731,19 @@ class RoomManager {
       friendCardId: room.friendType === "card" ? room.friendCardId : null,
       friendRevealed: !!room.friendRevealed,
       friendNickname: friend ? friend.nickname : null,
+      // 진행 중 주공팀 점수 / 승리까지 남은 점수 (playing·finished)
+      ...(room.status === "playing" || room.status === "finished"
+        ? (() => {
+            const live = Scoring.liveTeamScores(room);
+            return {
+              declarerTeamScore: live.declarerTeamScore,
+              defenderTeamScore: live.defenderTeamScore,
+              kittyScore: live.kittyScore,
+              pointsNeeded: live.pointsNeeded,
+            };
+          })()
+        : {}),
+      lastResult: room.status === "finished" ? room.lastResult : null,
       tableCards: (room.tableCards || []).map((t) => ({
         playerNickname: t.playerNickname,
         card: t.card,

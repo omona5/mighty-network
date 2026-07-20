@@ -349,3 +349,34 @@
 - **작업 요청**: 프렌드 지정 후 "무슨 프렌드인지"는 즉시 공개되어야 함.
 - **변경**: publicState에 friendCardId 공개(카드 프렌드). 소유자(friendNickname)만 friendRevealed 전까지 비공개. UI: "마이티 프렌드 (♠A) (소유자 비공개)" / 공개 후 "→ 닉네임". 조커 프렌드 버튼 추가.
 - **파일**: RoomManager.js, server.js, test.html, NetworkManager.cs
+
+## 2026-07-20 23:50 (UTC+9)
+
+- **작업 요청**: 스텝10(점수 계산/승패 판정) 구현.
+- **서버 신규**: `src/game/Scoring.js` — scoreOfCards, calculateResult(주공팀=주공+공개프렌드, 미공개 카드프렌드=주공단독, 바닥패점수는 주공팀, 목표점수 이상이면 주공승).
+- **RoomManager**: playCard 마지막 트릭 handOver, finishGame(status=finished+lastResult), returnToWaiting(대기 초기화).
+- **server.js**: handOver 시 finishAndBroadcast(game_finished), return_to_lobby 핸들러, maybeBotPlay에서도 종료 처리.
+- **클라이언트**: test.html 결과 패널+대기방 복귀, NetworkManager DrawFinished/game_finished/ReturnToLobby.
+- **검증**: scoring.test.js 통과. ws_test 10트릭 후 `판종료: 승=수비팀 주공팀=8/14 수비팀=12 바닥패=1` 확인.
+- **미구현(후속)**: 주공 바닥패 교환(먹고 3장 버리기), 런/백런 배수 점수. 다음=스텝11 재접속.
+
+## 2026-07-20 23:55 (UTC+9)
+
+- **작업 요청**: 주공+프렌드 승리까지 몇 점 필요한지 잘 보이게.
+- **변경**: publicState에 진행 중 declarerTeamScore/defenderTeamScore/kittyScore/pointsNeeded. HUD에 "★ 주공팀 승리 조건: N점 이상 (현재 X점 / 앞으로 Y점)" 표시. 결과 화면에도 목표·부족 점수 강조.
+
+## 2026-07-21 00:05 (UTC+9)
+
+- **작업 요청**: 개발 순서 확정 — 1) 바닥패 교환 → 2) 런/백런 → 3) 스텝11. 1번 구현.
+- **흐름**: bidding → **exchanging_kitty** → choosing_friend → playing.
+- **서버**: startKittyExchange(주공 손패+3), discard_kitty(정확히 3장), botPickDiscardIds, discardedKitty=묻힌 카드(점수=주공팀). beginFriendSelection/maybeBotDiscardKitty.
+- **클라이언트**: test.html/Unity에서 카드 3장 선택 후 버리기 UI.
+- **검증**: ws_test — 입찰마감(봇2 15) → 바닥패 버리기 완료 → 10트릭 → 판종료 주공팀 15/15.
+- **다음**: 런/백런 배수 점수.
+
+## 2026-07-21 00:10 (UTC+9)
+
+- **작업 요청**: 손패 받을 때 무늬/숫자별 정렬.
+- **정렬 규칙**: ♠→♥→♦→♣→조커, 같은 무늬는 A>K>...>2.
+- **서버**: Card.sortHand, dealCards/kitty/discard/playCard 후 정렬. sendHandsToHumans에서도 정렬.
+- **클라이언트**: HandView.SortCards, test.html sortHandClient.

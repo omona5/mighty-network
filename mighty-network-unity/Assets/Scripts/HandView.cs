@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -21,19 +22,72 @@ public class HandView : MonoBehaviour
 
     private readonly List<GameObject> spawned = new List<GameObject>();
 
-    // 손패를 다시 그린다.
+    // 손패를 다시 그린다. (무늬→숫자 높은순 정렬)
     public void ShowHand(CardData[] cards)
     {
         Clear();
         if (cards == null) return;
 
+        CardData[] sorted = SortCards(cards);
         Transform parent = cardContainer != null ? cardContainer : transform;
-        foreach (CardData card in cards)
+        foreach (CardData card in sorted)
         {
             CardView view = Instantiate(cardPrefab, parent);
             view.SetCard(card);
             view.Clicked = onCardClicked; // 클릭하면 콜백 호출
             spawned.Add(view.gameObject);
+        }
+    }
+
+    // ♠ → ♥ → ♦ → ♣ → 조커, 같은 무늬는 A > K > ... > 2
+    public static CardData[] SortCards(CardData[] cards)
+    {
+        if (cards == null || cards.Length == 0) return cards;
+        CardData[] copy = (CardData[])cards.Clone();
+        Array.Sort(copy, CompareCards);
+        return copy;
+    }
+
+    private static int CompareCards(CardData a, CardData b)
+    {
+        int sa = SuitOrder(a != null ? a.suit : null);
+        int sb = SuitOrder(b != null ? b.suit : null);
+        if (sa != sb) return sa.CompareTo(sb);
+        return RankOrder(b != null ? b.rank : null).CompareTo(RankOrder(a != null ? a.rank : null));
+    }
+
+    private static int SuitOrder(string suit)
+    {
+        switch (suit)
+        {
+            case "SPADE": return 0;
+            case "HEART": return 1;
+            case "DIAMOND": return 2;
+            case "CLUB": return 3;
+            case "JOKER": return 4;
+            default: return 9;
+        }
+    }
+
+    private static int RankOrder(string rank)
+    {
+        switch (rank)
+        {
+            case "2": return 0;
+            case "3": return 1;
+            case "4": return 2;
+            case "5": return 3;
+            case "6": return 4;
+            case "7": return 5;
+            case "8": return 6;
+            case "9": return 7;
+            case "10": return 8;
+            case "J": return 9;
+            case "Q": return 10;
+            case "K": return 11;
+            case "A": return 12;
+            case "JOKER": return 13;
+            default: return -1;
         }
     }
 

@@ -39,6 +39,10 @@ public class NetworkManager : MonoBehaviour
     private GameState currentState;
     private string myClientId = "";   // 서버가 알려준 내 식별자 (방장/나 구분용)
     private bool gameStarted = false;
+    private GameFinishedData lastResult = null; // 10단계: game_finished 결과
+    private CardData[] myHandCards = null;
+    private readonly System.Collections.Generic.List<string> discardSelected =
+        new System.Collections.Generic.List<string>();
 
     // 입찰 UI 입력값
     private string bidScoreInput = "13";
@@ -75,6 +79,20 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class PassBidMsg { public string type = "pass_bid"; public string data = ""; }
     [System.Serializable] private class FriendData { public string friendCardId; public string friendClientId; }
     [System.Serializable] private class ChooseFriendMsg { public string type = "choose_friend"; public FriendData data; }
+    [System.Serializable] private class ReturnLobbyMsg { public string type = "return_to_lobby"; public string data = ""; }
+    [System.Serializable] private class DiscardKittyData { public string[] cardIds; }
+    [System.Serializable] private class DiscardKittyMsg { public string type = "discard_kitty"; public DiscardKittyData data; }
+
+    [System.Serializable] private class TeamPlayerScore { public string clientId; public string nickname; public bool isBot; public int score; public int trickCount; }
+    [System.Serializable] private class GameFinishedData {
+        public string winner; public string winnerLabel; public int targetScore;
+        public int declarerTeamScore; public int defenderTeamScore; public int kittyScore;
+        public string declarerNickname; public string friendNickname;
+        public string friendType; public string friendCardId; public bool friendRevealed;
+        public string trumpSuit; public bool noTrump;
+        public TeamPlayerScore[] declarerTeam; public TeamPlayerScore[] defenderTeam;
+    }
+    [System.Serializable] private class GameFinishedMsg { public string type; public GameFinishedData data; }
 
     // 받는 메시지들
     [System.Serializable] private class WelcomeData { public string clientId; }
@@ -86,7 +104,7 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
@@ -147,6 +165,8 @@ public class NetworkManager : MonoBehaviour
                 int n = (m.data != null && m.data.cards != null) ? m.data.cards.Length : 0;
                 Log("[your_hand] 손패 " + n + "장 받음");
                 if (handView != null) handView.ShowHand(m.data.cards);
+                myHandCards = (m.data != null) ? HandView.SortCards(m.data.cards) : null;
+                discardSelected.Clear();
                 myCanDealMiss = (m.data != null && m.data.canDealMiss);
                 break;
             }
@@ -171,6 +191,23 @@ public class NetworkManager : MonoBehaviour
                 GameStateMsg m = JsonUtility.FromJson<GameStateMsg>(json);
                 currentState = m.data;
                 UpdateTable(m.data);
+                if (currentState != null && currentState.status == "waiting")
+                {
+                    gameStarted = false;
+                    lastResult = null;
+                    if (handView != null) handView.Clear();
+                    if (tableView != null) tableView.Clear();
+                }
+                break;
+            }
+
+            case "game_finished":
+            {
+                GameFinishedMsg m = JsonUtility.FromJson<GameFinishedMsg>(json);
+                lastResult = m.data;
+                Log("[game_finished] 승: " + (lastResult != null ? lastResult.winnerLabel : "?")
+                    + "  주공팀 " + (lastResult != null ? lastResult.declarerTeamScore : 0)
+                    + " / 목표 " + (lastResult != null ? lastResult.targetScore : 0));
                 break;
             }
 
@@ -246,6 +283,15 @@ public class NetworkManager : MonoBehaviour
     private void OnHandCardClicked(CardData card)
     {
         if (card == null) return;
+        // 바닥패 교환: 카드 선택 토글
+        if (currentState != null && currentState.status == "exchanging_kitty"
+            && currentState.declarerClientId == myClientId)
+        {
+            if (discardSelected.Contains(card.id)) discardSelected.Remove(card.id);
+            else if (discardSelected.Count < 3) discardSelected.Add(card.id);
+            Log("[kitty] 선택 " + discardSelected.Count + "/3: " + string.Join(",", discardSelected));
+            return;
+        }
         if (currentState != null && currentState.status != "playing")
         {
             Log("지금은 카드를 낼 수 없습니다. (" + currentState.status + ")");
@@ -391,8 +437,8 @@ public class NetworkManager : MonoBehaviour
         string phase = currentState != null ? currentState.status : "waiting";
         bool inGame = inRoom && phase != "waiting";
         // 게임 중에는 오버레이를 작게(왼쪽 위 HUD), 대기/로비에서는 넓게 표시
-        float panelW = inGame ? 380f : 500f;
-        float panelH = inGame ? 470f : 560f;
+        float panelW = inGame ? 400f : 500f;
+        float panelH = phase == "finished" ? 520f : (inGame ? 470f : 560f);
         GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
 
         GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
@@ -425,8 +471,10 @@ public class NetworkManager : MonoBehaviour
             switch (phase)
             {
                 case "bidding": DrawBidding(); break;
+                case "exchanging_kitty": DrawKittyExchange(); break;
                 case "choosing_friend": DrawChoosingFriend(); break;
                 case "playing": DrawGameHud(); break;
+                case "finished": DrawFinished(); break;
                 default: DrawWaitingRoom(); break;
             }
         }
@@ -529,6 +577,62 @@ public class NetworkManager : MonoBehaviour
         if (GUILayout.Button("방 나가기")) LeaveRoom();
     }
 
+    // ---- 바닥패 교환 화면 ----
+    private void DrawKittyExchange()
+    {
+        GUILayout.Label("바닥패 교환");
+        if (currentState == null) return;
+
+        GUILayout.Label("주공: " + currentState.declarerNickname
+            + " / 승리 조건 " + currentState.targetScore + "점 이상");
+
+        bool iAmDeclarer = currentState.declarerClientId == myClientId;
+        if (iAmDeclarer)
+        {
+            GUILayout.Label("바닥패 3장을 받았습니다. 버릴 카드 3장을 고르세요.");
+            GUILayout.Label("선택: " + discardSelected.Count + "/3"
+                + (discardSelected.Count > 0 ? " [" + string.Join(", ", discardSelected) + "]" : ""));
+            GUILayout.Label("(손패 카드를 클릭해 선택/해제)");
+
+            if (myHandCards != null)
+            {
+                GUILayout.BeginHorizontal();
+                int shown = 0;
+                foreach (CardData c in myHandCards)
+                {
+                    if (c == null) continue;
+                    bool sel = discardSelected.Contains(c.id);
+                    string label = (sel ? "[V] " : "") + CardKor(c.id);
+                    if (GUILayout.Button(label, GUILayout.Width(52), GUILayout.Height(36)))
+                    {
+                        if (sel) discardSelected.Remove(c.id);
+                        else if (discardSelected.Count < 3) discardSelected.Add(c.id);
+                    }
+                    shown++;
+                    if (shown % 7 == 0) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); }
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            GUI.enabled = discardSelected.Count == 3;
+            if (GUILayout.Button("3장 버리기", GUILayout.Height(36))) DiscardKitty();
+            GUI.enabled = true;
+        }
+        else GUILayout.Label("(주공이 바닥패 3장을 고르는 중...)");
+
+        GUILayout.Space(6);
+        if (GUILayout.Button("방 나가기")) LeaveRoom();
+    }
+
+    private void DiscardKitty()
+    {
+        if (discardSelected.Count != 3) return;
+        Send(JsonUtility.ToJson(new DiscardKittyMsg {
+            data = new DiscardKittyData { cardIds = discardSelected.ToArray() }
+        }));
+        Log("[discard_kitty] 전송: " + string.Join(",", discardSelected));
+    }
+
     // ---- 프렌드 선택 단계 화면 ----
     private void DrawChoosingFriend()
     {
@@ -536,8 +640,8 @@ public class NetworkManager : MonoBehaviour
         if (currentState == null) return;
 
         GUILayout.Label("주공: " + currentState.declarerNickname
-            + " / 공약 " + currentState.targetScore
             + " / 기루다 " + (currentState.noTrump ? "노기루" : SuitKor(currentState.trumpSuit)));
+        GUILayout.Label("★ 주공팀 승리 조건: " + currentState.targetScore + "점 이상");
 
         bool iAmDeclarer = currentState.declarerClientId == myClientId;
         if (iAmDeclarer)
@@ -573,6 +677,56 @@ public class NetworkManager : MonoBehaviour
         if (GUILayout.Button("방 나가기")) LeaveRoom();
     }
 
+    // ---- 결과 화면 (한 판 종료) ----
+    private void DrawFinished()
+    {
+        GUILayout.Label("한 판 종료");
+        GameFinishedData r = lastResult;
+        if (r == null)
+        {
+            GUILayout.Label("(결과 수신 대기...)");
+        }
+        else
+        {
+            GUILayout.Label("승자: " + r.winnerLabel);
+            GUILayout.Label("주공팀 목표였던 점수: " + r.targetScore + "점");
+            GUILayout.Label("주공: " + r.declarerNickname
+                + (string.IsNullOrEmpty(r.friendNickname) ? " (단독)" : " + 프렌드 " + r.friendNickname));
+            GUILayout.Label("결과 — 주공팀 " + r.declarerTeamScore + "점"
+                + "  |  수비팀 " + r.defenderTeamScore + "점"
+                + "  |  바닥패 " + r.kittyScore + "점");
+            if (r.winner == "declarer")
+                GUILayout.Label("(목표 " + r.targetScore + "점 달성)");
+            else
+                GUILayout.Label("(목표 " + r.targetScore + "점까지 "
+                    + Math.Max(0, r.targetScore - r.declarerTeamScore) + "점 부족)");
+
+            GUILayout.Space(4);
+            GUILayout.Label("주공팀:");
+            if (r.declarerTeam != null)
+            {
+                foreach (TeamPlayerScore p in r.declarerTeam)
+                    GUILayout.Label("  - " + p.nickname + ": " + p.score + "점");
+            }
+            GUILayout.Label("수비팀:");
+            if (r.defenderTeam != null)
+            {
+                foreach (TeamPlayerScore p in r.defenderTeam)
+                    GUILayout.Label("  - " + p.nickname + ": " + p.score + "점");
+            }
+        }
+
+        GUILayout.Space(8);
+        if (GUILayout.Button("대기방으로 돌아가기", GUILayout.Height(36))) ReturnToLobby();
+        if (GUILayout.Button("방 나가기")) LeaveRoom();
+    }
+
+    private void ReturnToLobby()
+    {
+        Send(JsonUtility.ToJson(new ReturnLobbyMsg()));
+        Log("[return_to_lobby] 전송");
+    }
+
     // ---- 게임 화면 HUD (게임 시작 후) ----
     private void DrawGameHud()
     {
@@ -581,7 +735,14 @@ public class NetworkManager : MonoBehaviour
         if (currentState != null)
         {
             // 주공/공약/프렌드
-            GUILayout.Label("주공: " + currentState.declarerNickname + " / 공약 " + currentState.targetScore);
+            string teamLabel = "주공: " + currentState.declarerNickname;
+            if (currentState.friendRevealed && !string.IsNullOrEmpty(currentState.friendNickname))
+                teamLabel += " + " + currentState.friendNickname;
+            GUILayout.Label(teamLabel);
+            // 승리 조건 — 눈에 띄게
+            GUILayout.Label("★ 주공팀 승리 조건: " + currentState.targetScore + "점 이상"
+                + "  (현재 " + currentState.declarerTeamScore + "점 / 앞으로 "
+                + currentState.pointsNeeded + "점)");
             if (currentState.friendChosen)
             {
                 if (currentState.friendType == "none")

@@ -11,13 +11,15 @@
 //   06)    play_card -> 턴 검증 후 테이블에 표시, 봇은 자동으로 냄
 //   07)    트릭 5장 완성 시 승자 판정(리드 무늬 최고 랭크), 승자가 다음 리드
 //   08)    마이티 룰(기루다/마이티/조커/조커콜/따라내기) - RuleEngine 적용
-//   09)    입찰(bid/pass_bid) → 주공/기루다 확정 → 프렌드(choose_friend) → playing
+//   09)    입찰 → 바닥패 교환(discard_kitty) → 프렌드 → playing
+//   10)    10트릭 종료 → 점수 계산/승패(game_finished) → return_to_lobby
 
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
 const RoomManager = require("./src/RoomManager");
+const { sortHand } = require("./src/game/Card");
 
 const PORT = 3000;
 
@@ -269,6 +271,22 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      // ---- 바닥패 교환: 주공이 3장 버리기 ----
+      case "discard_kitty": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room || room.status !== "exchanging_kitty") break;
+        const result = rooms.discardKitty(room, ws.clientId, data.cardIds);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[discard_kitty]", ws.clientId, data.cardIds);
+        send(ws, "your_hand", { cards: result.hand, canDealMiss: false });
+        broadcast(room, "kitty_discarded", { ok: true });
+        beginFriendSelection(room);
+        break;
+      }
+
       // ---- 09단계: 프렌드 선택 (주공만) ----
       case "choose_friend": {
         const room = rooms.getRoom(ws.roomId);
@@ -304,10 +322,22 @@ wss.on("connection", (ws) => {
           console.log("[trick] 승자:", result.trickResult.winnerNickname);
         }
         broadcast(room, "game_state", rooms.publicState(room));
-        // 카드를 낸 본인에게 갱신된 손패 전송
         send(ws, "your_hand", { cards: result.player.hand });
-        // 다음 차례가 봇이면 이어서 자동으로 낸다.
-        maybeBotPlay(room);
+        if (result.trickResult && result.trickResult.handOver) {
+          finishAndBroadcast(room);
+        } else {
+          maybeBotPlay(room);
+        }
+        break;
+      }
+
+      // ---- 10단계: 결과 확인 후 대기방 복귀 ----
+      case "return_to_lobby": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room || room.status !== "finished") break;
+        rooms.returnToWaiting(room);
+        console.log("[lobby] room", room.roomId, "대기방 복귀");
+        broadcast(room, "game_state", rooms.publicState(room));
         break;
       }
 
@@ -327,6 +357,7 @@ function sendHandsToHumans(room) {
   const bidding = room.status === "bidding";
   for (const p of room.players) {
     if (!p.isBot && p.ws) {
+      if (p.hand) sortHand(p.hand);
       send(p.ws, "your_hand", {
         cards: p.hand,
         canDealMiss: bidding && rooms.canDeclareDealMiss(p.hand),
@@ -369,8 +400,8 @@ function handleBidStep(room, complete) {
     redealAndRestartBidding(room);
     return;
   }
-  // 주공 결정 → 프렌드 선택 단계로
-  room.status = "choosing_friend";
+  // 주공 결정 → 바닥패 교환 → (이후) 프렌드 선택
+  room.status = "exchanging_kitty";
   console.log("[bid] 주공:", result.declarerNickname, "공약:", result.targetScore,
     "기루다:", result.noTrump ? "노기루" : result.trumpSuit);
   broadcast(room, "bid_result", {
@@ -379,13 +410,46 @@ function handleBidStep(room, complete) {
     trumpSuit: result.trumpSuit,
     noTrump: result.noTrump,
   });
+  const kittyStart = rooms.startKittyExchange(room);
+  if (kittyStart.error) {
+    console.log("[kitty] error:", kittyStart.error);
+  }
+  // 주공에게 13장 손패 재전송
+  sendHandsToHumans(room);
   broadcast(room, "game_state", rooms.publicState(room));
-  // 주공이 봇이면 자동으로 프렌드 지정
+  maybeBotDiscardKitty(room);
+}
+
+// 바닥패 버리기 완료 → 프렌드 선택
+const BOT_BID_DELAY = 600;
+
+function beginFriendSelection(room) {
+  room.status = "choosing_friend";
+  broadcast(room, "game_state", rooms.publicState(room));
   maybeBotChooseFriend(room);
 }
 
+// 주공이 봇이면 자동으로 약한 카드 3장 버림
+function maybeBotDiscardKitty(room) {
+  if (!room || room.status !== "exchanging_kitty") return;
+  const decl = room.players.find((p) => p.clientId === room.declarerClientId);
+  if (!decl || !decl.isBot) return;
+  setTimeout(() => {
+    const r = rooms.getRoom(room.roomId);
+    if (!r || r.status !== "exchanging_kitty") return;
+    const ids = rooms.botPickDiscardIds(r);
+    const result = rooms.discardKitty(r, r.declarerClientId, ids);
+    if (result.error) {
+      console.log("[bot] discard error:", result.error);
+      return;
+    }
+    console.log("[bot] 바닥패 버림:", ids.join(","));
+    broadcast(r, "kitty_discarded", { ok: true });
+    beginFriendSelection(r);
+  }, BOT_BID_DELAY);
+}
+
 // 09단계: 입찰 차례가 봇이면 잠시 후 자동 패스
-const BOT_BID_DELAY = 600;
 function maybeBotBid(room) {
   if (!room || room.status !== "bidding") return;
   const bidder = rooms.currentBidder(room);
@@ -444,6 +508,20 @@ function startPlaying(room) {
   maybeBotPlay(room);
 }
 
+// 10단계: 한 판 종료 처리
+function finishAndBroadcast(room) {
+  const result = rooms.finishGame(room);
+  console.log(
+    "[finish] room", room.roomId,
+    "승:", result.winnerLabel,
+    "주공팀", result.declarerTeamScore, "/", result.targetScore,
+    "수비팀", result.defenderTeamScore,
+    "(바닥패", result.kittyScore + ")"
+  );
+  broadcast(room, "game_finished", result);
+  broadcast(room, "game_state", rooms.publicState(room));
+}
+
 // 현재 차례가 봇이면 잠시 후 자동으로 카드를 낸다.
 // 다음 차례도 봇이면 계속 이어진다(사람 차례가 오거나 게임이 끝날 때까지).
 const BOT_PLAY_DELAY = 700; // ms
@@ -471,7 +549,11 @@ function maybeBotPlay(room) {
       console.log("[trick] 승자:", result.trickResult.winnerNickname);
     }
     broadcast(r, "game_state", rooms.publicState(r));
-    maybeBotPlay(r); // 다음도 봇이면 계속
+    if (result.trickResult && result.trickResult.handOver) {
+      finishAndBroadcast(r);
+    } else {
+      maybeBotPlay(r); // 다음도 봇이면 계속
+    }
   }, BOT_PLAY_DELAY);
 }
 
