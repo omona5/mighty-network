@@ -73,7 +73,7 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class BidData { public int targetScore; public string trumpSuit; public bool noTrump; }
     [System.Serializable] private class BidMsg { public string type = "bid"; public BidData data; }
     [System.Serializable] private class PassBidMsg { public string type = "pass_bid"; public string data = ""; }
-    [System.Serializable] private class FriendData { public string friendCardId; }
+    [System.Serializable] private class FriendData { public string friendCardId; public string friendClientId; }
     [System.Serializable] private class ChooseFriendMsg { public string type = "choose_friend"; public FriendData data; }
 
     // 받는 메시지들
@@ -86,7 +86,7 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public bool friendChosen; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
@@ -293,8 +293,24 @@ public class NetworkManager : MonoBehaviour
 
     private void ChooseFriend(string friendCardId)
     {
+        if (string.IsNullOrWhiteSpace(friendCardId))
+        {
+            Log("프렌드 카드 id를 입력하세요. (노프렌드는 '노프렌드' 버튼)");
+            return;
+        }
         Send(JsonUtility.ToJson(new ChooseFriendMsg { data = new FriendData { friendCardId = friendCardId } }));
-        Log("[choose_friend] 전송: " + friendCardId);
+        Log("[choose_friend] 카드: " + friendCardId);
+    }
+
+    private void ChooseFriendPlayer(string friendClientId)
+    {
+        if (string.IsNullOrEmpty(friendClientId))
+        {
+            Log("프렌드 플레이어를 선택하세요.");
+            return;
+        }
+        Send(JsonUtility.ToJson(new ChooseFriendMsg { data = new FriendData { friendClientId = friendClientId } }));
+        Log("[choose_friend] 플레이어: " + friendClientId);
     }
 
     // 테이블(낸 카드)을 화면 중앙에 갱신한다.
@@ -340,6 +356,16 @@ public class NetworkManager : MonoBehaviour
         string rank = cardId.Substring(us + 1);
         string sym = suit == "S" ? "♠" : suit == "H" ? "♥" : suit == "D" ? "♦" : suit == "C" ? "♣" : suit;
         return sym + rank;
+    }
+
+    // 프렌드 선언 표시용 (소유자 비공개여도 "무슨 프렌드"는 공개)
+    private static string FriendDeclLabel(string cardId, string mightyId)
+    {
+        if (string.IsNullOrEmpty(cardId)) return "카드 프렌드";
+        if (cardId == "JOKER") return "조커 프렌드";
+        if (!string.IsNullOrEmpty(mightyId) && cardId == mightyId)
+            return "마이티 프렌드 (" + CardKor(cardId) + ")";
+        return CardKor(cardId) + " 프렌드";
     }
 
     private void Log(string line)
@@ -520,14 +546,26 @@ public class NetworkManager : MonoBehaviour
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("마이티 프렌드 (" + CardKor(currentState.mightyCardId) + ")"))
                 ChooseFriend(currentState.mightyCardId);
+            if (GUILayout.Button("조커 프렌드")) ChooseFriend("JOKER");
             if (GUILayout.Button("노프렌드")) ChooseFriend("NONE");
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("직접(id):", GUILayout.Width(70));
+            GUILayout.Label("카드(id):", GUILayout.Width(70));
             friendCardInput = GUILayout.TextField(friendCardInput, 6, GUILayout.Width(80));
-            if (GUILayout.Button("지정")) ChooseFriend(friendCardInput.ToUpper());
+            if (GUILayout.Button("카드 지정")) ChooseFriend(friendCardInput.Trim().ToUpper());
             GUILayout.EndHorizontal();
+
+            GUILayout.Label("플레이어 프렌드 (즉시 공개):");
+            if (currentState.players != null)
+            {
+                foreach (PlayerInfo p in currentState.players)
+                {
+                    if (p.clientId == currentState.declarerClientId) continue;
+                    string label = (p.isBot ? "[봇] " : "") + p.nickname;
+                    if (GUILayout.Button(label)) ChooseFriendPlayer(p.clientId);
+                }
+            }
         }
         else GUILayout.Label("(주공이 프렌드를 고르는 중...)");
 
@@ -544,10 +582,21 @@ public class NetworkManager : MonoBehaviour
         {
             // 주공/공약/프렌드
             GUILayout.Label("주공: " + currentState.declarerNickname + " / 공약 " + currentState.targetScore);
-            if (currentState.friendRevealed)
-                GUILayout.Label("프렌드: " + currentState.friendNickname);
-            else if (currentState.friendChosen)
-                GUILayout.Label("프렌드: 지정됨(비공개)");
+            if (currentState.friendChosen)
+            {
+                if (currentState.friendType == "none")
+                    GUILayout.Label("프렌드: 없음(노프렌드)");
+                else if (currentState.friendType == "player")
+                    GUILayout.Label("프렌드: " + currentState.friendNickname + " (플레이어)");
+                else
+                {
+                    string decl = FriendDeclLabel(currentState.friendCardId, currentState.mightyCardId);
+                    if (currentState.friendRevealed)
+                        GUILayout.Label("프렌드: " + decl + " → " + currentState.friendNickname);
+                    else
+                        GUILayout.Label("프렌드: " + decl + " (소유자 비공개)");
+                }
+            }
             // 룰 정보 (기루다/마이티/조커콜)
             GUILayout.Label("기루다: " + (currentState.noTrump ? "노기루" : SuitKor(currentState.trumpSuit))
                 + "  |  마이티: " + CardKor(currentState.mightyCardId)

@@ -185,8 +185,9 @@ class RoomManager {
     room.declaredTrump = undefined;
     room.noTrump = false;
     room.targetScore = null;
-    room.friendCardId = undefined; // 지정 전 undefined, "없음"이면 null
+    room.friendCardId = undefined; // 지정 전 undefined, 노프렌드/플레이어면 null
     room.friendClientId = null;
+    room.friendType = undefined; // 지정 전 undefined, "card"|"player"|"none"
     room.friendRevealed = false;
   }
 
@@ -266,23 +267,56 @@ class RoomManager {
     };
   }
 
-  // 주공이 프렌드 카드를 지정. friendCardId가 "NONE"/빈값이면 노프렌드.
-  chooseFriend(room, clientId, friendCardId) {
+  // 주공이 프렌드를 지정.
+  // data: { friendCardId } 카드 프렌드 / { friendClientId } 플레이어 프렌드 / { friendCardId:"NONE" } 노프렌드
+  // 빈 값·미지정은 오류 (노프렌드는 반드시 "NONE"을 명시해야 함)
+  chooseFriend(room, clientId, data) {
     if (clientId !== room.declarerClientId) {
       return { error: "주공만 프렌드를 지정할 수 있습니다." };
     }
-    if (friendCardId && friendCardId !== "NONE") {
-      room.friendCardId = friendCardId;
-      const owner = room.players.find((p) =>
-        (p.hand || []).some((c) => c.id === friendCardId)
-      );
-      room.friendClientId = owner ? owner.clientId : null;
-    } else {
-      room.friendCardId = null; // 노프렌드
-      room.friendClientId = null;
+    const rawCard = data && data.friendCardId != null ? String(data.friendCardId).trim() : "";
+    const rawPlayer = data && data.friendClientId != null ? String(data.friendClientId).trim() : "";
+    const isNone = rawCard.toUpperCase() === "NONE";
+    const hasCard = rawCard !== "" && !isNone;
+    const hasPlayer = rawPlayer !== "";
+
+    if (!isNone && !hasCard && !hasPlayer) {
+      return { error: "프렌드를 지정하세요. (카드 / 플레이어 / 노프렌드)" };
     }
+    if (hasCard && hasPlayer) {
+      return { error: "카드 프렌드와 플레이어 프렌드는 동시에 지정할 수 없습니다." };
+    }
+
+    if (isNone) {
+      room.friendCardId = null;
+      room.friendClientId = null;
+      room.friendType = "none";
+      room.friendRevealed = true;
+      return { ok: true, friendType: "none" };
+    }
+
+    if (hasPlayer) {
+      if (rawPlayer === room.declarerClientId) {
+        return { error: "주공 자신을 프렌드로 지정할 수 없습니다." };
+      }
+      const p = room.players.find((x) => x.clientId === rawPlayer);
+      if (!p) return { error: "해당 플레이어를 찾을 수 없습니다." };
+      room.friendCardId = null;
+      room.friendClientId = rawPlayer;
+      room.friendType = "player";
+      room.friendRevealed = true; // 플레이어 지정은 즉시 공개
+      return { ok: true, friendType: "player", friendNickname: p.nickname };
+    }
+
+    const cardId = rawCard.toUpperCase();
+    room.friendCardId = cardId;
+    const owner = room.players.find((p) =>
+      (p.hand || []).some((c) => c.id === cardId)
+    );
+    room.friendClientId = owner ? owner.clientId : null;
+    room.friendType = "card";
     room.friendRevealed = false;
-    return { ok: true };
+    return { ok: true, friendType: "card" };
   }
 
   // 봇이 주공일 때 프렌드로 지정할 카드 반환.
@@ -571,7 +605,10 @@ class RoomManager {
       declarerClientId: room.declarerClientId || null,
       declarerNickname: declarer ? declarer.nickname : null,
       targetScore: room.targetScore || null,
-      friendChosen: room.friendCardId !== undefined, // 지정 완료 여부(노프렌드 포함)
+      friendChosen: room.friendType != null, // 지정 완료 여부(노프렌드 포함)
+      friendType: room.friendType || null, // "card"|"player"|"none"
+      // 카드 프렌드는 선언 내용(무슨 카드인지)을 즉시 공개. 소유자(닉네임)만 비공개.
+      friendCardId: room.friendType === "card" ? room.friendCardId : null,
       friendRevealed: !!room.friendRevealed,
       friendNickname: friend ? friend.nickname : null,
       tableCards: (room.tableCards || []).map((t) => ({

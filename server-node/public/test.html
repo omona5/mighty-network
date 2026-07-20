@@ -101,12 +101,18 @@
       <!-- 프렌드 선택 단계 (주공만) -->
       <div id="friendArea" class="hidden" style="background:#0f1626;border-radius:8px;padding:8px;margin:8px 0;">
         <div style="color:#ffd166;">프렌드를 지정하세요 (주공)</div>
-        <div>
+        <div style="margin:6px 0;">
           <button id="friendMightyBtn">마이티 프렌드</button>
+          <button id="friendJokerBtn">조커 프렌드</button>
           <button id="friendNoneBtn">노프렌드</button>
-          <input id="friendCard" placeholder="카드id 예: S_A" style="width:110px;" />
-          <button id="friendCustomBtn">지정</button>
         </div>
+        <div style="margin:6px 0;">
+          카드:
+          <input id="friendCard" placeholder="예: S_A" style="width:110px;" />
+          <button id="friendCustomBtn">카드 지정</button>
+        </div>
+        <div style="margin:6px 0;">플레이어 프렌드 (즉시 공개):</div>
+        <div id="friendPlayers"></div>
       </div>
 
       <div id="tableArea" class="hidden">
@@ -294,6 +300,25 @@
         const choosing = state.status === "choosing_friend";
         const iAmDeclarer = state.declarerClientId === myClientId;
         $("friendArea").classList.toggle("hidden", !(choosing && iAmDeclarer));
+        if (choosing && iAmDeclarer) {
+          const box = $("friendPlayers");
+          box.innerHTML = "";
+          (state.players || []).forEach((p) => {
+            if (p.clientId === state.declarerClientId) return; // 주공 자신 제외
+            const btn = document.createElement("button");
+            btn.textContent = (p.isBot ? "[봇] " : "") + p.nickname;
+            btn.style.marginRight = "6px";
+            btn.addEventListener("click", () =>
+              sendMsg("choose_friend", { friendClientId: p.clientId }));
+            box.appendChild(btn);
+          });
+        }
+      }
+      function friendDeclLabel(cardId, mightyId) {
+        if (!cardId) return "카드 프렌드";
+        if (cardId === "JOKER") return "조커 프렌드";
+        if (mightyId && cardId === mightyId) return "마이티 프렌드 (" + cardShort(cardId) + ")";
+        return cardShort(cardId) + " 프렌드";
       }
       function renderTable(state) {
         renderBidding(state);
@@ -301,9 +326,19 @@
         const playing = state.status === "playing";
         $("tableArea").classList.toggle("hidden", !playing);
         // 룰 정보
-        const friendTxt = state.friendRevealed
-          ? ("프렌드: " + state.friendNickname)
-          : (state.friendChosen ? "프렌드: 지정됨(비공개)" : "");
+        let friendTxt = "";
+        if (state.friendChosen) {
+          if (state.friendType === "none") friendTxt = "프렌드: 없음(노프렌드)";
+          else if (state.friendType === "player")
+            friendTxt = "프렌드: " + (state.friendNickname || "-") + " (플레이어)";
+          else {
+            // 카드 프렌드: 선언 카드는 공개, 소유자는 카드가 나오기 전까지 비공개
+            const decl = friendDeclLabel(state.friendCardId, state.mightyCardId);
+            friendTxt = state.friendRevealed
+              ? ("프렌드: " + decl + " → " + (state.friendNickname || "-"))
+              : ("프렌드: " + decl + " (소유자 비공개)");
+          }
+        }
         $("ruleInfo").innerHTML = playing
           ? ("주공: " + (state.declarerNickname || "-") + " / 공약 " + (state.targetScore || "-")
              + "<br>기루다: " + (state.noTrump ? "노기루" : suitSym(state.trumpSuit))
@@ -405,10 +440,15 @@
       // 프렌드 선택
       $("friendMightyBtn").addEventListener("click", () =>
         sendMsg("choose_friend", { friendCardId: latestState ? latestState.mightyCardId : "S_A" }));
+      $("friendJokerBtn").addEventListener("click", () =>
+        sendMsg("choose_friend", { friendCardId: "JOKER" }));
       $("friendNoneBtn").addEventListener("click", () =>
         sendMsg("choose_friend", { friendCardId: "NONE" }));
-      $("friendCustomBtn").addEventListener("click", () =>
-        sendMsg("choose_friend", { friendCardId: $("friendCard").value.toUpperCase() }));
+      $("friendCustomBtn").addEventListener("click", () => {
+        const id = $("friendCard").value.trim().toUpperCase();
+        if (!id) { log("[warn] 카드 id를 입력하세요"); return; }
+        sendMsg("choose_friend", { friendCardId: id });
+      });
     </script>
   </body>
 </html>

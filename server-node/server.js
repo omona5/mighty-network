@@ -273,13 +273,19 @@ wss.on("connection", (ws) => {
       case "choose_friend": {
         const room = rooms.getRoom(ws.roomId);
         if (!room || room.status !== "choosing_friend") break;
-        const result = rooms.chooseFriend(room, ws.clientId, data.friendCardId);
+        const result = rooms.chooseFriend(room, ws.clientId, data || {});
         if (result.error) {
           send(ws, "error_message", { message: result.error });
           break;
         }
-        console.log("[choose_friend]", ws.clientId, data.friendCardId);
-        broadcast(room, "friend_chosen", { friendChosen: true });
+        console.log("[choose_friend]", ws.clientId, result.friendType,
+          data.friendCardId || data.friendClientId || "");
+        broadcast(room, "friend_chosen", {
+          friendChosen: true,
+          friendType: result.friendType,
+          friendCardId: room.friendType === "card" ? room.friendCardId : null,
+          friendNickname: result.friendNickname || null,
+        });
         startPlaying(room);
         break;
       }
@@ -418,9 +424,13 @@ function maybeBotChooseFriend(room) {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "choosing_friend") return;
     const cardId = rooms.botFriendCardId(r);
-    rooms.chooseFriend(r, r.declarerClientId, cardId);
+    rooms.chooseFriend(r, r.declarerClientId, { friendCardId: cardId });
     console.log("[bot] 프렌드 지정:", cardId);
-    broadcast(r, "friend_chosen", { friendChosen: true });
+    broadcast(r, "friend_chosen", {
+      friendChosen: true,
+      friendType: "card",
+      friendCardId: cardId,
+    });
     startPlaying(r);
   }, BOT_BID_DELAY);
 }

@@ -328,3 +328,24 @@
 - **검증(단위)**: resolveBidding 하향(13→12→11) 및 바닥 재딜, 봇이 최소11에서 약패(추정11)로 11 공약하는지 확인. 일반 ws_test 흐름 회귀 없음.
 - **미해결/후속**: 최소공약 시작 13/바닥 11은 상수(원하면 방 옵션화 가능).
 - **다음 단계**: 사용자 확인 → 스텝9 커밋 → 스텝10.
+
+## 2026-07-20 23:18 (UTC+9)
+
+- **작업 요청**: 서버 재가동.
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network/server-node`
+- **명령**: `node server.js` (백그라운드)
+- **결과**: WebSocket 서버 `ws://localhost:3000` 정상 기동. 테스트 페이지 `http://localhost:3000`.
+- **다음 단계**: 사용자 요청 시 스텝10(점수 계산/승패 판정) 진행.
+
+## 2026-07-20 23:25 (UTC+9)
+
+- **작업 요청**: 빈칸 프렌드 지정 오류 수정 + 특정 플레이어 프렌드 선언.
+- **서버**: `chooseFriend`가 빈값/공백을 노프렌드로 취급하던 버그 수정(명시적 `NONE`만 노프렌드). `friendClientId`로 플레이어 프렌드 추가(즉시 공개, 주공 자신 불가). `friendType`: card|player|none.
+- **클라이언트**: test.html/Unity에 플레이어 버튼 목록, 빈 카드 입력 클라이언트 가드.
+- **검증**: 빈값/공백 오류, NONE/플레이어/카드/자기자신 단위 테스트 통과. 서버 재기동.
+
+## 2026-07-20 23:30 (UTC+9)
+
+- **작업 요청**: 프렌드 지정 후 "무슨 프렌드인지"는 즉시 공개되어야 함.
+- **변경**: publicState에 friendCardId 공개(카드 프렌드). 소유자(friendNickname)만 friendRevealed 전까지 비공개. UI: "마이티 프렌드 (♠A) (소유자 비공개)" / 공개 후 "→ 닉네임". 조커 프렌드 버튼 추가.
+- **파일**: RoomManager.js, server.js, test.html, NetworkManager.cs
