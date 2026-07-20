@@ -380,3 +380,11 @@
 - **정렬 규칙**: ♠→♥→♦→♣→조커, 같은 무늬는 A>K>...>2.
 - **서버**: Card.sortHand, dealCards/kitty/discard/playCard 후 정렬. sendHandsToHumans에서도 정렬.
 - **클라이언트**: HandView.SortCards, test.html sortHandClient.
+
+## 2026-07-21 00:05 (UTC+9)
+
+- **작업 요청**: 여기까지 커밋·푸시 후 서버 종료.
+- **커밋**: `498bd36` Step 10: scoring/finish, kitty exchange, live goal HUD, hand sort
+- **푸시**: `origin/main` (`b93872e..498bd36`)
+- **서버**: 포트 3000 종료 완료.
+- **다음**: 런/백런 → 스텝11.
