@@ -413,3 +413,11 @@
 - **UI**: test.html / Unity 대기방에 "점수 초기화(방장)" 버튼.
 - **서버**: 포트 3000 재기동.
 - **다음**: 스텝11 재접속, 또는 커밋/푸시.
+
+## 2026-07-22 00:12 (UTC+9)
+
+- **작업 요청**: 여기까지 커밋·푸시.
+- **커밋**: `1ae2bb2` Add run/backrun multipliers, session scoreboard, and host score reset.
+- **푸시**: `origin/main` (`958ec35..1ae2bb2`)
+- **포함**: 런/백런, 세션 누적 스코어보드, 방장 reset_scores, UI/문서/테스트.
+- **다음**: 스텝11 재접속.
