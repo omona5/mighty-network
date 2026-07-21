@@ -80,16 +80,21 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class FriendData { public string friendCardId; public string friendClientId; }
     [System.Serializable] private class ChooseFriendMsg { public string type = "choose_friend"; public FriendData data; }
     [System.Serializable] private class ReturnLobbyMsg { public string type = "return_to_lobby"; public string data = ""; }
+    [System.Serializable] private class ResetScoresMsg { public string type = "reset_scores"; public string data = ""; }
     [System.Serializable] private class DiscardKittyData { public string[] cardIds; }
     [System.Serializable] private class DiscardKittyMsg { public string type = "discard_kitty"; public DiscardKittyData data; }
 
     [System.Serializable] private class TeamPlayerScore { public string clientId; public string nickname; public bool isBot; public int score; public int trickCount; }
+    [System.Serializable] private class ScoreboardEntry { public string clientId; public string nickname; public bool isBot; public int delta; public int sessionScore; }
     [System.Serializable] private class GameFinishedData {
         public string winner; public string winnerLabel; public int targetScore;
         public int declarerTeamScore; public int defenderTeamScore; public int kittyScore;
         public string declarerNickname; public string friendNickname;
         public string friendType; public string friendCardId; public bool friendRevealed;
         public string trumpSuit; public bool noTrump;
+        public bool isRun; public bool isBackrun; public int multiplier;
+        public string[] multipliers; public int stakeBase; public int stakeTotal;
+        public ScoreboardEntry[] scoreboard;
         public TeamPlayerScore[] declarerTeam; public TeamPlayerScore[] defenderTeam;
     }
     [System.Serializable] private class GameFinishedMsg { public string type; public GameFinishedData data; }
@@ -101,7 +106,7 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; }
     [System.Serializable] private class RoomAckMsg { public string type; public RoomAckData data; }
 
-    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; }
+    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; public int sessionScore; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
     [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
@@ -277,6 +282,12 @@ public class NetworkManager : MonoBehaviour
     {
         Send(JsonUtility.ToJson(new StartGameMsg()));
         Log("[start_game] 전송");
+    }
+
+    private void ResetScores()
+    {
+        Send(JsonUtility.ToJson(new ResetScoresMsg()));
+        Log("[reset_scores] 전송");
     }
 
     // 손패 카드 클릭 시 호출됨
@@ -501,6 +512,7 @@ public class NetworkManager : MonoBehaviour
             foreach (PlayerInfo p in currentState.players)
             {
                 GUILayout.Label("  " + (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
+                    + "  누적 " + p.sessionScore
                     + (p.isReady ? " [준비]" : " [대기]")
                     + (p.connected ? "" : " (연결끊김)")
                     + (p.clientId == myClientId ? "  <- 나" : ""));
@@ -511,14 +523,17 @@ public class NetworkManager : MonoBehaviour
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("준비 / 취소")) ToggleReady();
 
-        // 방장에게만 시작 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
+        // 방장에게만 시작/점수초기화 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
         if (IAmHost())
         {
             GUI.enabled = currentState != null && currentState.canStart; // 5명 전원 준비 시 활성화
             if (GUILayout.Button("게임 시작(방장)")) StartGame();
             GUI.enabled = true;
+            if (GUILayout.Button("점수 초기화(방장)")) ResetScores();
         }
         GUILayout.EndHorizontal();
+
+        GUILayout.Label("(새 플레이어는 0점부터, 기존 사람 점수는 유지됩니다)");
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Ping")) SendPing();
@@ -701,6 +716,31 @@ public class NetworkManager : MonoBehaviour
                 GUILayout.Label("(목표 " + r.targetScore + "점까지 "
                     + Math.Max(0, r.targetScore - r.declarerTeamScore) + "점 부족)");
 
+            // 런 / 백런 / 배수
+            if (r.isRun) GUILayout.Label("★ 런! (주공팀 20점 전부)");
+            if (r.isBackrun) GUILayout.Label("★ 백런! (주공팀 10점 이하)");
+            if (r.multiplier > 1)
+            {
+                string tags = (r.multipliers != null && r.multipliers.Length > 0)
+                    ? string.Join(" + ", r.multipliers) : "";
+                GUILayout.Label("배수: ×" + r.multiplier
+                    + (string.IsNullOrEmpty(tags) ? "" : " (" + tags + ")"));
+            }
+            else GUILayout.Label("배수: ×1");
+            GUILayout.Label("정산 단위: " + r.stakeBase + " × " + r.multiplier + " = " + r.stakeTotal);
+
+            GUILayout.Space(4);
+            GUILayout.Label("이번 판 정산 / 누적 스코어:");
+            if (r.scoreboard != null)
+            {
+                foreach (ScoreboardEntry e in r.scoreboard)
+                {
+                    string d = (e.delta >= 0 ? "+" : "") + e.delta;
+                    GUILayout.Label("  " + (e.isBot ? "[봇] " : "") + e.nickname
+                        + ": " + d + " → 누적 " + e.sessionScore);
+                }
+            }
+
             GUILayout.Space(4);
             GUILayout.Label("주공팀:");
             if (r.declarerTeam != null)
@@ -781,7 +821,8 @@ public class NetworkManager : MonoBehaviour
             {
                 string me = p.clientId == myClientId ? " <- 나" : "";
                 GUILayout.Label("  " + (p.isBot ? "[봇] " : "") + p.nickname
-                    + " : 남은 " + p.handCount + "장, 획득 " + p.trickCount + "트릭" + me);
+                    + " : 남은 " + p.handCount + "장, 획득 " + p.trickCount + "트릭"
+                    + ", 누적 " + p.sessionScore + me);
             }
         }
 

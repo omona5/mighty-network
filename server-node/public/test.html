@@ -145,6 +145,7 @@
       </div>
       <button id="readyBtn">준비 / 준비취소</button>
       <button id="startBtn" class="hidden">게임 시작 (방장)</button>
+      <button id="resetScoresBtn" class="hidden" style="background:#ef476f;">점수 초기화 (방장)</button>
       <button id="pingBtn">Ping</button>
       <button id="leaveBtn">방 나가기</button>
     </div>
@@ -209,10 +210,8 @@
           case "friend_chosen":
             log("[friend_chosen] 프렌드 지정 완료");
             break;
-          case "game_finished":
-            log("[game_finished] 승: " + msg.data.winnerLabel
-              + " 주공팀 " + msg.data.declarerTeamScore + " / 목표 " + msg.data.targetScore);
-            renderResult(msg.data);
+          case "scores_reset":
+            log("[scores_reset] 누적 점수가 초기화되었습니다");
             break;
           case "room_created":
             myToken = msg.data.reconnectToken;
@@ -397,8 +396,13 @@
       }
       function renderResult(r) {
         $("resultArea").classList.remove("hidden");
-        $("resultTitle").textContent = "승자: " + r.winnerLabel;
+        let title = "승자: " + r.winnerLabel;
+        if (r.isRun) title += " ★런";
+        if (r.isBackrun) title += " ★백런";
+        $("resultTitle").textContent = title;
         const teamLine = (arr) => (arr || []).map((p) => p.nickname + " " + p.score + "점").join(", ");
+        const multTags = (r.multipliers && r.multipliers.length)
+          ? r.multipliers.join(" + ") : "";
         $("resultBody").innerHTML =
           "<b>주공팀 목표였던 점수: " + r.targetScore + "점</b>"
           + "<br>주공: " + (r.declarerNickname || "-")
@@ -409,6 +413,17 @@
           + "<br>" + (r.winner === "declarer"
             ? "(목표 " + r.targetScore + "점 달성)"
             : "(목표 " + r.targetScore + "점까지 " + Math.max(0, r.targetScore - r.declarerTeamScore) + "점 부족)")
+          + (r.isRun ? "<br><b style=\"color:#ffd166;\">★ 런! (주공팀 20점 전부)</b>" : "")
+          + (r.isBackrun ? "<br><b style=\"color:#ef476f;\">★ 백런! (주공팀 10점 이하)</b>" : "")
+          + "<br>배수: ×" + (r.multiplier || 1)
+          + (multTags ? (" (" + multTags + ")") : "")
+          + "<br>정산 단위: " + (r.stakeBase || 0) + " × " + (r.multiplier || 1) + " = " + (r.stakeTotal || 0)
+          + "<br><b>이번 판 정산 / 누적 스코어</b><br>"
+          + (r.scoreboard || []).map((p) =>
+              (p.isBot ? "[봇] " : "") + p.nickname
+              + ": " + (p.delta >= 0 ? "+" : "") + p.delta
+              + " → 누적 " + p.sessionScore
+            ).join("<br>")
           + "<br>주공팀: " + teamLine(r.declarerTeam)
           + "<br>수비팀: " + teamLine(r.defenderTeam);
       }
@@ -482,10 +497,12 @@
           const li = document.createElement("li");
           const me = p.clientId === myClientId ? " ← 나" : "";
           const playing = state.status === "playing";
+          const score = " [누적 " + (p.sessionScore || 0) + "]";
           const cnt = playing
             ? " (남은 " + (p.handCount || 0) + "장, 획득 " + (p.trickCount || 0) + "트릭)"
             : (p.isReady ? " [준비]" : " [대기]");
           li.textContent = (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
+            + score
             + cnt
             + (p.connected ? "" : " (연결끊김)")
             + me;
@@ -500,11 +517,14 @@
           $("startedBanner").classList.add("hidden");
         }
         const startBtn = $("startBtn");
+        const resetBtn = $("resetScoresBtn");
         if (iAmHost && waiting) {
           startBtn.classList.remove("hidden");
           startBtn.disabled = !state.canStart;
+          resetBtn.classList.remove("hidden");
         } else {
           startBtn.classList.add("hidden");
+          resetBtn.classList.add("hidden");
         }
         $("readyBtn").disabled = !waiting;
       }
@@ -529,6 +549,9 @@
       });
       $("readyBtn").addEventListener("click", () => sendMsg("ready", {}));
       $("startBtn").addEventListener("click", () => sendMsg("start_game", {}));
+      $("resetScoresBtn").addEventListener("click", () => {
+        if (confirm("누적 점수를 모두 0으로 초기화할까요?")) sendMsg("reset_scores", {});
+      });
       $("lobbyBtn").addEventListener("click", () => sendMsg("return_to_lobby", {}));
       $("discardKittyBtn").addEventListener("click", () => {
         if (discardSelected.length !== 3) return;

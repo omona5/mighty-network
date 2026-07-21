@@ -102,6 +102,7 @@ class RoomManager {
       reconnectToken: makeToken(),
       connected: true,
       isBot: false,
+      sessionScore: 0,
       ws,
     };
     // 사람은 항상 봇들보다 앞에 배치한다. (사람들 다음, 첫 봇 앞에 삽입)
@@ -132,6 +133,7 @@ class RoomManager {
       reconnectToken: null,
       connected: true,
       isBot: true,
+      sessionScore: 0,
       ws: null,
     };
     room.players.push(player);
@@ -580,9 +582,10 @@ class RoomManager {
     return room.status === "playing" && room.trickComplete && room.trickNumber >= NUM_TRICKS;
   }
 
-  // 한 판 종료: 점수 계산 + finished 상태
+  // 한 판 종료: 점수 계산 + 세션 누적 정산 + finished 상태
   finishGame(room) {
-    const result = Scoring.calculateResult(room);
+    let result = Scoring.calculateResult(room);
+    result = Scoring.applySessionScores(room, result);
     room.status = "finished";
     room.lastResult = result;
     room.currentTurnIndex = null;
@@ -635,6 +638,18 @@ class RoomManager {
     );
     const pool = legal.length ? legal : player.hand;
     return pool[Math.floor(Math.random() * pool.length)].id;
+  }
+
+  // 방장 전용: 세션 누적 점수 전부 0으로
+  resetSessionScores(room, clientId) {
+    if (room.status !== "waiting") {
+      return { error: "대기 중에서만 점수를 초기화할 수 있습니다." };
+    }
+    if (!this.isHost(room, clientId)) {
+      return { error: "방장만 점수를 초기화할 수 있습니다." };
+    }
+    room.players.forEach((p) => { p.sessionScore = 0; });
+    return { ok: true };
   }
 
   // ready 상태를 토글한다. 대상 플레이어를 반환(없으면 null).
@@ -758,6 +773,7 @@ class RoomManager {
         handCount: p.hand ? p.hand.length : 0, // 남은 카드 수 (내용은 비공개)
         wonCount: p.wonCards ? p.wonCards.length : 0, // 획득한 카드 수
         trickCount: p.wonCards ? Math.floor(p.wonCards.length / MAX_PLAYERS) : 0, // 이긴 트릭 수
+        sessionScore: p.sessionScore || 0, // 방 세션 누적 점수
       })),
     };
   }

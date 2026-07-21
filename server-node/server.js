@@ -331,6 +331,21 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      // ---- 세션 누적 점수 초기화 (방장, 대기 중) ----
+      case "reset_scores": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room) break;
+        const result = rooms.resetSessionScores(room, ws.clientId);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[scores] room", room.roomId, "누적 점수 초기화 by", ws.clientId);
+        broadcast(room, "scores_reset", { ok: true });
+        broadcast(room, "game_state", rooms.publicState(room));
+        break;
+      }
+
       // ---- 10단계: 결과 확인 후 대기방 복귀 ----
       case "return_to_lobby": {
         const room = rooms.getRoom(ws.roomId);
@@ -516,7 +531,10 @@ function finishAndBroadcast(room) {
     "승:", result.winnerLabel,
     "주공팀", result.declarerTeamScore, "/", result.targetScore,
     "수비팀", result.defenderTeamScore,
-    "(바닥패", result.kittyScore + ")"
+    "(바닥패", result.kittyScore + ")",
+    result.multipliers && result.multipliers.length
+      ? ("배수 " + result.multiplier + "x [" + result.multipliers.join("+") + "]")
+      : "배수 1x"
   );
   broadcast(room, "game_finished", result);
   broadcast(room, "game_state", rooms.publicState(room));

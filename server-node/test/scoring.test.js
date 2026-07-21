@@ -33,10 +33,16 @@ assert.strictEqual(r.declarerTeamScore, 15);
 assert.strictEqual(r.defenderTeamScore, 5);
 assert.strictEqual(r.kittyScore, 1);
 assert.strictEqual(r.winner, "declarer");
+assert.strictEqual(r.isRun, false);
+assert.strictEqual(r.isBackrun, false);
+assert.strictEqual(r.multiplier, 1);
+assert.strictEqual(r.stakeBase, 5); // 15-10
+assert.strictEqual(r.stakeTotal, 5);
 
 room.targetScore = 16;
 const r2 = Scoring.calculateResult(room);
 assert.strictEqual(r2.winner, "defender");
+assert.strictEqual(r2.stakeBase, 1); // 16-15
 
 // 미공개 카드 프렌드 → 주공 단독 (프렌드 점수 수비로)
 room.friendRevealed = false;
@@ -46,5 +52,63 @@ const r3 = Scoring.calculateResult(room);
 assert.strictEqual(r3.friendNickname, null);
 assert.strictEqual(r3.declarerTeamScore, 8 + 1); // 주공 8 + kitty 1
 assert.strictEqual(r3.defenderTeamScore, 6 + 2 + 1 + 2);
+
+// 백런: 주공팀 10점 이하
+assert.strictEqual(r3.isBackrun, true); // 9점
+assert.strictEqual(r3.multiplier, 2);
+assert.ok(r3.multipliers.includes("백런"));
+
+// 런: 주공팀 20점
+const runRoom = {
+  declarerClientId: "D",
+  targetScore: 14,
+  friendType: "none",
+  friendRevealed: true,
+  friendClientId: null,
+  declaredTrump: null,
+  noTrump: true,
+  discardedKitty: [c("C_10", 1), c("H_A", 1), c("D_K", 1)], // 3
+  players: [
+    { clientId: "D", nickname: "주공", isBot: false, wonCards: Array.from({ length: 17 }, (_, i) => c("X" + i, 1)) }, // 17 + kitty 3 = 20
+    { clientId: "A", nickname: "야1", isBot: true, wonCards: [] },
+    { clientId: "B", nickname: "야2", isBot: true, wonCards: [] },
+    { clientId: "C", nickname: "야3", isBot: true, wonCards: [] },
+    { clientId: "E", nickname: "야4", isBot: true, wonCards: [] },
+  ],
+};
+const rRun = Scoring.calculateResult(runRoom);
+assert.strictEqual(rRun.declarerTeamScore, 20);
+assert.strictEqual(rRun.isRun, true);
+assert.strictEqual(rRun.winner, "declarer");
+// 런×2 + 노기루×2 + 노프렌드×2 = 8
+assert.strictEqual(rRun.multiplier, 8);
+assert.deepStrictEqual(rRun.multipliers.sort(), ["노기루", "노프렌드", "런"].sort());
+assert.strictEqual(rRun.stakeBase, 10); // 20-10
+assert.strictEqual(rRun.stakeTotal, 80);
+// 노프렌드 승: 주공 +4*80, 야당 각 -80 → 영합
+assert.strictEqual(rRun.deltas.D, 320);
+assert.strictEqual(rRun.deltas.A, -80);
+assert.strictEqual(Object.values(rRun.deltas).reduce((a, b) => a + b, 0), 0);
+
+// 세션 누적
+rRun.deltas = rRun.deltas; // already set
+Scoring.applySessionScores(runRoom, rRun);
+assert.strictEqual(runRoom.players[0].sessionScore, 320);
+assert.strictEqual(rRun.scoreboard[0].nickname, "주공");
+
+// 프렌드 있는 승 영합: unit=5, 주공+10 프렌드+5 야당 각-5
+const rFriend = Scoring.calculateResult({
+  ...room,
+  friendRevealed: true,
+  friendClientId: "F",
+  friendType: "card",
+  targetScore: 14,
+  noTrump: false,
+});
+assert.strictEqual(rFriend.stakeTotal, 5);
+assert.strictEqual(rFriend.deltas.D, 10);
+assert.strictEqual(rFriend.deltas.F, 5);
+assert.strictEqual(rFriend.deltas.A + rFriend.deltas.B + rFriend.deltas.C, -15);
+assert.strictEqual(Object.values(rFriend.deltas).reduce((a, b) => a + b, 0), 0);
 
 console.log("Scoring tests OK");
