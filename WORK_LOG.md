@@ -590,3 +590,10 @@
 ## 2026-07-23 23:53 (UTC+9)
 
 - **작업 요청**: Unity에서 한글 폰트·재빌드 절차 상세 안내.
+
+## 2026-07-24 00:02 (UTC+9)
+
+- **작업 요청**: 여기까지 커밋·푸시.
+- **커밋**: `9058d3b` Add WebGL deploy prep: server URL config, Korean font, and static hosting.
+- **푸시**: `origin/main` (`b92c84b..9058d3b`)
+- **참고**: `public/webgl/Build/`는 gitignore (로컬 빌드 복사). 한글 폰트 OTF 포함.
