@@ -507,3 +507,86 @@
 - **커밋**: `7a08f42` Add reconnect with bot takeover, disconnect countdown, and seat shuffle.
 - **푸시**: `origin/main` (`cd8677f..7a08f42`)
 - **포함**: soft disconnect+봇대타, 5분 유예/카운트다운, unload close, shuffle_seats, reconnect.test.js.
+
+## 2026-07-23 23:09 (UTC+9)
+
+- **작업 요청**: 다음 할 일 안내.
+- **답변**: 계획상 스텝12 WebGL·라즈베리파이 배포. 11 잔여(닉네임 중복·관전자)는 선택.
+
+## 2026-07-23 23:10 (UTC+9)
+
+- **작업 요청**: 스텝11 잔여 개발. 관전자는 범위에서 제외.
+- **구현**: uniqueNickname(동건→동건2). 문서에서 관전자 제외. room_created/joined에 nickname, 변경 시 안내.
+- **검증**: 동건/동건2/동건3 + 봇 닉네임 충돌 없음.
+
+## 2026-07-23 23:16 (UTC+9)
+
+- **작업 요청**: 스텝12 배포 vs Unity 비주얼/애니메이션 선후 조언.
+- **권장**: 먼저 얇은 배포(접속·재접속·플레이 검증) 후 스프라이트/애니 반복. 배포 전엔 WebGL용 서버주소 분리 정도만.
+
+## 2026-07-23 23:18 (UTC+9)
+
+- **작업 요청**: WebGL 배포 시작 여부 + 라즈베리파이 정보 필요 여부.
+- **답변**: WebGL 빌드/로컬 검증은 Pi 정보 불필요. Pi 배포 단계에서 SSH·IP·OS·도메인/터널 정보 필요.
+
+## 2026-07-23 23:19 (UTC+9)
+
+- **작업 요청**: 서버 주소 설정 분리 여부 확인.
+- **답변**: Inspector public serverUrl만 있음(기본 localhost). WebGL용 빌드/런타임 설정·URL 쿼리 등은 미구현.
+
+## 2026-07-23 23:22 (UTC+9)
+
+- **작업 요청**: 서버 URL 설정 분리 + WebGL 빌드 체크리스트.
+- **구현**: ServerUrlResolver (?ws= → PlayerPrefs → WebGL 호스트 → Inspector), 로비 UI 저장·재연결.
+- **문서**: md_files/12 체크리스트·URL·로컬 테스트 절차. public/webgl placeholder.
+
+## 2026-07-23 23:26 (UTC+9)
+
+- **작업 요청**: 유니티에서 프리팹 만들라는 건지 확인.
+- **답변**: URL 설정/WebGL 단계에서는 프리팹 불필요. NetworkManager 기존 GO + WebGL 빌드만.
+
+## 2026-07-23 23:28 (UTC+9)
+
+- **작업 요청**: 현재 단계 Unity에서 할 일 상세 안내.
+- **답변**: 프로젝트 열기 → 컴파일 확인 → (선택) Play로 URL UI 확인 → WebGL Switch/Build → public/webgl 복사 → 브라우저 테스트.
+
+## 2026-07-23 23:31 (UTC+9)
+
+- **작업 요청**: Unity CS0103 Math 컴파일 오류 수정.
+- **수정**: NetworkManager.cs Math.Max → Mathf.Max.
+
+## 2026-07-23 23:35 (UTC+9)
+
+- **작업 요청**: Unity Build Settings(WebGL) 상세 안내.
+- **답변**: Switch Platform, Scenes In Build, Player Settings, Build 폴더, 주의사항 단계별 설명.
+
+## 2026-07-23 23:46 (UTC+9)
+
+- **작업 요청**: public/webgl 기대 파일 구조 설명.
+- **답변**: Unity WebGL 빌드 루트(index.html, Build/, TemplateData/)를 public/webgl/에 그대로 복사.
+
+## 2026-07-23 23:46 (UTC+9)
+
+- **후속**: public/webgl/index.html이 placeholder여서 testbuild/index.html로 교체.
+
+## 2026-07-23 23:48 (UTC+9)
+
+- **문제**: /webgl/ 디렉터리 readFile → 404. index.html은 200이었음.
+- **수정**: 디렉터리면 index.html, MIME(.wasm 등) 설정. 서버 재기동.
+
+## 2026-07-23 23:50 (UTC+9)
+
+- **작업 요청**: WebGL 화면이 작아 테스트 어려움.
+- **수정**: public/webgl 캔버스 거의 전체창, NetworkManager HUD 패널/폰트 Screen 기준 확대.
+- **안내**: 브라우저 강력 새로고침. UI 코드 반영은 WebGL 재빌드 필요.
+
+## 2026-07-23 23:52 (UTC+9)
+
+- **문제**: WebGL에서 한글 미표시.
+- **원인**: 기본 GUI 폰트에 한글 글리프 없음.
+- **수정**: NotoSansKR Resources/Fonts + NetworkManager GUI.skin.font 적용.
+- **필요**: Unity에서 WebGL 재빌드 후 public/webgl 복사.
+
+## 2026-07-23 23:53 (UTC+9)
+
+- **작업 요청**: Unity에서 한글 폰트·재빌드 절차 상세 안내.

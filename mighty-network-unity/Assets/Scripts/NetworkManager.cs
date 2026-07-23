@@ -5,16 +5,15 @@ using NativeWebSocket; // 무료 패키지: 에디터/WebGL 모두에서 WebSock
 
 // ============================================================================
 // NetworkManager (03단계: 방 생성/입장)
-//  - 서버(ws://localhost:3000)에 순수 WebSocket으로 접속
-//  - 닉네임 입력 후 방 만들기 / 방 코드로 입장
-//  - 방 안 플레이어 목록을 실시간 표시
-//  - 서버가 준 reconnectToken을 저장(PlayerPrefs) - 재접속(11단계) 대비
+//  - 서버 WebSocket URL: Inspector 기본값 + PlayerPrefs + WebGL ?ws= 쿼리 (ServerUrlResolver)
+//  - 서버가 준 reconnectToken을 저장(PlayerPrefs) - 재접속 복구
 //
 //  사용법: 빈 GameObject에 이 스크립트를 붙이고 Play. (UI는 OnGUI로 자동 표시)
 // ============================================================================
 public class NetworkManager : MonoBehaviour
 {
-    [Header("서버 주소 (개발용: localhost)")]
+    [Header("서버 주소 (기본값 / 개발용)")]
+    [Tooltip("우선순위: URL ?ws= → PlayerPrefs → WebGL 같은 호스트 → 이 값")]
     public string serverUrl = "ws://localhost:3000";
 
     [Header("손패 표시 (Inspector에서 연결)")]
@@ -25,6 +24,8 @@ public class NetworkManager : MonoBehaviour
 
     private WebSocket websocket;
     private string status = "대기 중...";
+    private string activeServerUrl = ""; // 실제로 접속 중인 URL
+    private Font uiFont; // WebGL 한글용 (Noto Sans KR)
     private readonly List<string> logLines = new List<string>();
     private Vector2 scroll;
 
@@ -54,6 +55,7 @@ public class NetworkManager : MonoBehaviour
     private bool intentionalLeave = false;
     private bool reconnectInProgress = false;
     private int reconnectAttempt = 0;
+    private bool suppressAutoReconnect = false; // 주소 변경 재연결 시 close 루프 방지
 
     // ---------- 서버와 주고받는 메시지 형식 (JSON) ----------
     // 공통: { "type": ..., "data": {...} }
@@ -109,7 +111,7 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class WelcomeData { public string clientId; }
     [System.Serializable] private class WelcomeMsg { public string type; public WelcomeData data; }
 
-    [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; }
+    [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; public string nickname; }
     [System.Serializable] private class RoomAckMsg { public string type; public RoomAckData data; }
     [System.Serializable] private class ReconnectedData {
         public string roomId; public string clientId; public string reconnectToken; public string nickname;
@@ -131,9 +133,20 @@ public class NetworkManager : MonoBehaviour
 
     private async void Start()
     {
+        // WebGL 기본 폰트에는 한글 글리프가 없어 안 보임 → Noto Sans KR 사용
+        uiFont = Resources.Load<Font>("Fonts/NotoSansKR-Regular");
+        if (uiFont == null)
+            Log("[font] NotoSansKR-Regular 로드 실패 (Resources/Fonts 확인)");
+        else
+            Log("[font] 한글 폰트 로드됨: " + uiFont.name);
+
         // 손패 카드를 클릭하면 그 카드를 서버에 낸다.
         if (handView != null) handView.onCardClicked = OnHandCardClicked;
 
+        activeServerUrl = ServerUrlResolver.Resolve(serverUrl);
+        serverUrl = activeServerUrl; // 로비 입력란에도 반영
+        Log("[config] 서버 URL = " + activeServerUrl
+            + " (우선순위: ?ws= → PlayerPrefs → WebGL호스트 → Inspector)");
         await ConnectSocket();
     }
 
@@ -145,15 +158,54 @@ public class NetworkManager : MonoBehaviour
             try { websocket.OnError -= OnSocketError; } catch { /* ignore */ }
             try { websocket.OnClose -= OnSocketClose; } catch { /* ignore */ }
             try { websocket.OnMessage -= OnSocketMessage; } catch { /* ignore */ }
+            try
+            {
+                if (websocket.State == WebSocketState.Open || websocket.State == WebSocketState.Connecting)
+                {
+                    suppressAutoReconnect = true;
+                    await websocket.Close();
+                    suppressAutoReconnect = false;
+                }
+            }
+            catch { suppressAutoReconnect = false; }
         }
 
-        Log("서버에 접속 시도: " + serverUrl);
-        websocket = new WebSocket(serverUrl);
+        string url = string.IsNullOrEmpty(activeServerUrl)
+            ? ServerUrlResolver.Resolve(serverUrl)
+            : activeServerUrl;
+        activeServerUrl = url;
+        Log("서버에 접속 시도: " + url);
+        websocket = new WebSocket(url);
         websocket.OnOpen += OnSocketOpen;
         websocket.OnError += OnSocketError;
         websocket.OnClose += OnSocketClose;
         websocket.OnMessage += OnSocketMessage;
         await websocket.Connect();
+    }
+
+    // 로비에서 주소 바꾼 뒤 저장+재연결
+    private async void ApplyServerUrlAndReconnect()
+    {
+        string next = ServerUrlResolver.Normalize(serverUrl);
+        if (string.IsNullOrEmpty(next))
+        {
+            Log("[config] 서버 URL이 비어 있습니다.");
+            return;
+        }
+        ServerUrlResolver.SavePrefs(next);
+        activeServerUrl = next;
+        serverUrl = next;
+        Log("[config] 서버 URL 저장: " + next);
+        status = "재연결 중...";
+        reconnectInProgress = false;
+        try
+        {
+            await ConnectSocket();
+        }
+        catch (System.Exception ex)
+        {
+            Log("[config] 재연결 실패: " + ex.Message);
+        }
     }
 
     private void OnSocketOpen()
@@ -181,9 +233,9 @@ public class NetworkManager : MonoBehaviour
     {
         status = "끊김";
         Log("[close] 연결이 끊겼습니다.");
-        if (intentionalLeave)
+        if (intentionalLeave || suppressAutoReconnect)
         {
-            inRoom = false;
+            if (intentionalLeave) inRoom = false;
             return;
         }
         string token = PlayerPrefs.GetString("reconnectToken", "");
@@ -276,6 +328,11 @@ public class NetworkManager : MonoBehaviour
                 PlayerPrefs.SetString("reconnectToken", m.data.reconnectToken);
                 PlayerPrefs.SetString("roomId", m.data.roomId);
                 PlayerPrefs.Save();
+                if (!string.IsNullOrEmpty(m.data.nickname) && m.data.nickname != nickname)
+                {
+                    nickname = m.data.nickname;
+                    Log("[" + head.type + "] 닉네임이 '" + nickname + "'(으)로 변경됨 (중복)");
+                }
                 Log("[" + head.type + "] 방 코드: " + m.data.roomId + " (토큰 저장됨)");
                 break;
             }
@@ -597,18 +654,52 @@ public class NetworkManager : MonoBehaviour
 
         string phase = currentState != null ? currentState.status : "waiting";
         bool inGame = inRoom && phase != "waiting";
-        // 게임 중에는 오버레이를 작게(왼쪽 위 HUD), 대기/로비에서는 넓게 표시
-        float panelW = inGame ? 400f : 500f;
-        float panelH = phase == "finished" ? 520f : (inGame ? 470f : 560f);
+        // 화면 크기에 맞춰 HUD 패널 확대 (WebGL 작은 캔버스 대응)
+        float panelW = Mathf.Clamp(Screen.width * 0.55f, 480f, 720f);
+        if (inGame) panelW = Mathf.Clamp(Screen.width * 0.42f, 400f, 560f);
+        float panelH = Mathf.Clamp(Screen.height - 40f, 420f, inGame ? 560f : 780f);
         GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
+
+        // WebGL/고해상도에서 글씨가 너무 작지 않게
+        int fontSize = Screen.height >= 900 ? 18 : 15;
+        if (uiFont != null)
+        {
+            GUI.skin.font = uiFont;
+            GUI.skin.label.font = uiFont;
+            GUI.skin.button.font = uiFont;
+            GUI.skin.textField.font = uiFont;
+            GUI.skin.textArea.font = uiFont;
+            GUI.skin.box.font = uiFont;
+        }
+        GUI.skin.label.fontSize = fontSize;
+        GUI.skin.button.fontSize = fontSize;
+        GUI.skin.textField.fontSize = fontSize;
 
         GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
         GUILayout.Label("연결 상태: " + status);
+        if (!string.IsNullOrEmpty(activeServerUrl))
+            GUILayout.Label("서버: " + activeServerUrl);
         GUILayout.Space(6);
 
         if (!inRoom)
         {
             // ---- 로비 화면 ----
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("서버URL:", GUILayout.Width(70));
+            serverUrl = GUILayout.TextField(serverUrl, GUILayout.Width(320));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("주소 저장·재연결", GUILayout.Height(28))) ApplyServerUrlAndReconnect();
+            if (GUILayout.Button("기본값", GUILayout.Width(70), GUILayout.Height(28)))
+            {
+                ServerUrlResolver.ClearPrefs();
+                serverUrl = "ws://localhost:3000";
+                Log("[config] PlayerPrefs 서버 URL 삭제, 입력란을 localhost로");
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Label("(WebGL: ?ws=wss://호스트 로도 지정 가능)");
+
+            GUILayout.Space(4);
             GUILayout.BeginHorizontal();
             GUILayout.Label("닉네임:", GUILayout.Width(70));
             nickname = GUILayout.TextField(nickname, 12, GUILayout.Width(180));
@@ -866,7 +957,7 @@ public class NetworkManager : MonoBehaviour
                 GUILayout.Label("(목표 " + r.targetScore + "점 달성)");
             else
                 GUILayout.Label("(목표 " + r.targetScore + "점까지 "
-                    + Math.Max(0, r.targetScore - r.declarerTeamScore) + "점 부족)");
+                    + Mathf.Max(0, r.targetScore - r.declarerTeamScore) + "점 부족)");
 
             // 런 / 백런 / 배수
             if (r.isRun) GUILayout.Label("★ 런! (주공팀 20점 전부)");

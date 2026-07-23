@@ -27,18 +27,51 @@ const PORT = 3000;
 let nextClientId = 1;
 const rooms = new RoomManager();
 
-// 1) HTTP 서버: 브라우저 테스트 페이지 제공
+// 1) HTTP 서버: 테스트 페이지 + WebGL 정적 파일
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".svg": "image/svg+xml",
+  ".wasm": "application/wasm",
+  ".data": "application/octet-stream",
+  ".bundle": "application/octet-stream",
+};
+
 const httpServer = http.createServer((req, res) => {
-  const urlPath = req.url === "/" ? "/test.html" : req.url;
-  const filePath = path.join(__dirname, "public", urlPath);
-  fs.readFile(filePath, (err, content) => {
-    if (err) {
-      res.writeHead(404);
-      res.end("Not found");
-      return;
+  // 쿼리/해시 제거
+  let urlPath = (req.url || "/").split("?")[0].split("#")[0];
+  if (urlPath === "/") urlPath = "/test.html";
+
+  // public 밖으로 못 나가게
+  const publicRoot = path.join(__dirname, "public");
+  let filePath = path.normalize(path.join(publicRoot, urlPath));
+  if (!filePath.startsWith(publicRoot)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+
+  fs.stat(filePath, (err, stat) => {
+    if (!err && stat.isDirectory()) {
+      filePath = path.join(filePath, "index.html");
     }
-    res.writeHead(200);
-    res.end(content);
+    fs.readFile(filePath, (readErr, content) => {
+      if (readErr) {
+        res.writeHead(404);
+        res.end("Not found: " + urlPath);
+        return;
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      const type = MIME[ext] || "application/octet-stream";
+      res.writeHead(200, { "Content-Type": type });
+      res.end(content);
+    });
   });
 });
 
@@ -127,7 +160,13 @@ wss.on("connection", (ws) => {
         send(ws, "room_created", {
           roomId: room.roomId,
           reconnectToken: result.player.reconnectToken,
+          nickname: result.player.nickname,
         });
+        if (result.renamed) {
+          send(ws, "error_message", {
+            message: "닉네임이 겹쳐 '" + result.player.nickname + "'(으)로 입장했습니다.",
+          });
+        }
         // 방 전체에 현재 상태 전송
         broadcast(room, "game_state", rooms.publicState(room));
         break;
@@ -171,11 +210,18 @@ wss.on("connection", (ws) => {
         ws.roomId = room.roomId;
         // 혹시 5명이 안 됐으면 봇으로 다시 채움 (안전장치)
         rooms.fillWithBots(room);
-        console.log("[room] joined", room.roomId, "by", data.nickname, "(봇 1명 교체)");
+        console.log("[room] joined", room.roomId, "by", result.player.nickname,
+          result.renamed ? "(요청: " + data.nickname.trim() + ")" : "", "(봇 1명 교체)");
         send(ws, "room_joined", {
           roomId: room.roomId,
           reconnectToken: result.player.reconnectToken,
+          nickname: result.player.nickname,
         });
+        if (result.renamed) {
+          send(ws, "error_message", {
+            message: "닉네임이 겹쳐 '" + result.player.nickname + "'(으)로 입장했습니다.",
+          });
+        }
         broadcast(room, "game_state", rooms.publicState(room));
         break;
       }

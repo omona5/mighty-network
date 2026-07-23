@@ -90,6 +90,7 @@ class RoomManager {
   }
 
   // 방에 플레이어 추가. 실패 시 { error } 반환, 성공 시 { player } 반환.
+  // 닉네임이 겹치면 동건2, 동건3… 형태로 자동 부여 (최대 12자).
   addPlayer(room, nickname, ws) {
     if (room.players.length >= MAX_PLAYERS) {
       return { error: "방이 가득 찼습니다. (최대 5명)" };
@@ -98,9 +99,11 @@ class RoomManager {
       return { error: "이미 시작된 방에는 입장할 수 없습니다." };
     }
 
+    const uniqueName = this.uniqueNickname(room, nickname);
+
     const player = {
       clientId: ws.clientId,
-      nickname,
+      nickname: uniqueName,
       isReady: false,
       reconnectToken: makeToken(),
       connected: true,
@@ -117,7 +120,24 @@ class RoomManager {
     if (!room.hostClientId) {
       room.hostClientId = player.clientId;
     }
-    return { player };
+    return { player, renamed: uniqueName !== nickname };
+  }
+
+  // 방 안 기존 닉네임(사람+봇)과 겹치지 않는 이름을 만든다.
+  uniqueNickname(room, base) {
+    const raw = (base || "").trim();
+    const taken = new Set(room.players.map((p) => p.nickname));
+    if (raw && !taken.has(raw) && raw.length <= 12) return raw;
+
+    const stem = (raw || "플레이어").slice(0, 12);
+    for (let n = 2; n < 100; n++) {
+      const suffix = String(n);
+      const maxStem = 12 - suffix.length;
+      const candidate = stem.slice(0, Math.max(1, maxStem)) + suffix;
+      if (!taken.has(candidate)) return candidate;
+    }
+    // 극히 드문 경우: 짧은 랜덤 접미
+    return (stem.slice(0, 8) + makeToken().slice(0, 4)).slice(0, 12);
   }
 
   // 봇(자동 플레이어)을 방에 추가한다. 빈자리를 채워 5명을 맞추는 용도.
@@ -132,7 +152,7 @@ class RoomManager {
     const botNumber = room.players.filter((p) => p.isBot).length + 1;
     const player = {
       clientId: "BOT" + ++botSeq,
-      nickname: "봇" + botNumber,
+      nickname: this.uniqueNickname(room, "봇" + botNumber),
       isReady: true, // 봇은 항상 준비 완료
       reconnectToken: null,
       connected: true,

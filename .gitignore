@@ -114,6 +114,9 @@ yarn-debug.log*
 yarn-error.log*
 .env
 
+# WebGL Unity 빌드 바이너리(용량 큼). index.html/TemplateData는 커밋, Build/는 로컬 복사.
+server-node/public/webgl/Build/
+
 # ==========================================
 # OS files
 # ==========================================
