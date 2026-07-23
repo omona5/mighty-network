@@ -145,6 +145,7 @@
       </div>
       <button id="readyBtn">준비 / 준비취소</button>
       <button id="startBtn" class="hidden">게임 시작 (방장)</button>
+      <button id="shuffleSeatsBtn" class="hidden" style="background:#118ab2;">자리 섞기 (방장)</button>
       <button id="resetScoresBtn" class="hidden" style="background:#ef476f;">점수 초기화 (방장)</button>
       <button id="pingBtn">Ping</button>
       <button id="leaveBtn">방 나가기</button>
@@ -159,21 +160,41 @@
         $("log").scrollTop = $("log").scrollHeight;
       }
 
-      const socket = new WebSocket("ws://" + location.host);
+      let socket = null;
       let myToken = null;
       let myClientId = null;
       let latestState = null; // 최근 game_state (내 차례 판정용)
       let myCanDealMiss = false; // 딜미스 선언 가능 여부(your_hand로 수신)
       let discardSelected = []; // 바닥패 버리기 선택 id 목록
       let myHandCards = [];
+      let intentionalLeave = false;
+      let reconnectTimer = null;
+      let reconnectAttempt = 0;
 
-      socket.addEventListener("open", () => { $("status").textContent = "연결 상태: 접속됨"; log("[open] 접속됨"); });
-      socket.addEventListener("close", () => { $("status").textContent = "연결 상태: 끊김"; log("[close] 끊김"); });
-      socket.addEventListener("error", () => log("[error] 연결 오류"));
-
-      socket.addEventListener("message", (event) => {
-        const msg = JSON.parse(event.data);
-        switch (msg.type) {
+      function bindSocket(ws) {
+        socket = ws;
+        ws.addEventListener("open", () => {
+          $("status").textContent = "연결 상태: 접속됨";
+          log("[open] 접속됨");
+          reconnectAttempt = 0;
+          // 저장된 토큰이 있으면 자동 재접속
+          if (myToken && !intentionalLeave) {
+            log("[reconnect] 토큰으로 재접속 요청");
+            sendMsg("reconnect", { reconnectToken: myToken });
+          }
+        });
+        ws.addEventListener("close", () => {
+          $("status").textContent = "연결 상태: 끊김";
+          log("[close] 끊김");
+          if (intentionalLeave) return;
+          if (!myToken) return;
+          $("status").textContent = "연결 상태: 재접속 중... (봇이 대신 플레이)";
+          scheduleReconnect();
+        });
+        ws.addEventListener("error", () => log("[error] 연결 오류"));
+        ws.addEventListener("message", (event) => {
+          const msg = JSON.parse(event.data);
+          switch (msg.type) {
           case "welcome":
             myClientId = msg.data.clientId;
             log("[welcome] 내 id: " + myClientId);
@@ -213,18 +234,43 @@
           case "scores_reset":
             log("[scores_reset] 누적 점수가 초기화되었습니다");
             break;
+          case "seats_shuffled":
+            log("[seats_shuffled] 자리가 섞였습니다");
+            break;
+          case "reconnected":
+            myClientId = msg.data.clientId;
+            myToken = msg.data.reconnectToken || myToken;
+            log("[reconnected] 복구됨 room=" + msg.data.roomId + " id=" + myClientId);
+            enterRoomView(msg.data.roomId);
+            break;
+          case "reconnect_failed":
+            log("[reconnect_failed] " + msg.data.message);
+            myToken = null;
+            intentionalLeave = false;
+            exitRoomView();
+            break;
           case "room_created":
             myToken = msg.data.reconnectToken;
+            intentionalLeave = false;
             log("[room_created] 방 코드 " + msg.data.roomId);
             enterRoomView(msg.data.roomId);
             break;
           case "room_joined":
             myToken = msg.data.reconnectToken;
+            intentionalLeave = false;
             log("[room_joined] 방 코드 " + msg.data.roomId);
             enterRoomView(msg.data.roomId);
             break;
           case "game_state":
             renderState(msg.data);
+            break;
+          case "game_finished":
+            log("[game_finished] 승: " + msg.data.winnerLabel
+              + " 주공팀 " + msg.data.declarerTeamScore + " / 목표 " + msg.data.targetScore
+              + (msg.data.isRun ? " ★런" : "")
+              + (msg.data.isBackrun ? " ★백런" : "")
+              + " ×" + (msg.data.multiplier || 1));
+            renderResult(msg.data);
             break;
           case "error_message":
             log("[error_message] " + msg.data.message);
@@ -232,12 +278,49 @@
             break;
           default:
             log("[recv] " + event.data);
-        }
-      });
+          }
+        });
+      }
+
+      function scheduleReconnect() {
+        if (reconnectTimer) return;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 10000);
+        reconnectAttempt++;
+        log("[reconnect] " + delay + "ms 후 재시도 (#" + reconnectAttempt + ")");
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectSocket();
+        }, delay);
+      }
+
+      function connectSocket() {
+        const ws = new WebSocket("ws://" + location.host);
+        bindSocket(ws);
+      }
+
+      connectSocket();
 
       function sendMsg(type, data) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("[send] 소켓이 아직 열리지 않음");
+          return;
+        }
         socket.send(JSON.stringify({ type, data }));
       }
+
+      // 뒤로가기/탭닫기 시 소켓을 즉시 닫아 서버가 바로 soft-disconnect 하도록
+      function forceCloseSocket() {
+        if (!socket) return;
+        try {
+          if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            socket.close();
+          }
+        } catch (e) { /* ignore */ }
+      }
+      window.addEventListener("pagehide", forceCloseSocket);
+      window.addEventListener("beforeunload", forceCloseSocket);
+
+      // 아래는 UI 헬퍼
 
       function enterRoomView(roomId) {
         $("lobby").classList.add("hidden");
@@ -487,11 +570,21 @@
           table.appendChild(el);
         });
       }
-      function renderState(state) {
-        latestState = state;
-        renderTable(state);
-        $("roomStatus").textContent = state.status;
-        $("playerCount").textContent = state.players.length;
+      function formatReconnectRemain(p, state) {
+        if (p.connected || p.isBot) return "";
+        const grace = (state && state.reconnectGraceMs) || (5 * 60 * 1000);
+        const expires = p.reconnectExpiresAt
+          || (p.disconnectedAt ? p.disconnectedAt + grace : 0);
+        if (!expires) return " (연결끊김·봇대타)";
+        const remainMs = Math.max(0, expires - Date.now());
+        const sec = Math.ceil(remainMs / 1000);
+        const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+        const ss = String(sec % 60).padStart(2, "0");
+        return " (연결끊김·봇대타 " + mm + ":" + ss + ")";
+      }
+
+      function renderPlayerList(state) {
+        if (!state || !state.players) return;
         $("players").innerHTML = "";
         state.players.forEach((p) => {
           const li = document.createElement("li");
@@ -504,10 +597,26 @@
           li.textContent = (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
             + score
             + cnt
-            + (p.connected ? "" : " (연결끊김)")
+            + formatReconnectRemain(p, state)
             + me;
           $("players").appendChild(li);
         });
+      }
+
+      // 끊긴 사람 카운트다운을 1초마다 갱신
+      setInterval(() => {
+        if (latestState && latestState.players &&
+            latestState.players.some((p) => !p.connected && !p.isBot)) {
+          renderPlayerList(latestState);
+        }
+      }, 1000);
+
+      function renderState(state) {
+        latestState = state;
+        renderTable(state);
+        $("roomStatus").textContent = state.status;
+        $("playerCount").textContent = state.players.length;
+        renderPlayerList(state);
 
         // 방장 전용 버튼들: 내가 방장이고 대기 중일 때만 표시
         const iAmHost = state.hostClientId === myClientId;
@@ -518,13 +627,16 @@
         }
         const startBtn = $("startBtn");
         const resetBtn = $("resetScoresBtn");
+        const shuffleBtn = $("shuffleSeatsBtn");
         if (iAmHost && waiting) {
           startBtn.classList.remove("hidden");
           startBtn.disabled = !state.canStart;
           resetBtn.classList.remove("hidden");
+          shuffleBtn.classList.remove("hidden");
         } else {
           startBtn.classList.add("hidden");
           resetBtn.classList.add("hidden");
+          shuffleBtn.classList.add("hidden");
         }
         $("readyBtn").disabled = !waiting;
       }
@@ -540,6 +652,9 @@
         });
       });
       $("leaveBtn").addEventListener("click", () => {
+        intentionalLeave = true;
+        myToken = null;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         sendMsg("leave_room", {});
         $("startedBanner").classList.add("hidden");
         exitRoomView();
@@ -549,6 +664,7 @@
       });
       $("readyBtn").addEventListener("click", () => sendMsg("ready", {}));
       $("startBtn").addEventListener("click", () => sendMsg("start_game", {}));
+      $("shuffleSeatsBtn").addEventListener("click", () => sendMsg("shuffle_seats", {}));
       $("resetScoresBtn").addEventListener("click", () => {
         if (confirm("누적 점수를 모두 0으로 초기화할까요?")) sendMsg("reset_scores", {});
       });

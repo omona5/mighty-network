@@ -6,6 +6,19 @@
 > - 이 단계(11)에서 구현: **자동 재접속** + **게임 상태 전체 재전송**(your_hand + game_state).
 > - socket.io가 아니므로 heartbeat/재연결을 라이브러리에 의존하지 않고 우리가 직접 만든다.
 
+## 구현 방식 (2026-07-23)
+
+**봇 대타 soft disconnect**
+
+1. 비정상 끊김 → 좌석·손패·누적점수 유지, `connected=false`
+2. 끊긴 동안 서버가 해당 손패로 봇처럼 입찰/버리기/프렌드/카드 제출
+3. `reconnect { reconnectToken }` → 기존 `clientId` 유지로 복구, `your_hand` + `game_state` 재전송
+4. 의도적 `leave_room` → 즉시 퇴장(토큰 무효)
+5. 유예 5분 만료: 대기중이면 자리 회수, 게임중이면 영구 봇 전환
+6. 플레이어 목록에 남은 시간 카운트다운 표시 (`mm:ss`)
+
+이미 있는 것: reconnectToken 발급, heartbeat, 방 비밀번호.
+
 ## 목표
 
 친구끼리 하는 개인서버로서 최소한의 안정성과 접근 제한을 추가한다.

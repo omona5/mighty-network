@@ -51,6 +51,9 @@ public class NetworkManager : MonoBehaviour
     private int trumpIndex = 0;
     private string friendCardInput = "";
     private bool myCanDealMiss = false; // your_hand로 수신한 딜미스 가능 여부
+    private bool intentionalLeave = false;
+    private bool reconnectInProgress = false;
+    private int reconnectAttempt = 0;
 
     // ---------- 서버와 주고받는 메시지 형식 (JSON) ----------
     // 공통: { "type": ..., "data": {...} }
@@ -70,6 +73,8 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class LeaveRoomMsg { public string type = "leave_room"; public string data = ""; }
     [System.Serializable] private class ReadyMsg { public string type = "ready"; public string data = ""; }
     [System.Serializable] private class StartGameMsg { public string type = "start_game"; public string data = ""; }
+    [System.Serializable] private class ReconnectData { public string reconnectToken; }
+    [System.Serializable] private class ReconnectMsg { public string type = "reconnect"; public ReconnectData data; }
 
     [System.Serializable] private class PlayCardData { public string cardId; }
     [System.Serializable] private class PlayCardMsg { public string type = "play_card"; public PlayCardData data; }
@@ -81,6 +86,7 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class ChooseFriendMsg { public string type = "choose_friend"; public FriendData data; }
     [System.Serializable] private class ReturnLobbyMsg { public string type = "return_to_lobby"; public string data = ""; }
     [System.Serializable] private class ResetScoresMsg { public string type = "reset_scores"; public string data = ""; }
+    [System.Serializable] private class ShuffleSeatsMsg { public string type = "shuffle_seats"; public string data = ""; }
     [System.Serializable] private class DiscardKittyData { public string[] cardIds; }
     [System.Serializable] private class DiscardKittyMsg { public string type = "discard_kitty"; public DiscardKittyData data; }
 
@@ -105,11 +111,15 @@ public class NetworkManager : MonoBehaviour
 
     [System.Serializable] private class RoomAckData { public string roomId; public string reconnectToken; }
     [System.Serializable] private class RoomAckMsg { public string type; public RoomAckData data; }
+    [System.Serializable] private class ReconnectedData {
+        public string roomId; public string clientId; public string reconnectToken; public string nickname;
+    }
+    [System.Serializable] private class ReconnectedMsg { public string type; public ReconnectedData data; }
 
-    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public int handCount; public int wonCount; public int trickCount; public int sessionScore; }
+    [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public bool botControlled; public double disconnectedAt; public double reconnectExpiresAt; public int handCount; public int wonCount; public int trickCount; public int sessionScore; }
     [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public double reconnectGraceMs; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class ErrorData { public string message; }
@@ -124,15 +134,93 @@ public class NetworkManager : MonoBehaviour
         // 손패 카드를 클릭하면 그 카드를 서버에 낸다.
         if (handView != null) handView.onCardClicked = OnHandCardClicked;
 
+        await ConnectSocket();
+    }
+
+    private async System.Threading.Tasks.Task ConnectSocket()
+    {
+        if (websocket != null)
+        {
+            try { websocket.OnOpen -= OnSocketOpen; } catch { /* ignore */ }
+            try { websocket.OnError -= OnSocketError; } catch { /* ignore */ }
+            try { websocket.OnClose -= OnSocketClose; } catch { /* ignore */ }
+            try { websocket.OnMessage -= OnSocketMessage; } catch { /* ignore */ }
+        }
+
         Log("서버에 접속 시도: " + serverUrl);
         websocket = new WebSocket(serverUrl);
-
-        websocket.OnOpen += () => { status = "접속됨"; Log("[open] 서버에 접속했습니다."); };
-        websocket.OnError += (e) => { status = "오류"; Log("[error] " + e); };
-        websocket.OnClose += (e) => { status = "끊김"; inRoom = false; Log("[close] 연결이 끊겼습니다."); };
-        websocket.OnMessage += (bytes) => HandleMessage(Encoding.UTF8.GetString(bytes));
-
+        websocket.OnOpen += OnSocketOpen;
+        websocket.OnError += OnSocketError;
+        websocket.OnClose += OnSocketClose;
+        websocket.OnMessage += OnSocketMessage;
         await websocket.Connect();
+    }
+
+    private void OnSocketOpen()
+    {
+        status = "접속됨";
+        reconnectInProgress = false;
+        reconnectAttempt = 0;
+        Log("[open] 서버에 접속했습니다.");
+
+        string token = PlayerPrefs.GetString("reconnectToken", "");
+        if (!intentionalLeave && !string.IsNullOrEmpty(token))
+        {
+            Send(JsonUtility.ToJson(new ReconnectMsg { data = new ReconnectData { reconnectToken = token } }));
+            Log("[reconnect] 토큰으로 재접속 요청");
+        }
+    }
+
+    private void OnSocketError(string e)
+    {
+        status = "오류";
+        Log("[error] " + e);
+    }
+
+    private void OnSocketClose(WebSocketCloseCode code)
+    {
+        status = "끊김";
+        Log("[close] 연결이 끊겼습니다.");
+        if (intentionalLeave)
+        {
+            inRoom = false;
+            return;
+        }
+        string token = PlayerPrefs.GetString("reconnectToken", "");
+        if (string.IsNullOrEmpty(token))
+        {
+            inRoom = false;
+            return;
+        }
+        // 좌석은 서버에 유지되고 봇이 대신 플레이 — 자동 재접속
+        status = "재접속 중...";
+        ScheduleReconnect();
+    }
+
+    private void OnSocketMessage(byte[] bytes)
+    {
+        HandleMessage(Encoding.UTF8.GetString(bytes));
+    }
+
+    private async void ScheduleReconnect()
+    {
+        if (reconnectInProgress) return;
+        reconnectInProgress = true;
+        reconnectAttempt++;
+        int delayMs = Mathf.Min(1000 * (1 << Mathf.Min(reconnectAttempt - 1, 3)), 10000);
+        Log("[reconnect] " + delayMs + "ms 후 재시도 (#" + reconnectAttempt + ")");
+        await System.Threading.Tasks.Task.Delay(delayMs);
+        if (intentionalLeave) { reconnectInProgress = false; return; }
+        try
+        {
+            await ConnectSocket();
+        }
+        catch (System.Exception ex)
+        {
+            Log("[reconnect] 실패: " + ex.Message);
+            reconnectInProgress = false;
+            ScheduleReconnect();
+        }
     }
 
     private void Update()
@@ -182,12 +270,41 @@ public class NetworkManager : MonoBehaviour
                 RoomAckMsg m = JsonUtility.FromJson<RoomAckMsg>(json);
                 myRoomId = m.data.roomId;
                 inRoom = true;
+                intentionalLeave = false;
                 gameStarted = false;
-                // 재접속 토큰 저장 (11단계에서 사용)
+                // 재접속 토큰 저장
                 PlayerPrefs.SetString("reconnectToken", m.data.reconnectToken);
                 PlayerPrefs.SetString("roomId", m.data.roomId);
                 PlayerPrefs.Save();
                 Log("[" + head.type + "] 방 코드: " + m.data.roomId + " (토큰 저장됨)");
+                break;
+            }
+
+            case "reconnected":
+            {
+                ReconnectedMsg m = JsonUtility.FromJson<ReconnectedMsg>(json);
+                myClientId = m.data.clientId;
+                myRoomId = m.data.roomId;
+                inRoom = true;
+                intentionalLeave = false;
+                if (!string.IsNullOrEmpty(m.data.reconnectToken))
+                {
+                    PlayerPrefs.SetString("reconnectToken", m.data.reconnectToken);
+                    PlayerPrefs.SetString("roomId", m.data.roomId);
+                    PlayerPrefs.Save();
+                }
+                Log("[reconnected] 복구됨 room=" + myRoomId + " id=" + myClientId);
+                break;
+            }
+
+            case "reconnect_failed":
+            {
+                ErrorMsg m = JsonUtility.FromJson<ErrorMsg>(json);
+                Log("[reconnect_failed] " + (m.data != null ? m.data.message : ""));
+                ClearReconnectPrefs();
+                inRoom = false;
+                gameStarted = false;
+                currentState = null;
                 break;
             }
 
@@ -263,6 +380,8 @@ public class NetworkManager : MonoBehaviour
 
     private void LeaveRoom()
     {
+        intentionalLeave = true;
+        ClearReconnectPrefs();
         Send(JsonUtility.ToJson(new LeaveRoomMsg()));
         inRoom = false;
         gameStarted = false;
@@ -270,6 +389,13 @@ public class NetworkManager : MonoBehaviour
         if (handView != null) handView.Clear();
         if (tableView != null) tableView.Clear();
         Log("[leave_room] 전송");
+    }
+
+    private void ClearReconnectPrefs()
+    {
+        PlayerPrefs.DeleteKey("reconnectToken");
+        PlayerPrefs.DeleteKey("roomId");
+        PlayerPrefs.Save();
     }
 
     private void ToggleReady()
@@ -288,6 +414,12 @@ public class NetworkManager : MonoBehaviour
     {
         Send(JsonUtility.ToJson(new ResetScoresMsg()));
         Log("[reset_scores] 전송");
+    }
+
+    private void ShuffleSeats()
+    {
+        Send(JsonUtility.ToJson(new ShuffleSeatsMsg()));
+        Log("[shuffle_seats] 전송");
     }
 
     // 손패 카드 클릭 시 호출됨
@@ -438,6 +570,24 @@ public class NetworkManager : MonoBehaviour
         if (websocket != null) await websocket.Close();
     }
 
+    private async void OnApplicationPause(bool pause)
+    {
+        // 모바일/WebGL에서 백그라운드 전환 시 소켓을 닫아 서버가 바로 감지하도록
+        if (pause && websocket != null && websocket.State == WebSocketState.Open)
+        {
+            Log("[pause] 백그라운드 → 소켓 종료 (재접속 대기)");
+            await websocket.Close();
+        }
+    }
+
+    private async void OnDestroy()
+    {
+        if (websocket != null)
+        {
+            try { await websocket.Close(); } catch { /* ignore */ }
+        }
+    }
+
     // ---------- 화면 UI (씬 세팅 없이 자동 표시) ----------
     private void OnGUI()
     {
@@ -514,7 +664,7 @@ public class NetworkManager : MonoBehaviour
                 GUILayout.Label("  " + (p.isHost ? "[방장] " : "") + (p.isBot ? "[봇] " : "") + p.nickname
                     + "  누적 " + p.sessionScore
                     + (p.isReady ? " [준비]" : " [대기]")
-                    + (p.connected ? "" : " (연결끊김)")
+                    + DisconnectLabel(p)
                     + (p.clientId == myClientId ? "  <- 나" : ""));
             }
         }
@@ -523,16 +673,18 @@ public class NetworkManager : MonoBehaviour
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("준비 / 취소")) ToggleReady();
 
-        // 방장에게만 시작/점수초기화 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
+        // 방장에게만 시작/자리섞기/점수초기화 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
         if (IAmHost())
         {
             GUI.enabled = currentState != null && currentState.canStart; // 5명 전원 준비 시 활성화
             if (GUILayout.Button("게임 시작(방장)")) StartGame();
             GUI.enabled = true;
+            if (GUILayout.Button("자리 섞기(방장)")) ShuffleSeats();
             if (GUILayout.Button("점수 초기화(방장)")) ResetScores();
         }
         GUILayout.EndHorizontal();
 
+        GUILayout.Label("(목록 위→아래 = 시계방향 순서. 자리 섞기는 게임 시작 전에만)");
         GUILayout.Label("(새 플레이어는 0점부터, 기존 사람 점수는 유지됩니다)");
 
         GUILayout.BeginHorizontal();
@@ -822,11 +974,30 @@ public class NetworkManager : MonoBehaviour
                 string me = p.clientId == myClientId ? " <- 나" : "";
                 GUILayout.Label("  " + (p.isBot ? "[봇] " : "") + p.nickname
                     + " : 남은 " + p.handCount + "장, 획득 " + p.trickCount + "트릭"
-                    + ", 누적 " + p.sessionScore + me);
+                    + ", 누적 " + p.sessionScore
+                    + DisconnectLabel(p) + me);
             }
         }
 
         GUILayout.Space(6);
         if (GUILayout.Button("방 나가기")) LeaveRoom();
+    }
+
+    // 끊긴 플레이어 남은 재접속 시간 (서버 Unix ms 기준)
+    private string DisconnectLabel(PlayerInfo p)
+    {
+        if (p == null || p.connected || p.isBot) return "";
+        double expires = p.reconnectExpiresAt;
+        if (expires <= 0 && p.disconnectedAt > 0)
+        {
+            double grace = (currentState != null && currentState.reconnectGraceMs > 0)
+                ? currentState.reconnectGraceMs : (5 * 60 * 1000);
+            expires = p.disconnectedAt + grace;
+        }
+        if (expires <= 0) return " (연결끊김·봇대타)";
+        // Date.now()와 맞추기: UTC ms
+        double nowMs = (System.DateTime.UtcNow - new System.DateTime(1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc)).TotalMilliseconds;
+        int sec = (int)System.Math.Ceiling(System.Math.Max(0, expires - nowMs) / 1000.0);
+        return " (연결끊김·봇대타 " + (sec / 60).ToString("00") + ":" + (sec % 60).ToString("00") + ")";
     }
 }

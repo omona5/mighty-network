@@ -18,6 +18,7 @@
 //     isReady,
 //     reconnectToken,    // 재접속 복구용 비밀 토큰 (본인에게만 전달)
 //     connected,         // 현재 연결 상태
+//     disconnectedAt,    // 끊긴 시각(ms). 재접속 유예 만료에 사용
 //     ws                 // WebSocket 참조 (브로드캐스트용, 외부로 노출 금지)
 //   }
 
@@ -29,6 +30,8 @@ const { sortHand } = require("./game/Card");
 
 const MAX_PLAYERS = 5;
 const NUM_TRICKS = 10;
+// 끊김 후 재접속 허용 시간. 그동안 봇이 대신 플레이한다.
+const RECONNECT_GRACE_MS = 5 * 60 * 1000;
 
 // 입찰(공약) 범위
 const MIN_BID = 13; // 입찰 시작 최소 공약
@@ -101,6 +104,7 @@ class RoomManager {
       isReady: false,
       reconnectToken: makeToken(),
       connected: true,
+      disconnectedAt: null,
       isBot: false,
       sessionScore: 0,
       ws,
@@ -132,6 +136,7 @@ class RoomManager {
       isReady: true, // 봇은 항상 준비 완료
       reconnectToken: null,
       connected: true,
+      disconnectedAt: null,
       isBot: true,
       sessionScore: 0,
       ws: null,
@@ -640,6 +645,112 @@ class RoomManager {
     return pool[Math.floor(Math.random() * pool.length)].id;
   }
 
+  // 끊긴 사람(또는 순수 봇)은 서버가 대신 행동한다.
+  isBotControlled(player) {
+    return !!(player && (player.isBot || !player.connected));
+  }
+
+  // 비정상 끊김: 좌석·손패·점수는 유지하고 봇이 대신 플레이.
+  softDisconnect(clientId) {
+    for (const roomId in this.rooms) {
+      const room = this.rooms[roomId];
+      const player = room.players.find((p) => p.clientId === clientId);
+      if (!player || player.isBot) continue;
+      if (!player.connected && !player.ws) return room; // 이미 soft
+      player.connected = false;
+      player.disconnectedAt = Date.now();
+      player.ws = null;
+      return room;
+    }
+    return null;
+  }
+
+  // reconnectToken으로 방/플레이어 찾기
+  findByReconnectToken(token) {
+    if (!token || typeof token !== "string") return null;
+    for (const roomId in this.rooms) {
+      const room = this.rooms[roomId];
+      const player = room.players.find((p) => p.reconnectToken === token);
+      if (player) return { room, player };
+    }
+    return null;
+  }
+
+  // 재접속: 기존 clientId를 새 ws에 붙이고 좌석 복구
+  reconnectPlayer(token, ws) {
+    const found = this.findByReconnectToken(token);
+    if (!found) {
+      return { error: "재접속 정보를 찾을 수 없습니다. (만료되었거나 잘못된 토큰)" };
+    }
+    const { room, player } = found;
+    if (player.isBot) {
+      return { error: "이미 봇으로 전환된 자리는 재접속할 수 없습니다." };
+    }
+    // 다른 연결이 살아 있으면 끊고 이 연결로 교체
+    if (player.ws && player.ws !== ws && player.ws.readyState === 1 /* OPEN */) {
+      try {
+        player.ws.close();
+      } catch (_) { /* ignore */ }
+    }
+    ws.clientId = player.clientId;
+    ws.roomId = room.roomId;
+    player.ws = ws;
+    player.connected = true;
+    player.disconnectedAt = null;
+    return { room, player };
+  }
+
+  // 유예 만료 좌석 회수. 영향 받은 방 목록 반환.
+  reclaimExpiredSeats(now = Date.now()) {
+    const affected = [];
+    for (const roomId of Object.keys(this.rooms)) {
+      const room = this.rooms[roomId];
+      let changed = false;
+      // 뒤에서부터 제거해도 안전하도록 복사
+      const targets = room.players.filter(
+        (p) =>
+          !p.isBot &&
+          !p.connected &&
+          p.disconnectedAt &&
+          now - p.disconnectedAt >= RECONNECT_GRACE_MS
+      );
+      for (const p of targets) {
+        if (room.status === "waiting") {
+          this.removePlayerByClientId(p.clientId);
+          // remove가 방 삭제했을 수 있음
+          if (!this.rooms[roomId]) {
+            changed = true;
+            break;
+          }
+          this.fillWithBots(this.rooms[roomId]);
+          changed = true;
+        } else {
+          // 게임 중: 영구 봇으로 전환 (손패·점수 유지, 재접속 불가)
+          console.log("[reclaim] room", roomId, p.nickname, "→ 영구 봇");
+          p.isBot = true;
+          p.reconnectToken = null;
+          p.connected = true;
+          p.disconnectedAt = null;
+          p.ws = null;
+          p.isReady = true;
+          changed = true;
+        }
+      }
+      if (!this.rooms[roomId]) {
+        affected.push(null); // 방 삭제됨
+        continue;
+      }
+      // 사람(비봇)이 없으면 방 삭제
+      if (this.rooms[roomId].players.every((p) => p.isBot)) {
+        delete this.rooms[roomId];
+        affected.push(null);
+        continue;
+      }
+      if (changed) affected.push(this.rooms[roomId]);
+    }
+    return affected.filter(Boolean);
+  }
+
   // 방장 전용: 세션 누적 점수 전부 0으로
   resetSessionScores(room, clientId) {
     if (room.status !== "waiting") {
@@ -649,6 +760,24 @@ class RoomManager {
       return { error: "방장만 점수를 초기화할 수 있습니다." };
     }
     room.players.forEach((p) => { p.sessionScore = 0; });
+    return { ok: true };
+  }
+
+  // 방장 전용: 대기 중 자리(턴 순서) 셔플. clientId/점수/방장 역할은 유지.
+  shuffleSeats(room, clientId) {
+    if (room.status !== "waiting") {
+      return { error: "게임 시작 전에만 자리를 섞을 수 있습니다." };
+    }
+    if (!this.isHost(room, clientId)) {
+      return { error: "방장만 자리를 섞을 수 있습니다." };
+    }
+    const arr = room.players;
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
     return { ok: true };
   }
 
@@ -716,6 +845,7 @@ class RoomManager {
       status: room.status,
       hostClientId: room.hostClientId,
       canStart: this.canStart(room),
+      reconnectGraceMs: RECONNECT_GRACE_MS,
       currentTurnClientId: turnP ? turnP.clientId : null,
       currentTurnNickname: turnP ? turnP.nickname : null,
       lastTrickWinnerNickname: room.lastTrickWinner ? room.lastTrickWinner.nickname : null,
@@ -769,6 +899,12 @@ class RoomManager {
         isReady: p.isReady,
         connected: p.connected,
         isBot: p.isBot,
+        botControlled: this.isBotControlled(p) && !p.isBot, // 사람인데 봇이 대신 플레이 중
+        disconnectedAt: !p.isBot && !p.connected ? p.disconnectedAt : null,
+        reconnectExpiresAt:
+          !p.isBot && !p.connected && p.disconnectedAt
+            ? p.disconnectedAt + RECONNECT_GRACE_MS
+            : null,
         isHost: p.clientId === room.hostClientId,
         handCount: p.hand ? p.hand.length : 0, // 남은 카드 수 (내용은 비공개)
         wonCount: p.wonCards ? p.wonCards.length : 0, // 획득한 카드 수
@@ -781,3 +917,4 @@ class RoomManager {
 
 module.exports = RoomManager;
 module.exports.MAX_PLAYERS = MAX_PLAYERS;
+module.exports.RECONNECT_GRACE_MS = RECONNECT_GRACE_MS;

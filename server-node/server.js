@@ -13,6 +13,7 @@
 //   08)    마이티 룰(기루다/마이티/조커/조커콜/따라내기) - RuleEngine 적용
 //   09)    입찰 → 바닥패 교환(discard_kitty) → 프렌드 → playing
 //   10)    10트릭 종료 → 점수 계산/승패(game_finished) → return_to_lobby
+//   11)    soft disconnect → 봇 대타, reconnect로 복구 (your_hand + game_state)
 
 const http = require("http");
 const fs = require("fs");
@@ -179,10 +180,43 @@ wss.on("connection", (ws) => {
         break;
       }
 
-      // ---- 03단계: 방 나가기 ----
+      // ---- 03단계: 방 나가기 (의도적 — 즉시 퇴장) ----
       case "leave_room":
-        leaveCurrentRoom(ws);
+        leaveCurrentRoom(ws); // hard leave
         break;
+
+      // ---- 11단계: 재접속 ----
+      case "reconnect": {
+        const token = data.reconnectToken || data.token;
+        const result = rooms.reconnectPlayer(token, ws);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          send(ws, "reconnect_failed", { message: result.error });
+          break;
+        }
+        const { room, player } = result;
+        console.log("[reconnect] room", room.roomId, "player", player.nickname, player.clientId);
+        send(ws, "reconnected", {
+          roomId: room.roomId,
+          clientId: player.clientId,
+          reconnectToken: player.reconnectToken,
+          nickname: player.nickname,
+        });
+        // 손패 + 전체 상태 재전송
+        if (player.hand && player.hand.length) {
+          sortHand(player.hand);
+          send(ws, "your_hand", {
+            cards: player.hand,
+            canDealMiss:
+              room.status === "bidding" && rooms.canDeclareDealMiss(player.hand),
+          });
+        }
+        broadcast(room, "game_state", rooms.publicState(room));
+        if (room.status === "finished" && room.lastResult) {
+          send(ws, "game_finished", room.lastResult);
+        }
+        break;
+      }
 
       // ---- 04단계: 준비 토글 ----
       case "ready": {
@@ -346,6 +380,22 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      // ---- 자리 섞기 (방장, 대기 중 / 게임 시작 전) ----
+      case "shuffle_seats": {
+        const room = rooms.getRoom(ws.roomId);
+        if (!room) break;
+        const result = rooms.shuffleSeats(room, ws.clientId);
+        if (result.error) {
+          send(ws, "error_message", { message: result.error });
+          break;
+        }
+        console.log("[seats] room", room.roomId, "자리 셔플 by", ws.clientId,
+          "→", room.players.map((p) => p.nickname).join(", "));
+        broadcast(room, "seats_shuffled", { ok: true });
+        broadcast(room, "game_state", rooms.publicState(room));
+        break;
+      }
+
       // ---- 10단계: 결과 확인 후 대기방 복귀 ----
       case "return_to_lobby": {
         const room = rooms.getRoom(ws.roomId);
@@ -363,7 +413,8 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     console.log("[disconnect] client disconnected:", ws.clientId);
-    leaveCurrentRoom(ws);
+    // 의도적 leave_room이면 이미 방에서 빠졌음 → soft 불필요
+    softDisconnectCurrent(ws);
   });
 });
 
@@ -371,7 +422,7 @@ wss.on("connection", (ws) => {
 function sendHandsToHumans(room) {
   const bidding = room.status === "bidding";
   for (const p of room.players) {
-    if (!p.isBot && p.ws) {
+    if (!p.isBot && p.connected && p.ws) {
       if (p.hand) sortHand(p.hand);
       send(p.ws, "your_hand", {
         cards: p.hand,
@@ -444,36 +495,38 @@ function beginFriendSelection(room) {
   maybeBotChooseFriend(room);
 }
 
-// 주공이 봇이면 자동으로 약한 카드 3장 버림
+// 주공이 봇(또는 끊긴 사람)이면 자동으로 약한 카드 3장 버림
 function maybeBotDiscardKitty(room) {
   if (!room || room.status !== "exchanging_kitty") return;
   const decl = room.players.find((p) => p.clientId === room.declarerClientId);
-  if (!decl || !decl.isBot) return;
+  if (!rooms.isBotControlled(decl)) return;
   setTimeout(() => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "exchanging_kitty") return;
+    const d = r.players.find((p) => p.clientId === r.declarerClientId);
+    if (!rooms.isBotControlled(d)) return; // 재접속했으면 중단
     const ids = rooms.botPickDiscardIds(r);
     const result = rooms.discardKitty(r, r.declarerClientId, ids);
     if (result.error) {
       console.log("[bot] discard error:", result.error);
       return;
     }
-    console.log("[bot] 바닥패 버림:", ids.join(","));
+    console.log("[bot] 바닥패 버림:", d.nickname, ids.join(","));
     broadcast(r, "kitty_discarded", { ok: true });
     beginFriendSelection(r);
   }, BOT_BID_DELAY);
 }
 
-// 09단계: 입찰 차례가 봇이면 잠시 후 자동 패스
+// 09단계: 입찰 차례가 봇(또는 끊긴 사람)이면 잠시 후 자동
 function maybeBotBid(room) {
   if (!room || room.status !== "bidding") return;
   const bidder = rooms.currentBidder(room);
-  if (!bidder || !bidder.isBot) return;
+  if (!rooms.isBotControlled(bidder)) return;
   setTimeout(() => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "bidding") return;
     const b = rooms.currentBidder(r);
-    if (!b || !b.isBot) return;
+    if (!rooms.isBotControlled(b)) return;
     // 손패 평가로 공약할지 패스할지 결정
     const decision = rooms.botDecideBid(r, b);
     let result;
@@ -494,17 +547,19 @@ function maybeBotBid(room) {
   }, BOT_BID_DELAY);
 }
 
-// 09단계: 주공이 봇이면 자동 프렌드 지정
+// 09단계: 주공이 봇(또는 끊긴 사람)이면 자동 프렌드 지정
 function maybeBotChooseFriend(room) {
   if (!room || room.status !== "choosing_friend") return;
   const decl = room.players.find((p) => p.clientId === room.declarerClientId);
-  if (!decl || !decl.isBot) return;
+  if (!rooms.isBotControlled(decl)) return;
   setTimeout(() => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "choosing_friend") return;
+    const d = r.players.find((p) => p.clientId === r.declarerClientId);
+    if (!rooms.isBotControlled(d)) return;
     const cardId = rooms.botFriendCardId(r);
     rooms.chooseFriend(r, r.declarerClientId, { friendCardId: cardId });
-    console.log("[bot] 프렌드 지정:", cardId);
+    console.log("[bot] 프렌드 지정:", d.nickname, cardId);
     broadcast(r, "friend_chosen", {
       friendChosen: true,
       friendType: "card",
@@ -540,20 +595,18 @@ function finishAndBroadcast(room) {
   broadcast(room, "game_state", rooms.publicState(room));
 }
 
-// 현재 차례가 봇이면 잠시 후 자동으로 카드를 낸다.
-// 다음 차례도 봇이면 계속 이어진다(사람 차례가 오거나 게임이 끝날 때까지).
+// 현재 차례가 봇(또는 끊긴 사람)이면 잠시 후 자동으로 카드를 낸다.
 const BOT_PLAY_DELAY = 700; // ms
 function maybeBotPlay(room) {
   if (!room || room.status !== "playing") return;
   const player = rooms.currentTurnPlayer(room);
-  if (!player || !player.isBot) return;
+  if (!rooms.isBotControlled(player)) return;
 
   setTimeout(() => {
-    // 시간이 지나는 사이 방 상태가 바뀔 수 있으니 다시 확인
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "playing") return;
     const bot = rooms.currentTurnPlayer(r);
-    if (!bot || !bot.isBot) return;
+    if (!rooms.isBotControlled(bot)) return;
 
     const cardId = rooms.botPickCardId(r, bot);
     if (!cardId) return;
@@ -570,43 +623,74 @@ function maybeBotPlay(room) {
     if (result.trickResult && result.trickResult.handOver) {
       finishAndBroadcast(r);
     } else {
-      maybeBotPlay(r); // 다음도 봇이면 계속
+      maybeBotPlay(r);
     }
   }, BOT_PLAY_DELAY);
 }
 
-// 현재 방에서 플레이어를 빼고, 남은 사람들에게 상태를 갱신해준다.
+// 끊김/재접속 직후 현재 단계에 맞는 봇 행동을 재개
+function resumeBotActions(room) {
+  if (!room) return;
+  maybeBotBid(room);
+  maybeBotDiscardKitty(room);
+  maybeBotChooseFriend(room);
+  maybeBotPlay(room);
+}
+
+// 의도적 퇴장: 좌석 즉시 삭제
 function leaveCurrentRoom(ws) {
   if (!ws.roomId) return;
   const room = rooms.removePlayerByClientId(ws.clientId);
   const leftRoomId = ws.roomId;
   ws.roomId = null;
   if (room) {
-    // 대기 중이면 빠진 사람 자리를 봇으로 채워 5명을 유지한다.
     if (room.status === "waiting") rooms.fillWithBots(room);
-    // 방에 사람이 남아있으면 갱신된 상태를 알려준다
     broadcast(room, "game_state", rooms.publicState(room));
   }
   console.log("[room] left", leftRoomId, "by", ws.clientId);
 }
 
+// 비정상 끊김: 좌석 유지 + 봇 대타
+function softDisconnectCurrent(ws) {
+  // leave_room으로 이미 빠진 경우 roomId가 없음. 그래도 clientId로 soft 시도.
+  const room = rooms.softDisconnect(ws.clientId);
+  ws.roomId = null;
+  if (!room) return;
+  console.log("[soft-disconnect] room", room.roomId, "client", ws.clientId, "→ 봇 대타");
+  broadcast(room, "game_state", rooms.publicState(room));
+  resumeBotActions(room);
+}
+
 // ---- Heartbeat: 좀비 연결(조용히 끊긴 클라이언트) 감지 ----
-// 주기적으로 모든 클라이언트에 ping을 보낸다.
-// 지난 주기에 pong 응답이 없었던(isAlive=false) 연결은 죽은 것으로 보고 종료한다.
-// (브라우저/Unity의 WebSocket은 서버 ping에 자동으로 pong 응답한다)
-const HEARTBEAT_INTERVAL = 15000; // 15초
+// 브라우저 뒤로가기 등으로 close가 안 올 수 있어, ping 무응답이면 강제 종료.
+// 주기 10초 → 대략 10~20초 안에 감지 (close가 오면 즉시 soft-disconnect).
+const HEARTBEAT_INTERVAL = 10000; // 10초
 const heartbeat = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (ws.isAlive === false) {
       console.log("[heartbeat] 응답 없는 연결 종료:", ws.clientId);
-      return ws.terminate(); // close 이벤트 발생 -> leaveCurrentRoom 처리됨
+      return ws.terminate(); // close → softDisconnectCurrent
     }
     ws.isAlive = false;
     ws.ping();
   });
 }, HEARTBEAT_INTERVAL);
 
-wss.on("close", () => clearInterval(heartbeat));
+// 재접속 유예 만료 좌석 회수 (대기: 제거, 게임중: 영구 봇)
+const RECLAIM_INTERVAL = 30000;
+const reclaimTimer = setInterval(() => {
+  const affected = rooms.reclaimExpiredSeats();
+  for (const room of affected) {
+    console.log("[reclaim] room", room.roomId, "상태 갱신");
+    broadcast(room, "game_state", rooms.publicState(room));
+    resumeBotActions(room);
+  }
+}, RECLAIM_INTERVAL);
+
+wss.on("close", () => {
+  clearInterval(heartbeat);
+  clearInterval(reclaimTimer);
+});
 
 httpServer.listen(PORT, () => {
   console.log(`WebSocket server running on ws://localhost:${PORT}`);
