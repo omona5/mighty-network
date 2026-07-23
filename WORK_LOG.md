@@ -500,3 +500,10 @@
 - **작업 요청**: A안 자리 섞기 버튼 (게임 시작 전·방장).
 - **구현**: shuffle_seats → RoomManager.shuffleSeats (Fisher-Yates), test.html/Unity 버튼.
 - **검증**: 방장·대기만 가능, 비방장/게임중 거부.
+
+## 2026-07-23 23:06 (UTC+9)
+
+- **작업 요청**: 여기까지 커밋·푸시.
+- **커밋**: `7a08f42` Add reconnect with bot takeover, disconnect countdown, and seat shuffle.
+- **푸시**: `origin/main` (`cd8677f..7a08f42`)
+- **포함**: soft disconnect+봇대타, 5분 유예/카운트다운, unload close, shuffle_seats, reconnect.test.js.
