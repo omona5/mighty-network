@@ -133,10 +133,10 @@ test("첫 트릭에서는 조커 효과 없음(기루다가 이김)", () => {
   assert.strictEqual(winner, "A");
 });
 
-// 6. 조커콜이 리드면 조커 효과 없음
-test("조커콜(C_3)이 리드면 조커 효과 없음", () => {
+// 6. 조커콜이 활성화되어 리드면 조커 효과 없음
+test("조커콜(C_3) 활성 리드면 조커 효과 없음", () => {
   const table = [
-    entry("A", makeCard("CLUB", "3")),  // 조커콜 리드
+    { clientId: "A", card: makeCard("CLUB", "3"), jokerCallActivated: true },
     entry("B", makeJoker()),            // 조커(효과 없음)
     entry("C", makeCard("CLUB", "K")),  // 리드무늬(클로버) 최고
     entry("D", makeCard("SPADE", "5")),
@@ -144,6 +144,18 @@ test("조커콜(C_3)이 리드면 조커 효과 없음", () => {
   ];
   const winner = RE.determineTrickWinner({ tableCards: table, ruleConfig: cfg, trickNumber: 4 });
   assert.strictEqual(winner, "C");
+});
+
+test("조커콜 카드라도 비활성이면 조커가 이김", () => {
+  const table = [
+    { clientId: "A", card: makeCard("CLUB", "3"), jokerCallActivated: false },
+    entry("B", makeJoker()),
+    entry("C", makeCard("CLUB", "K")),
+    entry("D", makeCard("SPADE", "5")),
+    entry("E", makeCard("DIAMOND", "9")),
+  ];
+  const winner = RE.determineTrickWinner({ tableCards: table, ruleConfig: cfg, trickNumber: 4 });
+  assert.strictEqual(winner, "B");
 });
 
 // 7. 리드무늬만 있을 때 최고 랭크
@@ -158,6 +170,82 @@ test("리드무늬 중 최고 랭크가 승자", () => {
   // 위 D는 마이티(S_A)라 이 케이스는 마이티가 이김
   const winner = RE.determineTrickWinner({ tableCards: table, ruleConfig: cfg, trickNumber: 3 });
   assert.strictEqual(winner, "D");
+});
+
+// 8. 조커 리드 시 선언 무늬 따라내기
+test("조커 리드 + declaredSuit=HEART면 HEART를 따라내야 함", () => {
+  const hand = [makeCard("SPADE", "K"), makeCard("HEART", "5")];
+  const table = [{ clientId: "A", card: makeJoker(), declaredSuit: "HEART" }];
+  assert.strictEqual(
+    RE.canPlayCard({ playerHand: hand, card: makeCard("SPADE", "K"), tableCards: table, ruleConfig: cfg }),
+    false
+  );
+  assert.strictEqual(
+    RE.canPlayCard({ playerHand: hand, card: makeCard("HEART", "5"), tableCards: table, ruleConfig: cfg }),
+    true
+  );
+});
+
+test("조커 리드(중간트릭)면 조커가 승자", () => {
+  // 조커가 중간 트릭에서 리드 → 조커가 최강이므로 조커 승
+  const table = [
+    { clientId: "A", card: makeJoker(), declaredSuit: "CLUB" },
+    entry("B", makeCard("CLUB", "A")),
+    entry("C", makeCard("CLUB", "K")),
+    entry("D", makeCard("SPADE", "5")),
+    entry("E", makeCard("DIAMOND", "9")),
+  ];
+  const winner = RE.determineTrickWinner({ tableCards: table, ruleConfig: cfg, trickNumber: 4 });
+  assert.strictEqual(winner, "A");
+});
+
+// 9. 조커콜 활성 시 조커 강제
+test("조커콜 활성 시 조커 보유자는 조커(또는 마이티)만 가능", () => {
+  const hand = [makeJoker(), makeCard("CLUB", "K"), makeCard("SPADE", "A")];
+  const table = [{ clientId: "A", card: makeCard("CLUB", "3"), jokerCallActivated: true }];
+  assert.strictEqual(
+    RE.canPlayCard({ playerHand: hand, card: makeCard("CLUB", "K"), tableCards: table, ruleConfig: cfg }),
+    false
+  );
+  assert.strictEqual(
+    RE.canPlayCard({ playerHand: hand, card: makeJoker(), tableCards: table, ruleConfig: cfg }),
+    true
+  );
+  assert.strictEqual(
+    RE.canPlayCard({ playerHand: hand, card: makeCard("SPADE", "A"), tableCards: table, ruleConfig: cfg }),
+    true
+  );
+});
+
+// 10. 딜미스 0.5점식
+test("딜미스: 빈 점수패 = 0 → 가능", () => {
+  const hand = [makeCard("SPADE", "2"), makeCard("HEART", "3"), makeCard("CLUB", "4")];
+  assert.strictEqual(RE.dealMissScore(hand), 0);
+  assert.strictEqual(RE.canDeclareDealMiss(hand), true);
+});
+
+test("딜미스: 마이티(S_A)=0, 조커=-1 → 가능", () => {
+  const hand = [makeCard("SPADE", "A"), makeJoker(), makeCard("HEART", "2")];
+  assert.strictEqual(RE.dealMissScore(hand), -1);
+  assert.strictEqual(RE.canDeclareDealMiss(hand), true);
+});
+
+test("딜미스: 10 한 장 = 0.5 → 가능", () => {
+  const hand = [makeCard("HEART", "10"), makeCard("CLUB", "2")];
+  assert.strictEqual(RE.dealMissScore(hand), 0.5);
+  assert.strictEqual(RE.canDeclareDealMiss(hand), true);
+});
+
+test("딜미스: K 한 장 = 1 → 불가", () => {
+  const hand = [makeCard("HEART", "K"), makeCard("CLUB", "2")];
+  assert.strictEqual(RE.dealMissScore(hand), 1);
+  assert.strictEqual(RE.canDeclareDealMiss(hand), false);
+});
+
+test("딜미스: 10 + 조커 = -0.5 → 가능", () => {
+  const hand = [makeCard("HEART", "10"), makeJoker()];
+  assert.strictEqual(RE.dealMissScore(hand), -0.5);
+  assert.strictEqual(RE.canDeclareDealMiss(hand), true);
 });
 
 console.log(`\n통과: ${passed}개`);

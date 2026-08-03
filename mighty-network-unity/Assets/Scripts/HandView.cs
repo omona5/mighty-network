@@ -33,10 +33,35 @@ public class HandView : MonoBehaviour
         foreach (CardData card in sorted)
         {
             CardView view = Instantiate(cardPrefab, parent);
+            ApplyHandCardSize(view);
             view.SetCard(card);
             view.Clicked = onCardClicked; // 클릭하면 콜백 호출
             spawned.Add(view.gameObject);
         }
+    }
+
+    // 뒷면 N장 (상대 손패 등). 클릭 불가.
+    public void ShowFaceDown(int count)
+    {
+        Clear();
+        if (count <= 0 || cardPrefab == null) return;
+        Transform parent = cardContainer != null ? cardContainer : transform;
+        for (int i = 0; i < count; i++)
+        {
+            CardView view = Instantiate(cardPrefab, parent);
+            ApplyHandCardSize(view);
+            view.SetFaceDown();
+            view.Clicked = null;
+            spawned.Add(view.gameObject);
+        }
+    }
+
+    private static void ApplyHandCardSize(CardView view)
+    {
+        if (view == null) return;
+        RectTransform rt = view.GetComponent<RectTransform>();
+        if (rt != null)
+            rt.sizeDelta = new Vector2(CardSpriteAtlas.DisplayWidth, CardSpriteAtlas.DisplayHeight);
     }
 
     // ♠ → ♥ → ♦ → ♣ → 조커, 같은 무늬는 A > K > ... > 2

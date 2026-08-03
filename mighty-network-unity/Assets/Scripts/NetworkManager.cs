@@ -22,6 +22,9 @@ public class NetworkManager : MonoBehaviour
     [Header("테이블(낸 카드) 표시 (Inspector에서 연결)")]
     public HandView tableView; // 06단계: 낸 카드들을 화면 중앙에 그림
 
+    [Header("상대 손패(뒷면) — 비우면 런타임 생성")]
+    public OpponentHandsView opponentHandsView;
+
     private WebSocket websocket;
     private string status = "대기 중...";
     private string activeServerUrl = ""; // 실제로 접속 중인 URL
@@ -48,14 +51,23 @@ public class NetworkManager : MonoBehaviour
     // 입찰 UI 입력값
     private string bidScoreInput = "13";
     private readonly string[] trumpOptions = { "SPADE", "HEART", "DIAMOND", "CLUB", "NT" };
-    private readonly string[] trumpLabels = { "♠", "♥", "♦", "♣", "노기루" };
+    private readonly string[] trumpLabels = { "S", "H", "D", "C", "노기루" };
     private int trumpIndex = 0;
     private string friendCardInput = "";
     private bool myCanDealMiss = false; // your_hand로 수신한 딜미스 가능 여부
+    [Header("재접속")]
+    [Tooltip("에디터에서 Play 시 PlayerPrefs 토큰으로 이전 게임에 자동 재입장. 테스트용(기본 꺼짐).")]
+    public bool autoReconnectInEditor = false;
+
     private bool intentionalLeave = false;
     private bool reconnectInProgress = false;
     private int reconnectAttempt = 0;
     private bool suppressAutoReconnect = false; // 주소 변경 재연결 시 close 루프 방지
+
+    // 리드 시 추가 선택 (조커 무늬 선언 / 조커콜 활성화)
+    private string pendingPlayCardId = null;
+    private bool pendingNeedSuit = false;
+    private bool pendingNeedJokerCall = false;
 
     // ---------- 서버와 주고받는 메시지 형식 (JSON) ----------
     // 공통: { "type": ..., "data": {...} }
@@ -78,7 +90,11 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class ReconnectData { public string reconnectToken; }
     [System.Serializable] private class ReconnectMsg { public string type = "reconnect"; public ReconnectData data; }
 
-    [System.Serializable] private class PlayCardData { public string cardId; }
+    [System.Serializable] private class PlayCardData {
+        public string cardId;
+        public string declaredSuit;
+        public bool activateJokerCall;
+    }
     [System.Serializable] private class PlayCardMsg { public string type = "play_card"; public PlayCardData data; }
 
     [System.Serializable] private class BidData { public int targetScore; public string trumpSuit; public bool noTrump; }
@@ -119,7 +135,12 @@ public class NetworkManager : MonoBehaviour
     [System.Serializable] private class ReconnectedMsg { public string type; public ReconnectedData data; }
 
     [System.Serializable] private class PlayerInfo { public string clientId; public string nickname; public bool isReady; public bool connected; public bool isHost; public bool isBot; public bool botControlled; public double disconnectedAt; public double reconnectExpiresAt; public int handCount; public int wonCount; public int trickCount; public int sessionScore; }
-    [System.Serializable] private class TableCardInfo { public string playerNickname; public CardData card; }
+    [System.Serializable] private class TableCardInfo {
+        public string playerNickname;
+        public CardData card;
+        public string declaredSuit;
+        public bool jokerCallActivated;
+    }
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
     [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public double reconnectGraceMs; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public int minBid; public string currentBidderClientId; public string currentBidderNickname; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
@@ -142,6 +163,17 @@ public class NetworkManager : MonoBehaviour
 
         // 손패 카드를 클릭하면 그 카드를 서버에 낸다.
         if (handView != null) handView.onCardClicked = OnHandCardClicked;
+
+        EnsureOpponentHandsView();
+
+#if UNITY_EDITOR
+        // 에디터 Play 시작마다 이전 방으로 끌려가는 것 방지 (기본)
+        if (!autoReconnectInEditor)
+        {
+            ClearReconnectPrefs();
+            Log("[editor] 자동 재접속 OFF — 저장된 reconnectToken 무시/삭제 (로비부터 시작)");
+        }
+#endif
 
         activeServerUrl = ServerUrlResolver.Resolve(serverUrl);
         serverUrl = activeServerUrl; // 로비 입력란에도 반영
@@ -216,11 +248,25 @@ public class NetworkManager : MonoBehaviour
         Log("[open] 서버에 접속했습니다.");
 
         string token = PlayerPrefs.GetString("reconnectToken", "");
-        if (!intentionalLeave && !string.IsNullOrEmpty(token))
+        if (!intentionalLeave && !string.IsNullOrEmpty(token) && ShouldAutoReconnectWithSavedToken())
         {
             Send(JsonUtility.ToJson(new ReconnectMsg { data = new ReconnectData { reconnectToken = token } }));
             Log("[reconnect] 토큰으로 재접속 요청");
         }
+        else if (!string.IsNullOrEmpty(token) && !ShouldAutoReconnectWithSavedToken())
+        {
+            Log("[reconnect] 저장된 토큰 있음 — 에디터 자동 재접속 OFF라 무시");
+        }
+    }
+
+    // WebGL/빌드: 항상 허용. 에디터: autoReconnectInEditor 일 때만.
+    private bool ShouldAutoReconnectWithSavedToken()
+    {
+#if UNITY_EDITOR
+        return autoReconnectInEditor;
+#else
+        return true;
+#endif
     }
 
     private void OnSocketError(string e)
@@ -239,7 +285,7 @@ public class NetworkManager : MonoBehaviour
             return;
         }
         string token = PlayerPrefs.GetString("reconnectToken", "");
-        if (string.IsNullOrEmpty(token))
+        if (string.IsNullOrEmpty(token) || !ShouldAutoReconnectWithSavedToken())
         {
             inRoom = false;
             return;
@@ -370,12 +416,14 @@ public class NetworkManager : MonoBehaviour
                 GameStateMsg m = JsonUtility.FromJson<GameStateMsg>(json);
                 currentState = m.data;
                 UpdateTable(m.data);
+                UpdateOpponentHands(m.data);
                 if (currentState != null && currentState.status == "waiting")
                 {
                     gameStarted = false;
                     lastResult = null;
                     if (handView != null) handView.Clear();
                     if (tableView != null) tableView.Clear();
+                    if (opponentHandsView != null) opponentHandsView.Clear();
                 }
                 break;
             }
@@ -445,6 +493,7 @@ public class NetworkManager : MonoBehaviour
         currentState = null;
         if (handView != null) handView.Clear();
         if (tableView != null) tableView.Clear();
+        if (opponentHandsView != null) opponentHandsView.Clear();
         Log("[leave_room] 전송");
     }
 
@@ -503,13 +552,58 @@ public class NetworkManager : MonoBehaviour
             Log("아직 내 차례가 아닙니다. (현재: " + currentState.currentTurnNickname + ")");
             return;
         }
-        PlayCard(card.id);
+        BeginPlayCard(card.id);
     }
 
-    private void PlayCard(string cardId)
+    // 리드이고 조커/조커콜이면 추가 선택 UI, 아니면 바로 전송
+    private void BeginPlayCard(string cardId)
     {
-        Send(JsonUtility.ToJson(new PlayCardMsg { data = new PlayCardData { cardId = cardId } }));
-        Log("[play_card] 전송: " + cardId);
+        ClearPendingPlay();
+        if (IsMyLeadTurn())
+        {
+            if (cardId == "JOKER")
+            {
+                pendingPlayCardId = cardId;
+                pendingNeedSuit = true;
+                Log("[play] 조커 리드 — 따라낼 무늬를 선택하세요");
+                return;
+            }
+            if (currentState != null && !string.IsNullOrEmpty(currentState.jokerCallCardId)
+                && cardId == currentState.jokerCallCardId)
+            {
+                pendingPlayCardId = cardId;
+                pendingNeedJokerCall = true;
+                Log("[play] 조커콜 카드 — 조커콜 사용 여부를 선택하세요");
+                return;
+            }
+        }
+        PlayCard(cardId, null, false);
+    }
+
+    private bool IsMyLeadTurn()
+    {
+        if (currentState == null || currentState.currentTurnClientId != myClientId) return false;
+        TableCardInfo[] t = currentState.tableCards;
+        return t == null || t.Length == 0 || t.Length >= 5;
+    }
+
+    private void ClearPendingPlay()
+    {
+        pendingPlayCardId = null;
+        pendingNeedSuit = false;
+        pendingNeedJokerCall = false;
+    }
+
+    private void PlayCard(string cardId, string declaredSuit, bool activateJokerCall)
+    {
+        var data = new PlayCardData { cardId = cardId, activateJokerCall = activateJokerCall };
+        if (!string.IsNullOrEmpty(declaredSuit)) data.declaredSuit = declaredSuit;
+        Send(JsonUtility.ToJson(new PlayCardMsg { data = data }));
+        string extra = "";
+        if (!string.IsNullOrEmpty(declaredSuit)) extra += " suit=" + declaredSuit;
+        if (activateJokerCall) extra += " jokerCall";
+        Log("[play_card] 전송: " + cardId + extra);
+        ClearPendingPlay();
     }
 
     private void SendBid()
@@ -573,25 +667,90 @@ public class NetworkManager : MonoBehaviour
         tableView.ShowHand(cards);
     }
 
+    private void EnsureOpponentHandsView()
+    {
+        if (opponentHandsView == null)
+        {
+            GameObject go = new GameObject("OpponentHandsView");
+            opponentHandsView = go.AddComponent<OpponentHandsView>();
+        }
+        if (opponentHandsView.cardPrefab == null && handView != null)
+            opponentHandsView.cardPrefab = handView.cardPrefab;
+    }
+
+    // 상대 손패를 뒷면 + 닉네임으로 표시 (나는 handView로 앞면)
+    private void UpdateOpponentHands(GameState state)
+    {
+        EnsureOpponentHandsView();
+        if (opponentHandsView == null) return;
+        if (opponentHandsView.cardPrefab == null && handView != null)
+            opponentHandsView.cardPrefab = handView.cardPrefab;
+
+        if (state == null || state.players == null || state.players.Length == 0)
+        {
+            opponentHandsView.Clear();
+            return;
+        }
+
+        // 손패가 있는 단계만 표시
+        string st = state.status;
+        bool show = st == "bidding" || st == "exchanging_kitty"
+            || st == "choosing_friend" || st == "playing";
+        if (!show)
+        {
+            opponentHandsView.Clear();
+            return;
+        }
+
+        int myIndex = -1;
+        for (int i = 0; i < state.players.Length; i++)
+        {
+            if (state.players[i] != null && state.players[i].clientId == myClientId)
+            {
+                myIndex = i;
+                break;
+            }
+        }
+        if (myIndex < 0) myIndex = 0;
+
+        var seats = new System.Collections.Generic.List<OpponentHandsView.SeatInfo>();
+        int n = state.players.Length;
+        for (int offset = 1; offset < n; offset++)
+        {
+            PlayerInfo p = state.players[(myIndex + offset) % n];
+            if (p == null) continue;
+            seats.Add(new OpponentHandsView.SeatInfo
+            {
+                nickname = p.nickname,
+                handCount = p.handCount,
+                isTurn = !string.IsNullOrEmpty(state.currentTurnClientId)
+                    && p.clientId == state.currentTurnClientId,
+                isBot = p.isBot,
+                disconnected = !p.connected && !p.isBot,
+            });
+        }
+        opponentHandsView.Show(seats.ToArray());
+    }
+
     private bool IAmHost()
     {
         return currentState != null && currentState.hostClientId == myClientId;
     }
 
-    // 무늬 코드를 기호로 (SPADE -> ♠)
+    // 무늬 코드를 표시용 문자로 (WebGL: ♠♥♦♣ 폰트 미포함 → S/H/D/C)
     private static string SuitKor(string suit)
     {
         switch (suit)
         {
-            case "SPADE": return "♠";
-            case "HEART": return "♥";
-            case "DIAMOND": return "♦";
-            case "CLUB": return "♣";
+            case "SPADE": return "S";
+            case "HEART": return "H";
+            case "DIAMOND": return "D";
+            case "CLUB": return "C";
             default: return "노기루";
         }
     }
 
-    // 카드 id를 짧게 (S_A -> ♠A, JOKER -> 조커)
+    // 카드 id를 짧게 (S_A -> SA, JOKER -> 조커)
     private static string CardKor(string cardId)
     {
         if (string.IsNullOrEmpty(cardId)) return "-";
@@ -600,7 +759,7 @@ public class NetworkManager : MonoBehaviour
         if (us < 0) return cardId;
         string suit = cardId.Substring(0, us);
         string rank = cardId.Substring(us + 1);
-        string sym = suit == "S" ? "♠" : suit == "H" ? "♥" : suit == "D" ? "♦" : suit == "C" ? "♣" : suit;
+        string sym = suit == "S" ? "S" : suit == "H" ? "H" : suit == "D" ? "D" : suit == "C" ? "C" : suit;
         return sym + rank;
     }
 
@@ -827,7 +986,7 @@ public class NetworkManager : MonoBehaviour
         {
             GUILayout.Space(4);
             GUI.color = new Color(1f, 0.5f, 0.5f);
-            if (GUILayout.Button("딜미스 (노게임 · 다시 돌리기)")) DeclareDealMiss();
+            if (GUILayout.Button("딜미스 (손패≤0.5점 · 다시 돌리기)")) DeclareDealMiss();
             GUI.color = Color.white;
         }
 
@@ -1055,6 +1214,47 @@ public class NetworkManager : MonoBehaviour
             {
                 GUILayout.Label("직전 트릭 승자: " + currentState.lastTrickWinnerNickname);
             }
+
+            // 테이블 리드 부가정보 (조커 무늬 / 조커콜)
+            if (currentState.tableCards != null && currentState.tableCards.Length > 0)
+            {
+                TableCardInfo lead = currentState.tableCards[0];
+                if (lead != null && lead.card != null)
+                {
+                    if (lead.card.id == "JOKER" && !string.IsNullOrEmpty(lead.declaredSuit))
+                        GUILayout.Label("조커 리드 무늬: " + SuitKor(lead.declaredSuit));
+                    if (lead.jokerCallActivated)
+                        GUILayout.Label("★ 조커콜 활성! (조커 강제)");
+                }
+            }
+        }
+
+        // 조커 리드 무늬 / 조커콜 선택
+        if (pendingNeedSuit && !string.IsNullOrEmpty(pendingPlayCardId))
+        {
+            GUILayout.Space(4);
+            GUILayout.Label("조커 리드 — 따라낼 무늬 선택:");
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < 4; i++)
+            {
+                string suit = trumpOptions[i];
+                if (GUILayout.Button(trumpLabels[i], GUILayout.Width(44), GUILayout.Height(32)))
+                    PlayCard(pendingPlayCardId, suit, false);
+            }
+            if (GUILayout.Button("취소", GUILayout.Width(50))) ClearPendingPlay();
+            GUILayout.EndHorizontal();
+        }
+        else if (pendingNeedJokerCall && !string.IsNullOrEmpty(pendingPlayCardId))
+        {
+            GUILayout.Space(4);
+            GUILayout.Label("조커콜 카드 — 조커콜을 사용할까요?");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("조커콜 사용", GUILayout.Height(32)))
+                PlayCard(pendingPlayCardId, null, true);
+            if (GUILayout.Button("일반으로 내기", GUILayout.Height(32)))
+                PlayCard(pendingPlayCardId, null, false);
+            if (GUILayout.Button("취소", GUILayout.Width(50))) ClearPendingPlay();
+            GUILayout.EndHorizontal();
         }
 
         GUILayout.Label("플레이어 (남은/획득트릭):");

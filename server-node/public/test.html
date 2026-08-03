@@ -98,7 +98,7 @@
           <button id="bidBtn">공약</button>
           <button id="passBidBtn">패스</button>
         </div>
-        <button id="dealMissBtn" class="hidden" style="margin-top:6px;background:#ef476f;">딜미스 (노게임 · 다시 돌리기)</button>
+        <button id="dealMissBtn" class="hidden" style="margin-top:6px;background:#ef476f;">딜미스 (손패≤0.5점 · 다시 돌리기)</button>
       </div>
 
       <!-- 바닥패 교환 (주공만) -->
@@ -136,8 +136,13 @@
         <div id="ruleInfo" style="color:#9ad;"></div>
         <div id="turnInfo"></div>
         <div id="trickWinner" style="color:#06d6a0;"></div>
+        <div id="leadExtra" style="color:#ffd166;margin:4px 0;"></div>
         <div>테이블에 낸 카드:</div>
         <div id="table"></div>
+        <div id="playChoice" class="hidden" style="background:#0f1626;border-radius:8px;padding:8px;margin:8px 0;">
+          <div id="playChoiceHint" style="color:#ffd166;margin-bottom:6px;"></div>
+          <div id="playChoiceBtns"></div>
+        </div>
       </div>
       <div id="handArea" class="hidden">
         <div>내 손패 (<span id="handCount">0</span>장):</div>
@@ -170,6 +175,7 @@
       let intentionalLeave = false;
       let reconnectTimer = null;
       let reconnectAttempt = 0;
+      let pendingPlayCardId = null; // 조커/조커콜 리드 대기
 
       function bindSocket(ws) {
         socket = ws;
@@ -400,8 +406,80 @@
           log("아직 내 차례가 아닙니다. (현재: " + latestState.currentTurnNickname + ")");
           return;
         }
-        sendMsg("play_card", { cardId: card.id });
-        log("[play_card] 전송: " + card.id);
+        beginPlayCard(card.id);
+      }
+      function isMyLeadTurn() {
+        if (!latestState || latestState.currentTurnClientId !== myClientId) return false;
+        const t = latestState.tableCards || [];
+        return t.length === 0 || t.length >= 5;
+      }
+      function clearPlayChoice() {
+        pendingPlayCardId = null;
+        const box = $("playChoice");
+        if (box) box.classList.add("hidden");
+      }
+      function beginPlayCard(cardId) {
+        clearPlayChoice();
+        if (isMyLeadTurn()) {
+          if (cardId === "JOKER") {
+            pendingPlayCardId = cardId;
+            showSuitChoice();
+            log("[play] 조커 리드 — 따라낼 무늬를 선택하세요");
+            return;
+          }
+          if (latestState.jokerCallCardId && cardId === latestState.jokerCallCardId) {
+            pendingPlayCardId = cardId;
+            showJokerCallChoice();
+            log("[play] 조커콜 카드 — 조커콜 사용 여부를 선택하세요");
+            return;
+          }
+        }
+        sendPlayCard(cardId);
+      }
+      function showSuitChoice() {
+        $("playChoice").classList.remove("hidden");
+        $("playChoiceHint").textContent = "조커 리드 — 따라낼 무늬 선택:";
+        const btns = $("playChoiceBtns");
+        btns.innerHTML = "";
+        [
+          ["SPADE", "♠ S"], ["HEART", "♥ H"], ["DIAMOND", "♦ D"], ["CLUB", "♣ C"]
+        ].forEach(([suit, label]) => {
+          const b = document.createElement("button");
+          b.textContent = label;
+          b.onclick = () => sendPlayCard(pendingPlayCardId, { declaredSuit: suit });
+          btns.appendChild(b);
+        });
+        const cancel = document.createElement("button");
+        cancel.textContent = "취소";
+        cancel.onclick = () => clearPlayChoice();
+        btns.appendChild(cancel);
+      }
+      function showJokerCallChoice() {
+        $("playChoice").classList.remove("hidden");
+        $("playChoiceHint").textContent = "조커콜을 사용할까요?";
+        const btns = $("playChoiceBtns");
+        btns.innerHTML = "";
+        const use = document.createElement("button");
+        use.textContent = "조커콜 사용";
+        use.style.background = "#ef476f";
+        use.onclick = () => sendPlayCard(pendingPlayCardId, { activateJokerCall: true });
+        btns.appendChild(use);
+        const plain = document.createElement("button");
+        plain.textContent = "일반으로 내기";
+        plain.onclick = () => sendPlayCard(pendingPlayCardId, { activateJokerCall: false });
+        btns.appendChild(plain);
+        const cancel = document.createElement("button");
+        cancel.textContent = "취소";
+        cancel.onclick = () => clearPlayChoice();
+        btns.appendChild(cancel);
+      }
+      function sendPlayCard(cardId, opts) {
+        const data = Object.assign({ cardId }, opts || {});
+        sendMsg("play_card", data);
+        log("[play_card] 전송: " + cardId
+          + (data.declaredSuit ? " suit=" + data.declaredSuit : "")
+          + (data.activateJokerCall ? " [조커콜]" : ""));
+        clearPlayChoice();
       }
       function updateDiscardUi() {
         const exchanging = latestState && latestState.status === "exchanging_kitty"
@@ -555,6 +633,18 @@
         // 직전 트릭 승자
         $("trickWinner").textContent = (playing && state.lastTrickWinnerNickname)
           ? ("직전 트릭 승자: " + state.lastTrickWinnerNickname) : "";
+        // 리드 부가정보
+        const leadExtra = $("leadExtra");
+        if (playing && state.tableCards && state.tableCards.length > 0) {
+          const lead = state.tableCards[0];
+          const parts = [];
+          if (lead.card && lead.card.id === "JOKER" && lead.declaredSuit)
+            parts.push("조커 리드 무늬: " + suitSym(lead.declaredSuit));
+          if (lead.jokerCallActivated) parts.push("★ 조커콜 활성! (조커 강제)");
+          leadExtra.textContent = parts.join("  |  ");
+        } else {
+          leadExtra.textContent = "";
+        }
         // 내 차례일 때만 손패를 클릭 가능하게 강조
         $("hand").classList.toggle("myturn", playing && myTurn);
         // 테이블에 낸 카드들

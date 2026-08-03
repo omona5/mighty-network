@@ -23,18 +23,35 @@ function pickDiscardIds(hand) {
   return scored.slice(0, 3).map((x) => x.id);
 }
 
-function legalCard(state) {
-  const table = state.tableCards || [];
+function legalPlay(state) {
+  const tableRaw = state.tableCards || [];
+  const isLead = tableRaw.length === 0 || tableRaw.length >= 5;
+  const table = isLead ? [] : tableRaw;
   let leadSuit = null;
-  if (table.length > 0 && table.length < 5) {
-    const lead = table[0].card;
-    if (lead.suit !== "JOKER") leadSuit = lead.suit;
+  let jokerCall = false;
+  if (table.length > 0) {
+    const lead = table[0];
+    jokerCall = !!lead.jokerCallActivated;
+    if (lead.card && lead.card.suit === "JOKER") leadSuit = lead.declaredSuit || null;
+    else if (lead.card) leadSuit = lead.card.suit;
+  }
+  if (jokerCall) {
+    const joker = myHand.find((c) => c.id === "JOKER" || c.suit === "JOKER");
+    if (joker) return { cardId: joker.id };
+    const mighty = myHand.find((c) => c.id === state.mightyCardId);
+    if (mighty) return { cardId: mighty.id };
   }
   if (leadSuit) {
     const follow = myHand.find((c) => c.suit === leadSuit);
-    if (follow) return follow;
+    if (follow) return { cardId: follow.id };
   }
-  return myHand[0];
+  const card = myHand[0];
+  const opts = { cardId: card.id };
+  if (isLead && card.id === "JOKER") opts.declaredSuit = "SPADE";
+  if (isLead && state.jokerCallCardId && card.id === state.jokerCallCardId) {
+    opts.activateJokerCall = false;
+  }
+  return opts;
 }
 
 ws.on("message", (raw) => {
@@ -88,9 +105,9 @@ ws.on("message", (raw) => {
         if (!sawFive) { sawFive = true; trickSeen++; console.log(`트릭#${trickSeen} 승자=${s.lastTrickWinnerNickname}`); }
       } else sawFive = false;
       if (s.currentTurnClientId === myId && !pending && myHand.length > 0) {
-        const card = legalCard(s);
+        const play = legalPlay(s);
         pending = true;
-        ws.send(JSON.stringify({ type: "play_card", data: { cardId: card.id } }));
+        ws.send(JSON.stringify({ type: "play_card", data: play }));
       }
     }
   } else if (msg.type === "error_message") { console.log("에러:", d.message); pending = false; didDiscard = false; }

@@ -38,8 +38,6 @@ const MIN_BID = 13; // 입찰 시작 최소 공약
 const MAX_BID = 20;
 const BID_FLOOR = 11; // 전원 패스 시 최소공약을 여기까지 낮춘다. 이보다 낮아지면 재딜.
 const SUITS = ["SPADE", "HEART", "DIAMOND", "CLUB"];
-// 점수 카드(끗) 랭크: 딜미스 판정용
-const POINT_RANKS = ["A", "K", "Q", "J", "10"];
 
 // 폴백 기루다: 입찰에서 아무도 안 정해졌을 때 대비용 기본값(정상 흐름에선 미사용)
 const FALLBACK_TRUMP_SUIT = "HEART";
@@ -467,28 +465,32 @@ class RoomManager {
     return { targetScore: minAllowed, trumpSuit: ev.suit, noTrump: false };
   }
 
-  // 딜미스(노게임) 선언 가능 여부.
-  // 표준: 점수카드(A·K·Q·J·10) 0장, 또는 점수카드가 마이티(♠A) 1장뿐이고 조커도 없을 때.
-  // (기루다 결정 전이므로 마이티는 기본값 ♠A=S_A로 판정)
-  canDeclareDealMiss(hand) {
-    if (!hand || hand.length === 0) return false;
-    const pointCards = hand.filter(
-      (c) => c.suit !== "JOKER" && POINT_RANKS.includes(c.rank)
-    );
-    const hasJoker = hand.some((c) => c.suit === "JOKER");
-    if (pointCards.length === 0) return true;
-    if (pointCards.length === 1 && pointCards[0].id === "S_A" && !hasJoker) return true;
-    return false;
+  // 딜미스(노게임) 선언 가능 여부 — 표준 5마 0.5점식 (마이티0 / 10=0.5 / 조커-1 / 그외 점수1 ≤ 0.5).
+  // hasActedInBidding이 true면(이미 공약·패스) 선언 불가.
+  canDeclareDealMiss(hand, hasActedInBidding = false) {
+    if (hasActedInBidding) return false;
+    return RuleEngine.canDeclareDealMiss(hand);
+  }
+
+  // 이 플레이어가 이번 입찰에서 이미 공약/패스했는지
+  hasActedInBidding(room, clientId) {
+    return (room.bids || []).some((b) => b.clientId === clientId);
   }
 
   // 딜미스 선언 처리. 성공 { ok, nickname }, 실패 { error }.
   declareDealMiss(room, clientId) {
     const p = room.players.find((x) => x.clientId === clientId);
     if (!p) return { error: "플레이어를 찾을 수 없습니다." };
-    if (!this.canDeclareDealMiss(p.hand)) {
-      return { error: "딜미스(노게임) 조건이 아닙니다." };
+    if (room.status !== "bidding") {
+      return { error: "입찰 중에만 딜미스를 선언할 수 있습니다." };
     }
-    return { ok: true, nickname: p.nickname };
+    if (this.hasActedInBidding(room, clientId)) {
+      return { error: "이미 공약/패스한 뒤에는 딜미스를 선언할 수 없습니다." };
+    }
+    if (!this.canDeclareDealMiss(p.hand, false)) {
+      return { error: "딜미스(노게임) 조건이 아닙니다. (손패 점수 0.5 이하)" };
+    }
+    return { ok: true, nickname: p.nickname, score: RuleEngine.dealMissScore(p.hand) };
   }
 
   // ===================== 06~08단계: 플레이 =====================
@@ -521,8 +523,9 @@ class RoomManager {
   }
 
   // 카드 제출 처리. 성공 { card, player, trickResult }, 실패 { error }.
+  // options: { declaredSuit?, activateJokerCall? } — 리드일 때만 사용
   // trickResult: 트릭이 완성됐으면 { winnerClientId, winnerNickname }, 아니면 null.
-  playCard(room, clientId, cardId) {
+  playCard(room, clientId, cardId, options = {}) {
     if (room.status !== "playing") return { error: "게임 중이 아닙니다." };
 
     // 직전 트릭이 완성된 상태면(테이블에 5장) 새 리드 전에 비운다.
@@ -539,26 +542,52 @@ class RoomManager {
     const idx = hand.findIndex((c) => c.id === cardId);
     if (idx === -1) return { error: "손패에 없는 카드입니다: " + cardId };
 
-    // 08단계: 따라내기 강제 검증
+    // 08단계: 따라내기 / 조커콜 강제 검증
     const card = hand[idx];
+    const isLead = room.tableCards.length === 0;
+    const cfg = room.ruleConfig;
+
+    let declaredSuit = null;
+    let jokerCallActivated = false;
+    if (isLead) {
+      if (RuleEngine.isJoker(card, cfg)) {
+        declaredSuit = options.declaredSuit || null;
+        if (!RuleEngine.isValidSuit(declaredSuit)) {
+          return { error: "조커 리드 시 따라낼 무늬(declaredSuit)를 선언해야 합니다." };
+        }
+      }
+      if (RuleEngine.isJokerCall(card, cfg)) {
+        jokerCallActivated = !!options.activateJokerCall;
+      }
+    }
+
     const legal = RuleEngine.canPlayCard({
       playerHand: hand,
       card,
       tableCards: room.tableCards,
-      ruleConfig: room.ruleConfig,
+      ruleConfig: cfg,
     });
     if (!legal) {
-      const leadSuit = RuleEngine.leadSuitOf(room.tableCards, room.ruleConfig);
+      const lead = room.tableCards[0];
+      if (lead && RuleEngine.isJokerCallActivated(lead, cfg)) {
+        return { error: "조커콜! 조커를 내야 합니다. (마이티로 막을 수 있음)" };
+      }
+      const leadSuit = RuleEngine.leadSuitOf(room.tableCards, cfg);
       return { error: "리드 무늬(" + leadSuit + ")를 따라내야 합니다." };
     }
 
     hand.splice(idx, 1); // 검증 통과 후 실제 제거
     sortHand(hand);
-    room.tableCards.push({
+    const entry = {
       clientId: player.clientId,
       playerNickname: player.nickname,
       card,
-    });
+    };
+    if (isLead && declaredSuit) entry.declaredSuit = declaredSuit;
+    if (isLead && RuleEngine.isJokerCall(card, cfg)) {
+      entry.jokerCallActivated = jokerCallActivated;
+    }
+    room.tableCards.push(entry);
 
     // 09단계: 프렌드 카드가 나오면 프렌드 공개
     if (!room.friendRevealed && room.friendCardId && card.id === room.friendCardId) {
@@ -650,19 +679,38 @@ class RoomManager {
     this.fillWithBots(room);
   }
 
-  // 봇이 낼 카드 id를 고른다. (08단계: 따라내기 규칙을 지키는 합법 카드 중 무작위)
-  botPickCardId(room, player) {
+  // 봇이 낼 카드(+리드 옵션)를 고른다.
+  // 반환: { cardId, declaredSuit?, activateJokerCall? } 또는 null
+  botPickPlay(room, player) {
     if (!player.hand || player.hand.length === 0) return null;
+    // 직전 트릭 완성 직후면 테이블을 비운 뒤 리드로 취급
+    const tableCards = room.trickComplete ? [] : room.tableCards || [];
     const legal = player.hand.filter((c) =>
       RuleEngine.canPlayCard({
         playerHand: player.hand,
         card: c,
-        tableCards: room.tableCards,
+        tableCards,
         ruleConfig: room.ruleConfig,
       })
     );
     const pool = legal.length ? legal : player.hand;
-    return pool[Math.floor(Math.random() * pool.length)].id;
+    const card = pool[Math.floor(Math.random() * pool.length)];
+    const isLead = tableCards.length === 0;
+    const opts = { cardId: card.id };
+    if (isLead && RuleEngine.isJoker(card, room.ruleConfig)) {
+      const suits = ["SPADE", "HEART", "DIAMOND", "CLUB"];
+      opts.declaredSuit = suits[Math.floor(Math.random() * suits.length)];
+    }
+    if (isLead && RuleEngine.isJokerCall(card, room.ruleConfig)) {
+      opts.activateJokerCall = Math.random() < 0.5;
+    }
+    return opts;
+  }
+
+  // 하위 호환: 카드 id만 필요할 때
+  botPickCardId(room, player) {
+    const pick = this.botPickPlay(room, player);
+    return pick ? pick.cardId : null;
   }
 
   // 끊긴 사람(또는 순수 봇)은 서버가 대신 행동한다.
@@ -912,6 +960,8 @@ class RoomManager {
       tableCards: (room.tableCards || []).map((t) => ({
         playerNickname: t.playerNickname,
         card: t.card,
+        declaredSuit: t.declaredSuit || null,
+        jokerCallActivated: !!t.jokerCallActivated,
       })),
       players: room.players.map((p) => ({
         clientId: p.clientId, // 클라이언트가 "나"를 식별하는 용도 (비밀 아님)

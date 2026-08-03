@@ -597,3 +597,89 @@
 - **커밋**: `9058d3b` Add WebGL deploy prep: server URL config, Korean font, and static hosting.
 - **푸시**: `origin/main` (`b92c84b..9058d3b`)
 - **참고**: `public/webgl/Build/`는 gitignore (로컬 빌드 복사). 한글 폰트 OTF 포함.
+
+## 2026-07-24 16:30 (UTC+9)
+
+- **작업 요청**: 다음에 뭘 해야 하는지.
+- **답변**: 로컬 WebGL 검증 완료 상태. 선택지 — Pi 배포(12) / 카드 UI·애니 / 커밋된 상태 유지 후 플레이테스트.
+
+## 2026-07-24 16:32 (UTC+9)
+
+- **문제**: WebGL에서 카드 숫자만 보이고 문양(♠♥♦♣) 안 보임.
+- **원인**: UI Text/폰트에 슈트 심볼 글리프 없음.
+- **수정**: CardView/NetworkManager 표시를 S/H/D/C로 변경, 카드 Text에 Noto 폰트 적용. 빨강/검정은 색으로 구분.
+- **필요**: WebGL 재빌드 후 public/webgl 복사.
+
+## 2026-07-23 23:59 (UTC+9)
+
+- **작업 요청**: 나무위키 마이티 룰과 현재 구현 비교 참고점 확인.
+- **참고 문서**: https://namu.wiki/w/마이티 , https://namu.wiki/w/마이티/세부_규칙 , https://mightyfriend.net/?p=25 , https://mightyfriend.net/?p=56
+- **이미 일치**: 마이티/조커콜 정의, 서열, 조커 첫·막턴 무효, 런/백런, 노기·노프 배수(승), 자리섞기(호스트).
+- **차이/미구현**: 초구 기루다 금지, 조커 리드 무늬선언, 조커콜 선택 활성화, 바닥패 후 기루변경(+1/+2), 딜미스 0.5점식, 백런 로컬기준 등.
+
+## 2026-07-31 23:11 (UTC+9)
+
+- **작업 요청**: 표준 5마 기준으로 2·3·5번만 반영 (조커 리드 무늬선언, 조커콜 선택, 딜미스 세부).
+- **서버**: RuleEngine — declaredSuit follow, activateJokerCall(+조커강제/마이티예외), dealMiss 0.5점식; RoomManager playCard 옵션; 봇 리드 옵션; 입찰/패스 후 딜미스 불가.
+- **클라**: Unity NetworkManager + test.html 선택 UI; ws_test 대응.
+- **테스트**: `node test/ruleEngine.test.js` 23개 통과.
+- **문서**: md_files/08_mighty_rules.md 표준 5마 반영 메모.
+- **미반영(의도적)**: 초구 기루다 금지, 바닥패 후 기루변경, 백런 로컬배수.
+2026-07-31 23:13 (UTC+9)
+
+## 2026-07-31 스프라이트 필요 목록 안내
+
+- **요청**: 트럼프 53장 보유 상태에서 추가 필요 스프라이트 문의.
+- **답변**: 필수/권장/선택 우선순위로 안내 (카드백, UI 버튼, 기루다 아이콘, 테이블 배경 등). 코드 변경 없음.
+
+## 2026-08-03 22:59 (UTC+9)
+
+- **작업**: 카드 스프라이트 시트(320×448, 10×6, 54장) 연동.
+- **시트 순서**: ♠A..K → ♦ → ♥ → ♣ → JOKER → BACK (A 먼저).
+- **추가**: `Resources/Cards/card_sheet.png` (+meta max 4096), `CardSpriteAtlas.cs`, `CardView` 스프라이트 표시/`SetFaceDown`.
+- **원본**: `Assets/Sprites/card.ss.png` 유지.
+- **확인**: Unity에서 Play 후 손패 그림 표시. 무늬 순서가 어긋나면 시트 순서만 알려주면 수정.
+
+## 2026-08-03 23:01 (UTC+9)
+
+- **요청**: Cursor 업데이트 위해 서버 일시 종료.
+- **조치**: PID 1686 (port 3000) kill. 포트 해제 확인.
+
+## 2026-08-03 23:02 (UTC+9)
+
+- **결과**: 서버(PID 1686, :3000) 종료 완료. 포트 비움.
+
+## 2026-08-03 23:02 (UTC+9)
+
+- **알림**: 백그라운드 서버 태스크 exit 143 (SIGTERM) — Cursor 업데이트용 수동 종료와 동일 원인. 이상 아님.
+
+## 2026-08-03 23:03 (UTC+9)
+
+- **요청**: 서버 재기동.
+- **조치**: `server-node`에서 `node server.js` 백그라운드 기동 (PID 29321). :3000 대기.
+
+## 2026-08-03 23:06 (UTC+9)
+
+- **요청**: 상대 손패를 뒷면 스프라이트+닉네임으로 표시.
+- **추가**: OpponentHandsView (좌/상/우 배치), HandView.ShowFaceDown, NetworkManager game_state 연동.
+- **동작**: 내 손패=앞면(handView), 상대=BACK 스프라이트×handCount + 이름(턴 하이라이트).
+
+## 2026-08-03 23:08 (UTC+9)
+
+- **질문**: 카드 렌더링 방식 / 스크린 비율 스케일 필요 여부.
+- **답변**: CanvasScaler(1920×1080)로 전체 스케일. 카드는 프리팹 고정 70×98(상대는 36×50). 스프라이트 320×448은 Rect에 맞춰 축소될 뿐. 작게 보이는 건 기준 크기가 작아서 — % 높이 기반 스케일 권장.
+
+## 2026-08-03 23:09 (UTC+9)
+
+- **질문**: 픽셀 깨짐 방지 = 원본 픽셀(320×448) 또는 n배 크기?
+- **답변**: 픽셀아트 원칙상 맞음(정수배 + Point 필터). CanvasScaler·Bilinear면 깨짐/번짐. 320은 1배도 큼 → 보통 시트 다운스케일 자산 + 정수배, 또는 Point+정수배 UI.
+
+## 2026-08-03 23:11 (UTC+9)
+
+- **요청**: Point 필터 + 손패 160×224.
+- **적용**: card_sheet Point(meta+런타임), Card 프리팹 160×224, HandView 강제 사이즈, HandContainer 1700×240 spacing -40, Table 900×240, 상대 손패 80×112.
+
+## 2026-08-03 23:13 (UTC+9)
+
+- **버그**: 에디터 Play 시 PlayerPrefs reconnectToken으로 진행 중 게임에 자동 재입장.
+- **수정**: 에디터 기본 `autoReconnectInEditor=false` — Play 시작 시 토큰 삭제, OnOpen/OnClose 자동 재접속 스킵. WebGL은 기존대로. 재접속 테스트 시 Inspector에서 체크.

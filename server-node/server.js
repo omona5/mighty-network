@@ -254,7 +254,11 @@ wss.on("connection", (ws) => {
           send(ws, "your_hand", {
             cards: player.hand,
             canDealMiss:
-              room.status === "bidding" && rooms.canDeclareDealMiss(player.hand),
+              room.status === "bidding"
+              && rooms.canDeclareDealMiss(
+                player.hand,
+                rooms.hasActedInBidding(room, player.clientId)
+              ),
           });
         }
         broadcast(room, "game_state", rooms.publicState(room));
@@ -318,6 +322,10 @@ wss.on("connection", (ws) => {
           break;
         }
         console.log("[bid]", ws.clientId, data.targetScore, data.noTrump ? "노기루" : data.trumpSuit);
+        const bidder = room.players.find((p) => p.clientId === ws.clientId);
+        if (bidder && bidder.hand) {
+          send(ws, "your_hand", { cards: bidder.hand, canDealMiss: false });
+        }
         handleBidStep(room, result.complete);
         break;
       }
@@ -332,6 +340,10 @@ wss.on("connection", (ws) => {
           break;
         }
         console.log("[pass_bid]", ws.clientId);
+        const passer = room.players.find((p) => p.clientId === ws.clientId);
+        if (passer && passer.hand) {
+          send(ws, "your_hand", { cards: passer.hand, canDealMiss: false });
+        }
         handleBidStep(room, result.complete);
         break;
       }
@@ -392,7 +404,10 @@ wss.on("connection", (ws) => {
       case "play_card": {
         const room = rooms.getRoom(ws.roomId);
         if (!room) break;
-        const result = rooms.playCard(room, ws.clientId, data.cardId);
+        const result = rooms.playCard(room, ws.clientId, data.cardId, {
+          declaredSuit: data.declaredSuit,
+          activateJokerCall: data.activateJokerCall,
+        });
         if (result.error) {
           send(ws, "error_message", { message: result.error });
           break;
@@ -472,7 +487,12 @@ function sendHandsToHumans(room) {
       if (p.hand) sortHand(p.hand);
       send(p.ws, "your_hand", {
         cards: p.hand,
-        canDealMiss: bidding && rooms.canDeclareDealMiss(p.hand),
+        canDealMiss:
+          bidding
+          && rooms.canDeclareDealMiss(
+            p.hand,
+            rooms.hasActedInBidding(room, p.clientId)
+          ),
       });
     }
   }
@@ -654,14 +674,21 @@ function maybeBotPlay(room) {
     const bot = rooms.currentTurnPlayer(r);
     if (!rooms.isBotControlled(bot)) return;
 
-    const cardId = rooms.botPickCardId(r, bot);
-    if (!cardId) return;
-    const result = rooms.playCard(r, bot.clientId, cardId);
+    const pick = rooms.botPickPlay(r, bot);
+    if (!pick || !pick.cardId) return;
+    const result = rooms.playCard(r, bot.clientId, pick.cardId, {
+      declaredSuit: pick.declaredSuit,
+      activateJokerCall: pick.activateJokerCall,
+    });
     if (result.error) {
       console.log("[bot] play error:", result.error);
       return;
     }
-    console.log("[bot]", bot.nickname, "냄:", cardId);
+    console.log(
+      "[bot]", bot.nickname, "냄:", pick.cardId
+        + (pick.declaredSuit ? (" (" + pick.declaredSuit + ")") : "")
+        + (pick.activateJokerCall ? " [조커콜]" : "")
+    );
     if (result.trickResult) {
       console.log("[trick] 승자:", result.trickResult.winnerNickname);
     }
