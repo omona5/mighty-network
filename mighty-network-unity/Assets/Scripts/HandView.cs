@@ -3,44 +3,50 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // ============================================================================
-// HandView: 내 손패 전체를 화면에 그리는 매니저.
-//   - Inspector 연결:
-//       cardPrefab    : 위에서 만든 Card 프리팹 (CardView가 붙어 있음)
-//       cardContainer : 카드들이 나열될 부모 오브젝트
-//                       (HorizontalLayoutGroup을 붙이면 자동 정렬됨)
-//   - ShowHand(cards): 기존 카드를 지우고 받은 카드만큼 프리팹을 생성한다.
-//   - Clear(): 카드를 모두 제거 (방 나갈 때 등)
+// HandView: 손패/테이블 카드 나열.
+//   ShowHand(cards): 손패 — 무늬·랭크 정렬
+//   ShowCardsInOrder(cards): 테이블 — 낸 순서 그대로
 // ============================================================================
 public class HandView : MonoBehaviour
 {
     [Header("Inspector에서 연결")]
-    public CardView cardPrefab;     // 카드 프리팹
-    public Transform cardContainer; // 카드가 놓일 부모 (레이아웃 그룹 권장)
+    public CardView cardPrefab;
+    public Transform cardContainer;
 
-    // 카드 클릭 콜백. NetworkManager가 연결한다. (null이면 클릭해도 반응 없음)
     public System.Action<CardData> onCardClicked;
 
     private readonly List<GameObject> spawned = new List<GameObject>();
+    private readonly List<CardView> spawnedViews = new List<CardView>();
 
-    // 손패를 다시 그린다. (무늬→숫자 높은순 정렬)
     public void ShowHand(CardData[] cards)
+    {
+        ShowInternal(cards, sort: true);
+    }
+
+    // 테이블용: 정렬하지 않고 왼쪽→오른쪽 낸 순서
+    public void ShowCardsInOrder(CardData[] cards)
+    {
+        ShowInternal(cards, sort: false);
+    }
+
+    private void ShowInternal(CardData[] cards, bool sort)
     {
         Clear();
         if (cards == null) return;
 
-        CardData[] sorted = SortCards(cards);
+        CardData[] list = sort ? SortCards(cards) : cards;
         Transform parent = cardContainer != null ? cardContainer : transform;
-        foreach (CardData card in sorted)
+        foreach (CardData card in list)
         {
             CardView view = Instantiate(cardPrefab, parent);
             ApplyHandCardSize(view);
             view.SetCard(card);
-            view.Clicked = onCardClicked; // 클릭하면 콜백 호출
+            view.Clicked = onCardClicked;
             spawned.Add(view.gameObject);
+            spawnedViews.Add(view);
         }
     }
 
-    // 뒷면 N장 (상대 손패 등). 클릭 불가.
     public void ShowFaceDown(int count)
     {
         Clear();
@@ -53,6 +59,25 @@ public class HandView : MonoBehaviour
             view.SetFaceDown();
             view.Clicked = null;
             spawned.Add(view.gameObject);
+            spawnedViews.Add(view);
+        }
+    }
+
+    public void SetAllPlayable(bool playable)
+    {
+        foreach (CardView v in spawnedViews)
+        {
+            if (v != null && v.Card != null) v.SetPlayable(playable);
+        }
+    }
+
+    public void ApplyPlayability(Func<CardData, bool> canPlay)
+    {
+        foreach (CardView v in spawnedViews)
+        {
+            if (v == null || v.Card == null) continue;
+            bool ok = canPlay == null || canPlay(v.Card);
+            v.SetPlayable(ok);
         }
     }
 
@@ -64,7 +89,6 @@ public class HandView : MonoBehaviour
             rt.sizeDelta = new Vector2(CardSpriteAtlas.DisplayWidth, CardSpriteAtlas.DisplayHeight);
     }
 
-    // ♠ → ♥ → ♦ → ♣ → 조커, 같은 무늬는 A > K > ... > 2
     public static CardData[] SortCards(CardData[] cards)
     {
         if (cards == null || cards.Length == 0) return cards;
@@ -116,7 +140,6 @@ public class HandView : MonoBehaviour
         }
     }
 
-    // 화면의 카드를 모두 제거한다.
     public void Clear()
     {
         foreach (GameObject go in spawned)
@@ -124,5 +147,6 @@ public class HandView : MonoBehaviour
             if (go != null) Destroy(go);
         }
         spawned.Clear();
+        spawnedViews.Clear();
     }
 }

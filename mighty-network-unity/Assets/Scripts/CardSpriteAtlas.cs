@@ -9,6 +9,7 @@ using UnityEngine;
 //   나머지 6칸은 빈 셀.
 //
 // Resources 경로: Resources/Cards/card_sheet
+//   ※ 원본을 Sprites/card.ss.png 에서 수정했다면 이 파일로 다시 복사해야 반영됨.
 // ============================================================================
 public static class CardSpriteAtlas
 {
@@ -34,6 +35,15 @@ public static class CardSpriteAtlas
     private static Dictionary<string, Sprite> byId;
     private static Sprite backSprite;
     private static bool loadAttempted;
+
+    // Domain Reload 꺼둔 에디터 / 재Play 시 이전 스프라이트 캐시 제거
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        byId = null;
+        backSprite = null;
+        loadAttempted = false;
+    }
 
     public static Sprite Get(string cardId)
     {

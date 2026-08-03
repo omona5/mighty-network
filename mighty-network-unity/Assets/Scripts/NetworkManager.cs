@@ -64,6 +64,10 @@ public class NetworkManager : MonoBehaviour
     private int reconnectAttempt = 0;
     private bool suppressAutoReconnect = false; // 주소 변경 재연결 시 close 루프 방지
 
+    private Vector2 finishedScroll;
+    private float finishedAutoLobbyAt = -1f; // realtimeSinceStartup 기준, <=0 이면 비활성
+    private const float FinishedAutoLobbySec = 8f;
+
     // 리드 시 추가 선택 (조커 무늬 선언 / 조커콜 활성화)
     private string pendingPlayCardId = null;
     private bool pendingNeedSuit = false;
@@ -326,6 +330,15 @@ public class NetworkManager : MonoBehaviour
 #if !UNITY_WEBGL || UNITY_EDITOR
         websocket?.DispatchMessageQueue();
 #endif
+        // 결과 화면: 버튼이 가려져도 대기방으로 복귀되도록 자동 전환
+        if (inRoom && currentState != null && currentState.status == "finished"
+            && finishedAutoLobbyAt > 0f
+            && Time.realtimeSinceStartup >= finishedAutoLobbyAt)
+        {
+            finishedAutoLobbyAt = -1f;
+            Log("[lobby] 결과 확인 시간 종료 → 자동 대기방 복귀");
+            ReturnToLobby();
+        }
     }
 
     private void HandleMessage(string json)
@@ -359,6 +372,7 @@ public class NetworkManager : MonoBehaviour
                 myHandCards = (m.data != null) ? HandView.SortCards(m.data.cards) : null;
                 discardSelected.Clear();
                 myCanDealMiss = (m.data != null && m.data.canDealMiss);
+                RefreshHandPlayability();
                 break;
             }
 
@@ -417,10 +431,12 @@ public class NetworkManager : MonoBehaviour
                 currentState = m.data;
                 UpdateTable(m.data);
                 UpdateOpponentHands(m.data);
+                RefreshHandPlayability();
                 if (currentState != null && currentState.status == "waiting")
                 {
                     gameStarted = false;
                     lastResult = null;
+                    finishedAutoLobbyAt = -1f;
                     if (handView != null) handView.Clear();
                     if (tableView != null) tableView.Clear();
                     if (opponentHandsView != null) opponentHandsView.Clear();
@@ -432,9 +448,11 @@ public class NetworkManager : MonoBehaviour
             {
                 GameFinishedMsg m = JsonUtility.FromJson<GameFinishedMsg>(json);
                 lastResult = m.data;
+                finishedAutoLobbyAt = Time.realtimeSinceStartup + FinishedAutoLobbySec;
                 Log("[game_finished] 승: " + (lastResult != null ? lastResult.winnerLabel : "?")
                     + "  주공팀 " + (lastResult != null ? lastResult.declarerTeamScore : 0)
-                    + " / 목표 " + (lastResult != null ? lastResult.targetScore : 0));
+                    + " / 목표 " + (lastResult != null ? lastResult.targetScore : 0)
+                    + "  (" + FinishedAutoLobbySec + "초 후 자동 대기방)");
                 break;
             }
 
@@ -552,6 +570,11 @@ public class NetworkManager : MonoBehaviour
             Log("아직 내 차례가 아닙니다. (현재: " + currentState.currentTurnNickname + ")");
             return;
         }
+        if (!IsLegalToPlay(card))
+        {
+            Log("지금은 낼 수 없는 카드입니다: " + card.id);
+            return;
+        }
         BeginPlayCard(card.id);
     }
 
@@ -653,18 +676,66 @@ public class NetworkManager : MonoBehaviour
         Log("[choose_friend] 플레이어: " + friendClientId);
     }
 
-    // 테이블(낸 카드)을 화면 중앙에 갱신한다.
+    // 테이블(낸 카드)을 화면 중앙에 갱신한다. — 낸 순서 그대로(정렬 없음)
     private void UpdateTable(GameState state)
     {
         if (tableView == null) return;
         if (state == null || state.tableCards == null)
         {
-            tableView.ShowHand(new CardData[0]);
+            tableView.ShowCardsInOrder(new CardData[0]);
             return;
         }
         CardData[] cards = new CardData[state.tableCards.Length];
         for (int i = 0; i < state.tableCards.Length; i++) cards[i] = state.tableCards[i].card;
-        tableView.ShowHand(cards);
+        tableView.ShowCardsInOrder(cards);
+    }
+
+    // 내 차례일 때 못 내는 카드 음영
+    private void RefreshHandPlayability()
+    {
+        if (handView == null) return;
+        if (currentState == null || currentState.status != "playing"
+            || currentState.currentTurnClientId != myClientId
+            || myHandCards == null || myHandCards.Length == 0)
+        {
+            handView.SetAllPlayable(true);
+            return;
+        }
+
+        TableCardSnapshot[] table = BuildTableSnapshots(currentState);
+        string mighty = currentState.mightyCardId;
+        string jokerCall = currentState.jokerCallCardId;
+        CardData[] hand = myHandCards;
+        handView.ApplyPlayability(c =>
+            CardPlayLegality.CanPlay(c, hand, table, mighty, jokerCall));
+    }
+
+    private static TableCardSnapshot[] BuildTableSnapshots(GameState state)
+    {
+        if (state == null || state.tableCards == null) return new TableCardSnapshot[0];
+        var arr = new TableCardSnapshot[state.tableCards.Length];
+        for (int i = 0; i < state.tableCards.Length; i++)
+        {
+            TableCardInfo t = state.tableCards[i];
+            arr[i] = new TableCardSnapshot
+            {
+                card = t != null ? t.card : null,
+                declaredSuit = t != null ? t.declaredSuit : null,
+                jokerCallActivated = t != null && t.jokerCallActivated,
+            };
+        }
+        return arr;
+    }
+
+    private bool IsLegalToPlay(CardData card)
+    {
+        if (card == null || myHandCards == null || currentState == null) return false;
+        return CardPlayLegality.CanPlay(
+            card,
+            myHandCards,
+            BuildTableSnapshots(currentState),
+            currentState.mightyCardId,
+            currentState.jokerCallCardId);
     }
 
     private void EnsureOpponentHandsView()
@@ -813,10 +884,13 @@ public class NetworkManager : MonoBehaviour
 
         string phase = currentState != null ? currentState.status : "waiting";
         bool inGame = inRoom && phase != "waiting";
+        bool isFinished = phase == "finished";
         // 화면 크기에 맞춰 HUD 패널 확대 (WebGL 작은 캔버스 대응)
         float panelW = Mathf.Clamp(Screen.width * 0.55f, 480f, 720f);
         if (inGame) panelW = Mathf.Clamp(Screen.width * 0.42f, 400f, 560f);
+        if (isFinished) panelW = Mathf.Clamp(Screen.width * 0.5f, 480f, 640f);
         float panelH = Mathf.Clamp(Screen.height - 40f, 420f, inGame ? 560f : 780f);
+        if (isFinished) panelH = Mathf.Clamp(Screen.height - 40f, 520f, Screen.height - 40f);
         GUILayout.BeginArea(new Rect(20, 20, panelW, panelH), GUI.skin.box);
 
         // WebGL/고해상도에서 글씨가 너무 작지 않게
@@ -1098,69 +1172,86 @@ public class NetworkManager : MonoBehaviour
     private void DrawFinished()
     {
         GUILayout.Label("한 판 종료");
+
+        // 버튼은 위에 고정 — 상세 내용이 길어도 잘리지 않게
+        if (finishedAutoLobbyAt > 0f)
+        {
+            float remain = Mathf.Max(0f, finishedAutoLobbyAt - Time.realtimeSinceStartup);
+            GUILayout.Label("자동 대기방 복귀: " + remain.ToString("0") + "초");
+        }
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("대기방으로 돌아가기", GUILayout.Height(40)))
+        {
+            finishedAutoLobbyAt = -1f;
+            ReturnToLobby();
+        }
+        if (GUILayout.Button("방 나가기", GUILayout.Height(40)))
+        {
+            finishedAutoLobbyAt = -1f;
+            LeaveRoom();
+        }
+        GUILayout.EndHorizontal();
+        GUILayout.Space(6);
+
         GameFinishedData r = lastResult;
         if (r == null)
         {
             GUILayout.Label("(결과 수신 대기...)");
+            return;
         }
+
+        finishedScroll = GUILayout.BeginScrollView(finishedScroll, GUILayout.ExpandHeight(true));
+        GUILayout.Label("승자: " + r.winnerLabel);
+        GUILayout.Label("주공팀 목표였던 점수: " + r.targetScore + "점");
+        GUILayout.Label("주공: " + r.declarerNickname
+            + (string.IsNullOrEmpty(r.friendNickname) ? " (단독)" : " + 프렌드 " + r.friendNickname));
+        GUILayout.Label("결과 — 주공팀 " + r.declarerTeamScore + "점"
+            + "  |  수비팀 " + r.defenderTeamScore + "점"
+            + "  |  바닥패 " + r.kittyScore + "점");
+        if (r.winner == "declarer")
+            GUILayout.Label("(목표 " + r.targetScore + "점 달성)");
         else
+            GUILayout.Label("(목표 " + r.targetScore + "점까지 "
+                + Mathf.Max(0, r.targetScore - r.declarerTeamScore) + "점 부족)");
+
+        if (r.isRun) GUILayout.Label("★ 런! (주공팀 20점 전부)");
+        if (r.isBackrun) GUILayout.Label("★ 백런! (주공팀 10점 이하)");
+        if (r.multiplier > 1)
         {
-            GUILayout.Label("승자: " + r.winnerLabel);
-            GUILayout.Label("주공팀 목표였던 점수: " + r.targetScore + "점");
-            GUILayout.Label("주공: " + r.declarerNickname
-                + (string.IsNullOrEmpty(r.friendNickname) ? " (단독)" : " + 프렌드 " + r.friendNickname));
-            GUILayout.Label("결과 — 주공팀 " + r.declarerTeamScore + "점"
-                + "  |  수비팀 " + r.defenderTeamScore + "점"
-                + "  |  바닥패 " + r.kittyScore + "점");
-            if (r.winner == "declarer")
-                GUILayout.Label("(목표 " + r.targetScore + "점 달성)");
-            else
-                GUILayout.Label("(목표 " + r.targetScore + "점까지 "
-                    + Mathf.Max(0, r.targetScore - r.declarerTeamScore) + "점 부족)");
+            string tags = (r.multipliers != null && r.multipliers.Length > 0)
+                ? string.Join(" + ", r.multipliers) : "";
+            GUILayout.Label("배수: ×" + r.multiplier
+                + (string.IsNullOrEmpty(tags) ? "" : " (" + tags + ")"));
+        }
+        else GUILayout.Label("배수: ×1");
+        GUILayout.Label("정산 단위: " + r.stakeBase + " × " + r.multiplier + " = " + r.stakeTotal);
 
-            // 런 / 백런 / 배수
-            if (r.isRun) GUILayout.Label("★ 런! (주공팀 20점 전부)");
-            if (r.isBackrun) GUILayout.Label("★ 백런! (주공팀 10점 이하)");
-            if (r.multiplier > 1)
+        GUILayout.Space(4);
+        GUILayout.Label("이번 판 정산 / 누적 스코어:");
+        if (r.scoreboard != null)
+        {
+            foreach (ScoreboardEntry e in r.scoreboard)
             {
-                string tags = (r.multipliers != null && r.multipliers.Length > 0)
-                    ? string.Join(" + ", r.multipliers) : "";
-                GUILayout.Label("배수: ×" + r.multiplier
-                    + (string.IsNullOrEmpty(tags) ? "" : " (" + tags + ")"));
-            }
-            else GUILayout.Label("배수: ×1");
-            GUILayout.Label("정산 단위: " + r.stakeBase + " × " + r.multiplier + " = " + r.stakeTotal);
-
-            GUILayout.Space(4);
-            GUILayout.Label("이번 판 정산 / 누적 스코어:");
-            if (r.scoreboard != null)
-            {
-                foreach (ScoreboardEntry e in r.scoreboard)
-                {
-                    string d = (e.delta >= 0 ? "+" : "") + e.delta;
-                    GUILayout.Label("  " + (e.isBot ? "[봇] " : "") + e.nickname
-                        + ": " + d + " → 누적 " + e.sessionScore);
-                }
-            }
-
-            GUILayout.Space(4);
-            GUILayout.Label("주공팀:");
-            if (r.declarerTeam != null)
-            {
-                foreach (TeamPlayerScore p in r.declarerTeam)
-                    GUILayout.Label("  - " + p.nickname + ": " + p.score + "점");
-            }
-            GUILayout.Label("수비팀:");
-            if (r.defenderTeam != null)
-            {
-                foreach (TeamPlayerScore p in r.defenderTeam)
-                    GUILayout.Label("  - " + p.nickname + ": " + p.score + "점");
+                string d = (e.delta >= 0 ? "+" : "") + e.delta;
+                GUILayout.Label("  " + (e.isBot ? "[봇] " : "") + e.nickname
+                    + ": " + d + " → 누적 " + e.sessionScore);
             }
         }
 
-        GUILayout.Space(8);
-        if (GUILayout.Button("대기방으로 돌아가기", GUILayout.Height(36))) ReturnToLobby();
-        if (GUILayout.Button("방 나가기")) LeaveRoom();
+        GUILayout.Space(4);
+        GUILayout.Label("주공팀:");
+        if (r.declarerTeam != null)
+        {
+            foreach (TeamPlayerScore p in r.declarerTeam)
+                GUILayout.Label("  - " + p.nickname + ": " + p.score + "점");
+        }
+        GUILayout.Label("수비팀:");
+        if (r.defenderTeam != null)
+        {
+            foreach (TeamPlayerScore p in r.defenderTeam)
+                GUILayout.Label("  - " + p.nickname + ": " + p.score + "점");
+        }
+        GUILayout.EndScrollView();
     }
 
     private void ReturnToLobby()

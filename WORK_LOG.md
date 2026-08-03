@@ -689,3 +689,44 @@
 - **요청**: 여기까지 커밋·푸시.
 - **커밋**: `27555f2` Add standard 5마 rule gaps and card sprite UI.
 - **푸시**: SSH로 `origin/main` 반영 (`78c1d53..27555f2`). HTTPS remote는 인증 실패 → tracking은 fetch로 동기화.
+
+## 2026-08-03 23:21 (UTC+9)
+
+- **문제**: Sprites/card.ss.png 수정해도 게임에 미반영.
+- **원인**: 런타임은 Resources/Cards/card_sheet.png 로드 (복사본이 구버전).
+- **조치**: 시트 동기화 복사 + CardSpriteAtlas Play 시 정적 캐시 리셋. 스크립트 재실행 불필요, Play 재시작하면 됨.
+
+## 2026-08-03 23:24 (UTC+9)
+
+- **문제**: Unity Player에서 판 종료 후 대기방 복귀 안 됨.
+- **원인**: OnGUI 결과 상세가 길어 하단「대기방으로 돌아가기」버튼이 패널 밖으로 잘림.
+- **수정**: 버튼을 상단 고정 + 상세 스크롤, 8초 후 자동 return_to_lobby.
+
+## 2026-08-03 23:28 (UTC+9)
+
+- **질문**: 특정 폰트로 리더보드/점수판 UI 가능 여부 (구현 요청 아님).
+- **답변**: 가능. Resources 폰트 + UI Text/TextMeshPro 또는 기존 Noto 경로. 세션 점수는 이미 game_state/game_finished에 있음.
+
+## 2026-08-03 23:29 (UTC+9)
+
+- **논의**: 추가 TODO 초안 — (1) 상시 리더보드 (2) 기루다/마이티/조커콜 표시 (3) 실시간 점수카드 시각화(손패 앞).
+- **메모**: sessionScore·룰 id·팀점수는 이미 game_state에 있음. UI/시각화 작업 위주.
+
+## 2026-08-03 23:29 (UTC+9)
+
+- **질문**: 리더보드용 폰트 파일 형식.
+- **답변**: TTF/OTF 권장. Resources/Fonts 배치. WebGL은 한글 포함 폰트 필요. TMP 쓰면 Font Asset 생성.
+
+## 2026-08-03 23:32 (UTC+9)
+
+- **요청**: 테이블 카드 낸 순서 유지 + 내 차례 못 내는 카드 음영.
+- **수정**: HandView.ShowCardsInOrder, CardView.SetPlayable, CardPlayLegality, NetworkManager 테이블/하이라이트 연동.
+
+## 2026-08-03 23:36 (UTC+9)
+
+- **질문**: 조커 선 낼 때 카드 활성/비활성 판정 로직 확인.
+- **결론**: 조커 리드=선언 무늬 따라내기(+마이티/조커 예외). 조커콜 활성=조커(또는 마이티)만. 「특정 카드만」은 보통 선언 무늬(+마이티)가 켜진 정상 동작.
+
+## 2026-08-03 23:37 (UTC+9)
+
+- **확인**: 조커 선 리드 시 그 트릭에 한해 따라낼 무늬 선언 — 맞음. 이미 declaredSuit로 구현됨.
