@@ -683,3 +683,9 @@
 
 - **버그**: 에디터 Play 시 PlayerPrefs reconnectToken으로 진행 중 게임에 자동 재입장.
 - **수정**: 에디터 기본 `autoReconnectInEditor=false` — Play 시작 시 토큰 삭제, OnOpen/OnClose 자동 재접속 스킵. WebGL은 기존대로. 재접속 테스트 시 Inspector에서 체크.
+
+## 2026-08-03 23:15 (UTC+9)
+
+- **요청**: 여기까지 커밋·푸시.
+- **커밋**: `27555f2` Add standard 5마 rule gaps and card sprite UI.
+- **푸시**: SSH로 `origin/main` 반영 (`78c1d53..27555f2`). HTTPS remote는 인증 실패 → tracking은 fetch로 동기화.
