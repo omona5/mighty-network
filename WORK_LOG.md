@@ -885,3 +885,9 @@
 
 - **질문**: 출마 성공 시 패를 한장씩 걷었다가 다시 나누는 룰이 문서에 있는지.
 - **결론**: 프로젝트 문서/5마 구현에 없음. 출마 성공=바닥패 3장 교환. 재배분은 딜미스·전원패스(바닥) 때만. (6마의 제외자 패 재배분과는 별개)
+
+## 2026-08-09 22:27 (UTC+9)
+
+- **요청**: 지금까지 변경 커밋 후 푸시.
+- **커밋**: `a4de8f3` Add play animations, rule HUD, and hand reset hardening. (34 files)
+- **푸시**: 실패 — HTTPS GitHub 인증 없음 (`could not read Username for https://github.com`). 로컬은 origin/main 대비 1커밋 ahead.
