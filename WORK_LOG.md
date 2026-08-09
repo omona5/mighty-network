@@ -891,3 +891,143 @@
 - **요청**: 지금까지 변경 커밋 후 푸시.
 - **커밋**: `a4de8f3` Add play animations, rule HUD, and hand reset hardening. (34 files)
 - **푸시**: 실패 — HTTPS GitHub 인증 없음 (`could not read Username for https://github.com`). 로컬은 origin/main 대비 1커밋 ahead.
+
+## 2026-08-09 22:29 (UTC+9)
+
+- **질문**: 13 공약 후 남이 14 하면 15로 올릴지 묻는 로직이 없는 것 같다.
+- **확인**: 맞음. 현재 입찰은 **한 바퀴 단판**(각자 1회 공약/패스). 표준식 연속 재입찰(올려 부르기) 미구현. WORK_LOG에도 "오름차순 다회전 아님" 명시.
+
+## 2026-08-09 22:30 (UTC+9)
+
+- **요청**: 입찰을 계속 올릴 수 있게 (연속 재입찰).
+- **적용**: RoomManager — passedClientIds, 패스 제외 시계방향 진행, 최고공약자 외 전원 패스 시 종료. publicState nextMinBid. Unity/test.html 올릴 최소 표시.
+
+## 2026-08-09 22:33 (UTC+9)
+
+- **질문**: 바닥패가 3장 받아 총 6장 중 3장 선택하는 룰인지.
+- **답**: 아님. 5마 표준·현 구현은 손패10+바닥3=13장 중 아무 3장 버림(다시 10장).
+
+## 2026-08-09 22:38 (UTC+9)
+
+- **요청**: 바닥패 버리기를 손패 클릭으로 / 선택 시 카드 위로 / 출마 성공 시 중앙 바닥패→주공 핸드 애니 / 딜 후 중앙에 바닥패 3장.
+- **서버**: `RoomManager.publicState`에 `kittyCount` 추가 (내용은 비공개).
+- **Unity**:
+  - `KittyView.cs` — 입찰 중 중앙 뒷면 3장, 주공 확정 시 손패/상대 좌석으로 비행.
+  - `CardView` — `SetSelectedRaised` (LateUpdate Y+32).
+  - `HandView` — `ApplyDiscardSelectionRaise`.
+  - `NetworkManager` — OnGUI 카드 버튼 제거(손패 클릭만), 13장 손패는 비행 후 반영, 버리기 확정 버튼만 유지.
+- **서버**: kittyCount 반영 위해 node 재기동.
+- **다음**: Unity Play로 입찰→주공→버리기 UX 확인.
+
+## 2026-08-09 22:50 (UTC+9)
+
+- **요청**: 출마 성공 시 승리 토스트와 동일 형식의 당선 문구 + 비주공 \"카드 고르는 중...\" + 봇 주공도 ~2초 고르는 시간.
+- **Unity**: `TrickWinAnimator`에 Announce/ShowStickyToast/ClearStickyToast. `NetworkManager`가 `bid_result`/입찰→교환 전환 시 \"{닉}가 당선되었습니다!\n공약: N장\" 표시, 비주공은 fade 후 sticky \"카드 고르는 중...\".
+- **서버**: `BOT_KITTY_DELAY = 2000` (봇 discard 대기).
+- **서버 재기동**: 반영.
+
+## 2026-08-09 22:53 (UTC+9)
+
+- **요청**: 주공에게도 박스 안내 \"버릴 카드 3장을 선택하세요.\" + 이때부터 메뉴 최소화.
+- **적용**: 당선 토스트 후 주공 sticky 안내 / 비주공 \"카드 고르는 중...\". `exchanging_kitty` 진입 시 HUD 자동 최소화. 축소 UI에 선택 n/3 + 3장 버리기 버튼 유지.
+
+## 2026-08-09 22:56 (UTC+9)
+
+- **버그**: 버릴 카드 선택이 안 되거나 올림 표시가 안 됨.
+- **원인**: HorizontalLayoutGroup이 LateUpdate 이후 카드 Y를 덮어씀 → 선택 올림이 렌더에 반영되지 않음. Self 닉네임 Text raycast가 손패와 겹칠 수 있음.
+- **수정**: `CardView` — `Canvas.willRenderCanvases`에서 raise 재적용 + 선택 시 tint. `OpponentHandsView` nameText.raycastTarget=false. 버리기 중 HandContainer를 맨 앞으로.
+
+## 2026-08-09 22:58 (UTC+9)
+
+- **버그**: 내 차례가 아닐 때도 카드 클릭으로 내기 가능(또는 그렇게 보임).
+- **원인**: `RefreshHandPlayability`가 내 차례가 아닐 때 `SetAllPlayable(true)`로 클릭을 열어 둠. 낙관적 제거 후 서버 거절 시 손패 미복구.
+- **수정**: 내 차례 아니면 `SetAllPlayable(false)`. `PlayCard` 직전 턴 재검증. 서버 `play_card` 실패 시 `your_hand` 재전송.
+
+## 2026-08-09 23:00 (UTC+9)
+
+- **요청**: 토스트 텍스트 상자 좌우 여백 확대.
+- **적용**: `TrickWinAnimator` 텍스트 inset 16→48, 박스 560→620.
+
+## 2026-08-09 23:03 (UTC+9)
+
+- **요청**: 게임 종료 시 중앙 테이블 패 숨김. 카드 비행 도착점을 실제 5장 배치 위치와 일치.
+- **적용**: `game_finished`/`status==finished`에서 tableView.Clear. 테이블을 항상 5슬롯 고정 배치(HLG 끄고 수동 좌표). 비행 endPos=`GetTableSlotWorldPosition(i, playerCount)`.
+
+## 2026-08-09 23:04 (UTC+9)
+
+- **요청**: Unity 기본 파란 배경 → 진한 초록.
+- **적용**: SampleScene Main Camera `m_BackGroundColor` → 딥 포레스트 그린 (≈#0A381F).
+
+## 2026-08-09 23:07 (UTC+9)
+
+- **버그**: 카드 비행 가로 위치는 맞는데 애니 종료 후 위로 순간이동.
+- **원인**: 도착 Y를 수식(라벨 보정)으로 추정 → 실제 닉네임 라벨 포함 슬롯 Y와 불일치.
+- **수정**: 최종 테이블을 먼저 배치 후 마지막 슬롯만 숨기고, 그 CardView 실제 world position으로 비행 → 도착 시 슬롯 표시.
+
+## 2026-08-09 23:09 (UTC+9)
+
+- **요청**: 중앙 텍스트 잠깐 비활성화해 애니 이상 원인 확인.
+- **적용**: `HandView.showTableNicknames = false` (테이블 닉네임 OFF). 카드만 y=0 슬롯에 배치. 닉네임 켤 때는 컬럼을 -labelH/2 내려 카드 중심이 동일하게 y=0.
+
+## 2026-08-09 23:10 (UTC+9)
+
+- **버그**: 첫 트릭 이후 중앙패 안 보임(애니만 재생).
+- **원인**: 닉네임 OFF 시 카드가 TableContainer 직속인데, 트릭승 `HidePointCardSlots`가 parent(컨테이너)를 SetActive(false).
+- **수정**: 슬롯 루트가 컨테이너면 카드 자신만 숨김. Clear/Show 시 컨테이너 재활성화.
+
+## 2026-08-09 23:14 (UTC+9)
+
+- **요청**: 닉네임 텍스트 재활성화 + 애니 도착점 불일치 원인 조사.
+- **원인**: 테이블 슬롯이 VerticalLayoutGroup 의존 → 생성 직후(ForceUpdate 포함) 레이아웃이 확정되기 전 CardView.worldPosition을 찍어 endPos로 씀. 애니 종료 후 레이아웃이 잡히며 Y로 점프. 닉네임 라벨 자체가 직접 원인은 아님.
+- **수정**: 닉네임 ON. VLG 제거, 카드 피벗=슬롯 원점·닉네임은 카드 아래 절대좌표 배치. 비행 타깃=카드 피벗과 동일.
+
+## 2026-08-09 23:15 (UTC+9)
+
+- **버그**: 애니 도착점과 중앙패 위치 여전히 불일치.
+- **원인**: 비행 카드는 Canvas `CardFlyLayer`(스트레치) 소속, 테이블 카드는 `TableContainer` 소속 → 월드 position 대입이 UI에서 어긋남.
+- **수정**: `CardPlayAnimator`가 목적 카드와 **같은 부모**에서 `anchoredPosition` 보간. 목적 카드/닉네임은 alpha=0 후 착지 시 복구.
+
+## 2026-08-09 23:19 (UTC+9)
+
+- **요청**: 업데이트한 카드 스프라이트 다시 반영.
+- **조치**: `Assets/Sprites/card.ss.png` → `Assets/Resources/Cards/card_sheet.png` 동기화 복사 (3200×2688, 동일 바이트). 런타임은 Resources 경로만 로드.
+- **확인**: Unity Play 재시작 시 CardSpriteAtlas 캐시 리셋으로 새 시트 적용.
+
+## 2026-08-09 23:20 (UTC+9)
+
+- **버그**: 닉네임 텍스트 사라짐 + 1턴 이후 애니 없음(카드는 보임).
+- **원인**:
+  1) `showTableNicknames=false`가 씬에 직렬화되어 닉 미생성.
+  2) 애니 busy 중 다음 game_state가 `ShowTableCards`로 Clear → dest 파괴 → busy 고착/애니 스킵.
+- **수정**: 닉네임 항상 생성. 테이블 애니는 순차 큐(`CoProcessTableAnimQueue`)로 Clear 타이밍 보호. CardPlayAnimator도 큐+finally.
+
+## 2026-08-09 23:26 (UTC+9)
+
+- **요청**: 스프라이트 재반영 + 점수/바닥패 애니를 사람 방향 화면 밖으로 + 내 닉/점수 손패 가림 해소.
+- **스프라이트**: card.ss.png → Resources/Cards/card_sheet.png 동기화.
+- **애니**: `BeyondSeatWorld`로 좌석을 지나 화면 밖까지 연장. 트릭승·kitty FlyToTarget에 적용. 비행 시간 약간 증가.
+- **Self HUD**: Y 0.22→0.34, Canvas 맨 앞으로 재부모화, 패널/폰트 약간 확대.
+
+## 2026-08-09 23:29 (UTC+9)
+
+- **버그**: 2번째 순서일 때 첫 사람 패 애니 후 안 보임 → 내가 내면 보임.
+- **원인**: 비행 중 dest `CanvasGroup.alpha=0`이 복구되지 않거나 잔류. 다음 ShowTableCards 때만 새 인스턴스로 보임.
+- **수정**: Graphic.color alpha로 숨김/복구 + CanvasGroup 정리. 애니 종료 후 `ShowTableCards`로 테이블 강제 재배치.
+
+## 2026-08-09 23:34 (UTC+9)
+
+- **요청**: 닉/점수를 손패 아래 배치, 토스트와 동일 폰트, 패 장수 제거, 좌상단 주공팀·공약 표기.
+- **수정**:
+  - `OpponentHandsView`: Self Y 0.06(손패 아래), 상대도 닉을 카드 아래. `FormatStatusLine`에서 패 N장 제거. fontSize=40(토스트와 동일).
+  - `GameRuleHud`/`NetworkManager`: 주공팀(마이티 공개 전=주공 개인점, 후=`declarerTeamScore`), 공약(`targetScore`/`highestBid`) 행 추가. 패널 높이 220.
+- **다음**: Unity Play로 손패 아래 레이아웃·좌상단 HUD 확인.
+
+## 2026-08-09 23:35 (UTC+9)
+
+- **요청**: 닉/점수 폰트를 이전·좌상단 UI와 동일하게.
+- **수정**: `OpponentHandsView` StatusFontSize 40→15 (GameRuleHud body와 동일). Self/Opp 패널 크기 축소.
+
+## 2026-08-09 23:41 (UTC+9)
+
+- **요청**: 여기까지 커밋 푸시.
+- **포함**: kitty/play UX, 테이블 애니, 손패 아래 닉·점수, 좌상단 주공팀·공약 HUD, 카드 시트 동기화, KittyView 등.

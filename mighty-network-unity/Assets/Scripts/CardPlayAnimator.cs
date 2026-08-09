@@ -1,20 +1,32 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 // ============================================================================
-// CardPlayAnimator: 제출 카드를 시작 위치 → 테이블 슬롯으로 이동
+// CardPlayAnimator: 제출 카드 → 테이블 슬롯 (같은 부모 로컬 보간)
 // ============================================================================
 public class CardPlayAnimator : MonoBehaviour
 {
     public float duration = 0.38f;
 
+    private struct FlyRequest
+    {
+        public CardData card;
+        public Vector3 startWorld;
+        public RectTransform destCard;
+        public Vector2 startSize;
+        public Vector2 endSize;
+        public Action onComplete;
+    }
+
     private CardView cardPrefab;
     private RectTransform flyLayer;
     private bool busy;
+    private readonly Queue<FlyRequest> queue = new Queue<FlyRequest>();
 
-    public bool IsBusy { get { return busy; } }
+    public bool IsBusy { get { return busy || queue.Count > 0; } }
 
     public void Configure(CardView prefab, Canvas canvas)
     {
@@ -34,64 +46,132 @@ public class CardPlayAnimator : MonoBehaviour
     public void AnimateToTable(
         CardData card,
         Vector3 startWorld,
-        Vector3 endWorld,
+        RectTransform destCard,
         Vector2 startSize,
         Vector2 endSize,
         Action onComplete)
     {
-        if (cardPrefab == null || flyLayer == null || card == null)
+        if (cardPrefab == null || card == null || destCard == null)
         {
             if (onComplete != null) onComplete();
             return;
         }
-        StartCoroutine(CoFly(card, startWorld, endWorld, startSize, endSize, onComplete));
+
+        queue.Enqueue(new FlyRequest
+        {
+            card = card,
+            startWorld = startWorld,
+            destCard = destCard,
+            startSize = startSize,
+            endSize = endSize,
+            onComplete = onComplete,
+        });
+        if (!busy)
+            StartCoroutine(CoDrainQueue());
     }
 
-    private IEnumerator CoFly(
-        CardData card,
-        Vector3 startWorld,
-        Vector3 endWorld,
-        Vector2 startSize,
-        Vector2 endSize,
-        Action onComplete)
+    private IEnumerator CoDrainQueue()
     {
+        if (busy) yield break;
         busy = true;
-        CardView view = Instantiate(cardPrefab, flyLayer);
-        view.Clicked = null;
-        view.SetCard(card);
-        view.SetPlayable(true);
-
-        RectTransform rt = view.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = startSize;
-        rt.position = startWorld;
-        rt.localScale = Vector3.one;
-        view.RefreshDropShadow();
-
-        // 클릭 가로채지 않음
-        Graphic[] graphics = view.GetComponentsInChildren<Graphic>(true);
-        for (int i = 0; i < graphics.Length; i++)
-            graphics[i].raycastTarget = false;
-
-        float t = 0f;
-        while (t < duration)
+        while (queue.Count > 0)
         {
-            t += Time.unscaledDeltaTime;
-            float u = Mathf.Clamp01(t / duration);
-            // ease-out cubic
-            float e = 1f - Mathf.Pow(1f - u, 3f);
-            rt.position = Vector3.LerpUnclamped(startWorld, endWorld, e);
-            rt.sizeDelta = Vector2.LerpUnclamped(startSize, endSize, e);
-            view.RefreshDropShadow();
-            yield return null;
+            FlyRequest req = queue.Dequeue();
+            yield return CoFlyOne(req);
         }
-
-        rt.position = endWorld;
-        rt.sizeDelta = endSize;
-        if (view != null) Destroy(view.gameObject);
         busy = false;
-        if (onComplete != null) onComplete();
+    }
+
+    private IEnumerator CoFlyOne(FlyRequest req)
+    {
+        Action onComplete = req.onComplete;
+        RectTransform destCard = req.destCard;
+        CardView flyView = null;
+
+        try
+        {
+            if (destCard == null)
+                yield break;
+
+            Transform destParent = destCard.parent != null ? destCard.parent : destCard;
+
+            // 목적 카드/닉네임: Graphic만 끄기 (CanvasGroup alpha 잔류 버그 회피)
+            SetGraphicsVisible(destCard.gameObject, false);
+            Transform nick = destParent != null ? destParent.Find("Nick") : null;
+            if (nick != null) SetGraphicsVisible(nick.gameObject, false);
+
+            flyView = Instantiate(cardPrefab, destParent);
+            flyView.Clicked = null;
+            flyView.SetCard(req.card);
+            flyView.SetPlayable(true);
+
+            RectTransform rt = flyView.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.localScale = Vector3.one;
+            rt.localRotation = Quaternion.identity;
+            rt.sizeDelta = req.startSize;
+            rt.position = req.startWorld;
+            Vector2 startLocal = rt.anchoredPosition;
+            Vector2 endLocal = destCard.anchoredPosition;
+
+            Graphic[] graphics = flyView.GetComponentsInChildren<Graphic>(true);
+            for (int i = 0; i < graphics.Length; i++)
+                graphics[i].raycastTarget = false;
+
+            flyView.RefreshDropShadow();
+            rt.SetAsLastSibling();
+
+            float t = 0f;
+            while (t < duration)
+            {
+                if (flyView == null || destCard == null)
+                    yield break;
+                t += Time.unscaledDeltaTime;
+                float u = Mathf.Clamp01(t / duration);
+                float e = 1f - Mathf.Pow(1f - u, 3f);
+                rt.anchoredPosition = Vector2.LerpUnclamped(startLocal, endLocal, e);
+                rt.sizeDelta = Vector2.LerpUnclamped(req.startSize, req.endSize, e);
+                flyView.RefreshDropShadow();
+                yield return null;
+            }
+
+            if (rt != null)
+            {
+                rt.anchoredPosition = endLocal;
+                rt.sizeDelta = req.endSize;
+            }
+        }
+        finally
+        {
+            if (flyView != null) Destroy(flyView.gameObject);
+
+            // dest가 살아 있으면 반드시 다시 보이게
+            if (destCard != null)
+            {
+                SetGraphicsVisible(destCard.gameObject, true);
+                Transform nick = destCard.parent != null ? destCard.parent.Find("Nick") : null;
+                if (nick != null) SetGraphicsVisible(nick.gameObject, true);
+            }
+
+            if (onComplete != null) onComplete();
+        }
+    }
+
+    private static void SetGraphicsVisible(GameObject go, bool visible)
+    {
+        if (go == null) return;
+        Graphic[] graphics = go.GetComponentsInChildren<Graphic>(true);
+        for (int i = 0; i < graphics.Length; i++)
+        {
+            if (graphics[i] == null) continue;
+            Color c = graphics[i].color;
+            c.a = visible ? 1f : 0f;
+            graphics[i].color = c;
+        }
+        // CanvasGroup 잔여 alpha도 정리
+        CanvasGroup cg = go.GetComponent<CanvasGroup>();
+        if (cg != null) cg.alpha = visible ? 1f : 0f;
     }
 }

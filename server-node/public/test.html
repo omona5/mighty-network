@@ -516,13 +516,18 @@
             : "아직 공약 없음";
           const myBidTurn = state.currentBidderClientId === myClientId;
           const minBid = state.minBid || 13;
+          const raiseMin = state.nextMinBid
+            || (state.highestBid ? state.highestBid.targetScore + 1 : minBid);
           $("bidStatus").textContent = `입찰 차례: ${state.currentBidderNickname || "-"}`
-            + (myBidTurn ? "  << 내 차례!" : "") + `  |  최소공약 ${minBid}  |  ` + hi;
+            + (myBidTurn ? "  << 내 차례! (올리거나 패스)" : "")
+            + `  |  바닥최소 ${minBid}`
+            + (state.highestBid ? `  |  올릴최소 ${raiseMin}` : "")
+            + `  |  ` + hi;
           $("bidControls").classList.toggle("hidden", !myBidTurn);
           const scoreInput = $("bidScore");
-          scoreInput.min = minBid;
-          if (myBidTurn && (scoreInput.value === "" || parseInt(scoreInput.value, 10) < minBid)) {
-            scoreInput.value = minBid;
+          scoreInput.min = raiseMin;
+          if (myBidTurn && (scoreInput.value === "" || parseInt(scoreInput.value, 10) < raiseMin)) {
+            scoreInput.value = raiseMin;
           }
         }
         updateDealMissBtn();

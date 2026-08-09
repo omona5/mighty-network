@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // ============================================================================
-// GameRuleHud: 좌상단 — 기루다 / 마이티 / 조커콜 / 주공 / 프렌드
+// GameRuleHud: 좌상단 — 기루다 / 마이티 / 조커콜 / 주공 / 프렌드 / 주공팀·공약
 // ============================================================================
 public class GameRuleHud : MonoBehaviour
 {
@@ -19,6 +19,8 @@ public class GameRuleHud : MonoBehaviour
         public string jokerCallLabel;
         public string declarerLabel;
         public string friendLabel;
+        public string teamScoreLabel;  // 주공팀 현재 점수 (마이티 전=주공만, 후=합산)
+        public string bidLabel;        // 공약 N점
         public bool visible;
     }
 
@@ -42,7 +44,9 @@ public class GameRuleHud : MonoBehaviour
             + "마이티  " + NullDash(info.mightyLabel) + "\n"
             + "조커콜  " + NullDash(info.jokerCallLabel) + "\n"
             + "주공    " + NullDash(info.declarerLabel) + "\n"
-            + "프렌드  " + NullDash(info.friendLabel);
+            + "프렌드  " + NullDash(info.friendLabel) + "\n"
+            + "주공팀  " + NullDash(info.teamScoreLabel) + "\n"
+            + "공약    " + NullDash(info.bidLabel);
     }
 
     public void Clear()
@@ -73,7 +77,7 @@ public class GameRuleHud : MonoBehaviour
         root.anchorMax = new Vector2(0f, 1f);
         root.pivot = new Vector2(0f, 1f);
         root.anchoredPosition = new Vector2(16f, -16f);
-        root.sizeDelta = new Vector2(280f, 168f);
+        root.sizeDelta = new Vector2(280f, 220f);
         canvasGroup = go.GetComponent<CanvasGroup>();
         canvasGroup.blocksRaycasts = false;
         // 카드/상대 손패보다 위에 보이도록

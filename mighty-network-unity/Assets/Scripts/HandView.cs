@@ -27,6 +27,8 @@ public class HandView : MonoBehaviour
     private const float TableLabelHeight = 28f;
     private const int TableLabelFontSize = 20;
     private const int TableNickMaxChars = 8;
+    // 5마: 트릭당 항상 5장 — 배치/비행 도착점을 이 슬롯 기준으로 고정
+    public const int TableTrickSlots = 5;
 
     private readonly List<GameObject> spawned = new List<GameObject>();
     private readonly List<CardView> spawnedViews = new List<CardView>();
@@ -51,54 +53,77 @@ public class HandView : MonoBehaviour
         ShowTableCards(entries);
     }
 
-    // 테이블용: 카드 + 제출자 닉네임
+    // 테이블용: 카드 + 제출자 닉네임 (항상 TableTrickSlots 기준 고정 슬롯)
     public void ShowTableCards(TableCardEntry[] entries)
     {
+        ShowTableCards(entries, TableTrickSlots);
+    }
+
+    public void ShowTableCards(TableCardEntry[] entries, int slotCount)
+    {
         Clear();
+        EnsureTableContainerActive();
         if (entries == null || cardPrefab == null) return;
 
         Transform parent = cardContainer != null ? cardContainer : transform;
+        int slots = Mathf.Max(slotCount, 1);
+        // HLG는 장수에 따라 가운데로 다시 모으므로, 고정 슬롯은 수동 배치
+        HorizontalLayoutGroup hlg = parent.GetComponent<HorizontalLayoutGroup>();
+        if (hlg != null) hlg.enabled = false;
+
+        float cardW = CardSpriteAtlas.DisplayWidth;
+        float cardH = CardSpriteAtlas.DisplayHeight;
+
         for (int i = 0; i < entries.Length; i++)
         {
             TableCardEntry e = entries[i];
             if (e.card == null) continue;
 
-            GameObject col = new GameObject("TableSlot", typeof(RectTransform));
-            col.transform.SetParent(parent, false);
-            RectTransform colRt = col.GetComponent<RectTransform>();
-            colRt.anchorMin = new Vector2(0.5f, 0.5f);
-            colRt.anchorMax = new Vector2(0.5f, 0.5f);
-            colRt.pivot = new Vector2(0.5f, 0.5f);
-            float cardW = CardSpriteAtlas.DisplayWidth;
-            float cardH = CardSpriteAtlas.DisplayHeight;
-            colRt.sizeDelta = new Vector2(cardW, cardH + TableLabelHeight);
+            float slotX = GetTableSlotLocalX(i, slots);
 
-            VerticalLayoutGroup vlg = col.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = false;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
-            vlg.spacing = 0f;
-            vlg.padding = new RectOffset(0, 0, 0, 0);
+            // 슬롯 루트(숨김 단위). 카드 피벗 = 루트 원점 → 비행 도착점과 동일.
+            // VerticalLayoutGroup 사용 금지: 생성 직후 ForceUpdate 전 좌표가 어긋나 착지 점프 발생.
+            GameObject root = new GameObject("TableSlot", typeof(RectTransform));
+            root.transform.SetParent(parent, false);
+            RectTransform rootRt = root.GetComponent<RectTransform>();
+            rootRt.anchorMin = new Vector2(0.5f, 0.5f);
+            rootRt.anchorMax = new Vector2(0.5f, 0.5f);
+            rootRt.pivot = new Vector2(0.5f, 0.5f);
+            rootRt.sizeDelta = Vector2.zero;
+            rootRt.anchoredPosition = new Vector2(slotX, 0f);
 
-            CardView view = Instantiate(cardPrefab, col.transform);
+            CardView view = Instantiate(cardPrefab, root.transform);
             ApplyHandCardSize(view);
-            LayoutElement cardLe = view.gameObject.GetComponent<LayoutElement>();
-            if (cardLe == null) cardLe = view.gameObject.AddComponent<LayoutElement>();
-            cardLe.preferredWidth = cardW;
-            cardLe.preferredHeight = cardH;
-            cardLe.minHeight = cardH;
+            RectTransform vrt = view.GetComponent<RectTransform>();
+            if (vrt != null)
+            {
+                vrt.anchorMin = new Vector2(0.5f, 0.5f);
+                vrt.anchorMax = new Vector2(0.5f, 0.5f);
+                vrt.pivot = new Vector2(0.5f, 0.5f);
+                vrt.anchoredPosition = Vector2.zero;
+                vrt.sizeDelta = new Vector2(cardW, cardH);
+            }
             view.SetCard(e.card);
-            view.Clicked = null; // 테이블 카드는 클릭 없음
+            view.Clicked = null;
+            // 이전 애니 CanvasGroup/alpha 잔여 방지
+            CanvasGroup leftover = view.GetComponent<CanvasGroup>();
+            if (leftover != null) leftover.alpha = 1f;
+            if (view.background != null)
+            {
+                Color bc = view.background.color;
+                bc.a = 1f;
+                view.background.color = bc;
+            }
 
             GameObject labelGo = new GameObject("Nick", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            labelGo.transform.SetParent(col.transform, false);
+            labelGo.transform.SetParent(root.transform, false);
             RectTransform lrt = labelGo.GetComponent<RectTransform>();
+            lrt.anchorMin = new Vector2(0.5f, 0.5f);
+            lrt.anchorMax = new Vector2(0.5f, 0.5f);
+            lrt.pivot = new Vector2(0.5f, 0.5f);
             lrt.sizeDelta = new Vector2(cardW, TableLabelHeight);
-            LayoutElement labelLe = labelGo.AddComponent<LayoutElement>();
-            labelLe.preferredHeight = TableLabelHeight;
-            labelLe.minHeight = TableLabelHeight;
+            // 카드 하단 바로 아래 (카드 피벗은 0,0 유지 → 비행 착지와 동일)
+            lrt.anchoredPosition = new Vector2(0f, -(cardH * 0.5f + TableLabelHeight * 0.5f));
 
             Text label = labelGo.GetComponent<Text>();
             label.font = GetTableLabelFont();
@@ -110,12 +135,12 @@ public class HandView : MonoBehaviour
             label.raycastTarget = false;
             label.text = FormatTableNickname(e.playerNickname);
 
-            // 가독성용 얇은 그림자
             Shadow sh = labelGo.AddComponent<Shadow>();
             sh.effectColor = new Color(0f, 0f, 0f, 0.75f);
             sh.effectDistance = new Vector2(1f, -1f);
+            labelGo.transform.SetAsLastSibling();
 
-            spawned.Add(col);
+            spawned.Add(root);
             spawnedViews.Add(view);
         }
     }
@@ -186,6 +211,25 @@ public class HandView : MonoBehaviour
         }
     }
 
+    // 바닥패 버리기: 선택된 카드 id는 위로 올림
+    public void ApplyDiscardSelectionRaise(ICollection<string> selectedIds)
+    {
+        foreach (CardView v in spawnedViews)
+        {
+            if (v == null || v.Card == null) continue;
+            bool sel = selectedIds != null && selectedIds.Contains(v.Card.id);
+            v.SetSelectedRaised(sel);
+        }
+    }
+
+    public void ClearDiscardSelectionRaise()
+    {
+        foreach (CardView v in spawnedViews)
+        {
+            if (v != null) v.SetSelectedRaised(false);
+        }
+    }
+
     private static void ApplyHandCardSize(CardView view)
     {
         if (view == null) return;
@@ -248,6 +292,7 @@ public class HandView : MonoBehaviour
 
     public void Clear()
     {
+        EnsureTableContainerActive();
         foreach (GameObject go in spawned)
         {
             if (go != null) Destroy(go);
@@ -284,6 +329,33 @@ public class HandView : MonoBehaviour
         return false;
     }
 
+    // 테이블에 이미 배치된 index번째 카드의 실제 월드 좌표 (비행 도착점용)
+    public bool TryGetSpawnedCardWorldPosition(int index, out Vector3 worldPos)
+    {
+        worldPos = Vector3.zero;
+        RectTransform rt;
+        if (!TryGetSpawnedCardRect(index, out rt)) return false;
+        worldPos = rt.position;
+        return true;
+    }
+
+    public bool TryGetSpawnedCardRect(int index, out RectTransform cardRt)
+    {
+        cardRt = null;
+        if (index < 0 || index >= spawnedViews.Count) return false;
+        CardView v = spawnedViews[index];
+        if (v == null) return false;
+        cardRt = v.transform as RectTransform;
+        return cardRt != null;
+    }
+
+    public void SetTableSlotVisible(int index, bool visible)
+    {
+        if (index < 0 || index >= spawned.Count) return;
+        GameObject go = spawned[index];
+        if (go != null) go.SetActive(visible);
+    }
+
     // 테이블에 보이는 점수카드(point>0) 월드 좌표 목록
     public void CollectPointCardWorldPositions(List<CardData> cardsOut, List<Vector3> positionsOut)
     {
@@ -315,14 +387,34 @@ public class HandView : MonoBehaviour
         return parent.position;
     }
 
+    // 슬롯 루트: 닉네임 컬럼이면 그 컬럼, 카드가 컨테이너 직속이면 카드 자신
+    // (직속일 때 parent를 끄면 TableContainer 전체가 비활성화되어 이후 패가 안 보임)
+    private Transform GetTableSlotRoot(CardView v)
+    {
+        if (v == null) return null;
+        Transform parent = cardContainer != null ? cardContainer : transform;
+        Transform t = v.transform;
+        if (t.parent != null && t.parent != parent)
+            return t.parent;
+        return t;
+    }
+
+    private void EnsureTableContainerActive()
+    {
+        Transform parent = cardContainer != null ? cardContainer : transform;
+        if (parent != null && !parent.gameObject.activeSelf)
+            parent.gameObject.SetActive(true);
+    }
+
     // 점수카드 슬롯 즉시 숨김 (비행 복제본과 중복 방지)
     public void HidePointCardSlots()
     {
+        EnsureTableContainerActive();
         for (int i = 0; i < spawnedViews.Count; i++)
         {
             CardView v = spawnedViews[i];
             if (v == null || v.Card == null || v.Card.point <= 0) continue;
-            Transform slot = v.transform.parent != null ? v.transform.parent : v.transform;
+            Transform slot = GetTableSlotRoot(v);
             if (slot != null) slot.gameObject.SetActive(false);
         }
     }
@@ -330,12 +422,13 @@ public class HandView : MonoBehaviour
     // 비전수 카드 슬롯 fade-out
     public IEnumerator CoFadeNonPointSlots(float duration)
     {
+        EnsureTableContainerActive();
         var groups = new List<CanvasGroup>();
         for (int i = 0; i < spawnedViews.Count; i++)
         {
             CardView v = spawnedViews[i];
             if (v == null || v.Card == null || v.Card.point > 0) continue;
-            Transform slot = v.transform.parent != null ? v.transform.parent : v.transform;
+            Transform slot = GetTableSlotRoot(v);
             if (slot == null || !slot.gameObject.activeInHierarchy) continue;
             CanvasGroup cg = slot.GetComponent<CanvasGroup>();
             if (cg == null) cg = slot.gameObject.AddComponent<CanvasGroup>();
@@ -367,17 +460,25 @@ public class HandView : MonoBehaviour
     public Vector3 GetTableSlotWorldPosition(int index, int totalCount)
     {
         Transform parent = cardContainer != null ? cardContainer : transform;
+        int n = Mathf.Max(totalCount, 1);
+        int i = Mathf.Clamp(index, 0, n - 1);
+        float x = GetTableSlotLocalX(i, n);
+        // 닉네임 OFF일 때 카드 중심 = y0 / ON이면 컬럼을 내려 카드 중심이 역시 y0
+        float y = 0f;
+        return parent.TransformPoint(new Vector3(x, y, 0f));
+    }
+
+    private float GetTableSlotLocalX(int index, int totalCount)
+    {
+        Transform parent = cardContainer != null ? cardContainer : transform;
         float cardW = CardSpriteAtlas.DisplayWidth;
         float spacing = 8f;
-        HorizontalLayoutGroup hlg = parent.GetComponent<HorizontalLayoutGroup>();
+        HorizontalLayoutGroup hlg = parent != null ? parent.GetComponent<HorizontalLayoutGroup>() : null;
         if (hlg != null) spacing = hlg.spacing;
         int n = Mathf.Max(totalCount, 1);
         int i = Mathf.Clamp(index, 0, n - 1);
         float totalW = n * cardW + Mathf.Max(0, n - 1) * spacing;
-        float x = -totalW * 0.5f + cardW * 0.5f + i * (cardW + spacing);
-        // 슬롯 = 카드+라벨 컬럼; 카드 중심은 컬럼 중심보다 라벨 높이의 절반만큼 위
-        float y = TableLabelHeight * 0.5f;
-        return parent.TransformPoint(new Vector3(x, y, 0f));
+        return -totalW * 0.5f + cardW * 0.5f + i * (cardW + spacing);
     }
 
     public Vector2 HandCardSize

@@ -410,6 +410,9 @@ wss.on("connection", (ws) => {
         });
         if (result.error) {
           send(ws, "error_message", { message: result.error });
+          // 클라이언트가 낙관적으로 손패를 지웠을 수 있어 서버 손패로 복구
+          const p = room.players.find((x) => x.clientId === ws.clientId);
+          if (p) send(ws, "your_hand", { cards: p.hand || [] });
           break;
         }
         console.log("[play]", ws.clientId, data.cardId);
@@ -562,6 +565,8 @@ function handleBidStep(room, complete) {
 
 // 바닥패 버리기 완료 → 프렌드 선택
 const BOT_BID_DELAY = 600;
+// 봇 주공: 당선 연출·"카드 고르는 중" 여유
+const BOT_KITTY_DELAY = 2000;
 
 function beginFriendSelection(room) {
   room.status = "choosing_friend";
@@ -588,7 +593,7 @@ function maybeBotDiscardKitty(room) {
     console.log("[bot] 바닥패 버림:", d.nickname, ids.join(","));
     broadcast(r, "kitty_discarded", { ok: true });
     beginFriendSelection(r);
-  }, BOT_BID_DELAY);
+  }, BOT_KITTY_DELAY);
 }
 
 // 09단계: 입찰 차례가 봇(또는 끊긴 사람)이면 잠시 후 자동

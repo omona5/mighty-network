@@ -12,7 +12,7 @@ public class TrickWinAnimator : MonoBehaviour
     public float toastHold = 0.85f;
     public float toastFade = 0.35f;
     public float nonPointFade = 0.35f;
-    public float flyDuration = 0.5f;
+    public float flyDuration = 0.55f;
     public float flyStagger = 0.07f;
 
     private CardView cardPrefab;
@@ -22,6 +22,8 @@ public class TrickWinAnimator : MonoBehaviour
     private Text toastText;
     private CanvasGroup toastGroup;
     private bool busy;
+    private bool stickyToast;
+    private Coroutine announceRoutine;
 
     public bool IsBusy { get { return busy; } }
 
@@ -50,7 +52,7 @@ public class TrickWinAnimator : MonoBehaviour
             toastRoot.anchorMin = new Vector2(0.5f, 0.5f);
             toastRoot.anchorMax = new Vector2(0.5f, 0.5f);
             toastRoot.pivot = new Vector2(0.5f, 0.5f);
-            toastRoot.sizeDelta = new Vector2(520f, 96f);
+            toastRoot.sizeDelta = new Vector2(620f, 128f);
             toastRoot.anchoredPosition = new Vector2(0f, 90f);
 
             GameObject bgGo = new GameObject("Bg", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -68,8 +70,9 @@ public class TrickWinAnimator : MonoBehaviour
             RectTransform trt = textGo.GetComponent<RectTransform>();
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;
-            trt.offsetMin = new Vector2(16f, 8f);
-            trt.offsetMax = new Vector2(-16f, -8f);
+            // 좌우 여백을 넉넉히 (텍스트가 박스 끝에 붙지 않게)
+            trt.offsetMin = new Vector2(48f, 12f);
+            trt.offsetMax = new Vector2(-48f, -12f);
             toastText = textGo.GetComponent<Text>();
             toastText.fontSize = 40;
             toastText.alignment = TextAnchor.MiddleCenter;
@@ -80,6 +83,7 @@ public class TrickWinAnimator : MonoBehaviour
             toastGroup = root.GetComponent<CanvasGroup>();
             toastGroup.alpha = 0f;
             toastGroup.blocksRaycasts = false;
+            toastGroup.interactable = false;
             toastRoot.SetAsLastSibling();
         }
 
@@ -90,12 +94,21 @@ public class TrickWinAnimator : MonoBehaviour
     {
         if (toastBg != null)
             toastBg.color = Color.black;
-        if (toastText == null) return;
-
-        Font font = UiFonts.Primary;
-        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        toastText.font = font;
-        toastText.color = Color.white;
+        if (toastRoot != null)
+            toastRoot.sizeDelta = new Vector2(620f, 128f);
+        if (toastText != null)
+        {
+            RectTransform trt = toastText.rectTransform;
+            if (trt != null)
+            {
+                trt.offsetMin = new Vector2(48f, 12f);
+                trt.offsetMax = new Vector2(-48f, -12f);
+            }
+            Font font = UiFonts.Primary;
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            toastText.font = font;
+            toastText.color = Color.white;
+        }
     }
 
     public void Play(
@@ -111,8 +124,95 @@ public class TrickWinAnimator : MonoBehaviour
             if (onComplete != null) onComplete();
             return;
         }
+        ClearStickyToast();
         StartCoroutine(CoPlay(
             winnerNickname, pointCards, tableCenterWorld, winnerWorld, tableView, onComplete));
+    }
+
+    // 검정 박스 + 흰 글씨 토스트 (당선 안내 등). hold 후 fade.
+    public void Announce(string message, float holdSec = 1.35f, float fadeSec = 0.35f, Action onComplete = null)
+    {
+        EnsureToastReady();
+        if (announceRoutine != null)
+        {
+            StopCoroutine(announceRoutine);
+            announceRoutine = null;
+        }
+        stickyToast = false;
+        announceRoutine = StartCoroutine(CoAnnounce(message, holdSec, fadeSec, onComplete));
+    }
+
+    // 사라지지 않는 안내 (예: 카드 고르는 중...)
+    public void ShowStickyToast(string message)
+    {
+        EnsureToastReady();
+        if (announceRoutine != null)
+        {
+            StopCoroutine(announceRoutine);
+            announceRoutine = null;
+        }
+        stickyToast = true;
+        if (toastText != null) toastText.text = message ?? "";
+        ApplyToastStyle();
+        if (toastGroup != null) toastGroup.alpha = 1f;
+        if (toastRoot != null) toastRoot.SetAsLastSibling();
+    }
+
+    public void ClearStickyToast()
+    {
+        stickyToast = false;
+        if (announceRoutine != null)
+        {
+            StopCoroutine(announceRoutine);
+            announceRoutine = null;
+        }
+        if (toastGroup != null && !busy) toastGroup.alpha = 0f;
+    }
+
+    private IEnumerator CoAnnounce(string message, float holdSec, float fadeSec, Action onComplete)
+    {
+        if (toastText == null || toastGroup == null || toastRoot == null)
+        {
+            if (onComplete != null) onComplete();
+            yield break;
+        }
+
+        ApplyToastStyle();
+        toastText.text = message ?? "";
+        toastGroup.alpha = 1f;
+        toastRoot.SetAsLastSibling();
+
+        float hold = 0f;
+        while (hold < holdSec)
+        {
+            hold += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (stickyToast)
+        {
+            announceRoutine = null;
+            if (onComplete != null) onComplete();
+            yield break;
+        }
+
+        float fadeT = 0f;
+        while (fadeT < fadeSec)
+        {
+            fadeT += Time.unscaledDeltaTime;
+            toastGroup.alpha = 1f - Mathf.Clamp01(fadeT / fadeSec);
+            yield return null;
+        }
+        toastGroup.alpha = 0f;
+        announceRoutine = null;
+        if (onComplete != null) onComplete();
+    }
+
+    private void EnsureToastReady()
+    {
+        if (toastRoot != null) return;
+        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Configure(cardPrefab, canvas);
     }
 
     private IEnumerator CoPlay(

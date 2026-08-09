@@ -213,13 +213,14 @@ class RoomManager {
 
   // ===================== 09단계: 입찰 / 주공 / 프렌드 =====================
 
-  // 입찰 시작 세팅 (한 바퀴 단판 입찰: 각자 한 번씩 공약 또는 패스)
+  // 입찰 시작 세팅 (연속 입찰: 패스한 사람은 제외, 최고 공약만 남을 때까지 올려 부르기)
   // startMinBid: 이번 입찰 라운드의 최소 공약(전원 패스로 낮춰진 경우 그 값)
   startBidding(room, startMinBid = MIN_BID) {
     room.minBid = startMinBid;
     room.currentBidderIndex = 0;
     room.highestBid = null; // { clientId, nickname, targetScore, trumpSuit, noTrump }
     room.bids = [];
+    room.passedClientIds = []; // 패스한 사람 — 더 이상 입찰 불가
     room.declarerClientId = null;
     room.declaredTrump = undefined;
     room.noTrump = false;
@@ -317,10 +318,36 @@ class RoomManager {
     return room.players[room.currentBidderIndex] || null;
   }
 
-  // 다음 입찰자로. 모두 한 번씩 했으면 true(완료) 반환.
-  _advanceBidder(room) {
-    room.currentBidderIndex++;
-    return room.currentBidderIndex >= room.players.length;
+  // 다음 입찰자로. 패스하지 않은 다음 사람. 입찰 종료면 true.
+  _passedSet(room) {
+    return new Set(room.passedClientIds || []);
+  }
+
+  _isBiddingComplete(room) {
+    const players = room.players || [];
+    if (players.length === 0) return true;
+    const passed = this._passedSet(room);
+    if (!room.highestBid) {
+      return players.every((p) => passed.has(p.clientId));
+    }
+    const highId = room.highestBid.clientId;
+    return players.every((p) => p.clientId === highId || passed.has(p.clientId));
+  }
+
+  _finishOrAdvanceBidder(room) {
+    if (this._isBiddingComplete(room)) return true;
+    const n = room.players.length;
+    const passed = this._passedSet(room);
+    let idx = room.currentBidderIndex;
+    for (let i = 0; i < n; i++) {
+      idx = (idx + 1) % n;
+      const p = room.players[idx];
+      if (p && !passed.has(p.clientId)) {
+        room.currentBidderIndex = idx;
+        return false;
+      }
+    }
+    return true;
   }
 
   // 공약 제출. 성공 { ok, complete }, 실패 { error }.
@@ -328,6 +355,9 @@ class RoomManager {
     const bidder = room.players[room.currentBidderIndex];
     if (!bidder || bidder.clientId !== clientId) {
       return { error: "당신의 입찰 차례가 아닙니다." };
+    }
+    if ((room.passedClientIds || []).includes(clientId)) {
+      return { error: "이미 패스한 뒤에는 다시 공약할 수 없습니다." };
     }
     const targetScore = parseInt(bid && bid.targetScore, 10);
     const roundMin = room.minBid || MIN_BID;
@@ -350,7 +380,7 @@ class RoomManager {
       noTrump,
     };
     room.bids.push({ ...room.highestBid, pass: false });
-    return { ok: true, complete: this._advanceBidder(room) };
+    return { ok: true, complete: this._finishOrAdvanceBidder(room) };
   }
 
   // 패스. 성공 { ok, complete }, 실패 { error }.
@@ -359,8 +389,11 @@ class RoomManager {
     if (!bidder || bidder.clientId !== clientId) {
       return { error: "당신의 입찰 차례가 아닙니다." };
     }
+    if (!(room.passedClientIds || []).includes(clientId)) {
+      room.passedClientIds = (room.passedClientIds || []).concat([clientId]);
+    }
     room.bids.push({ clientId, nickname: bidder.nickname, pass: true });
-    return { ok: true, complete: this._advanceBidder(room) };
+    return { ok: true, complete: this._finishOrAdvanceBidder(room) };
   }
 
   // 입찰 마감 후 주공/기루다/목표점 확정.
@@ -708,6 +741,7 @@ class RoomManager {
     room.friendRevealed = false;
     room.highestBid = null;
     room.bids = [];
+    room.passedClientIds = [];
     room.minBid = undefined;
     room.currentBidderIndex = null;
     room.players.forEach((p) => {
@@ -970,8 +1004,12 @@ class RoomManager {
       })(),
       // 입찰 진행 정보
       minBid: room.minBid || MIN_BID,
+      nextMinBid: room.highestBid
+        ? Math.min(MAX_BID, room.highestBid.targetScore + 1)
+        : (room.minBid || MIN_BID),
       currentBidderClientId: room.status === "bidding" && bidder ? bidder.clientId : null,
       currentBidderNickname: room.status === "bidding" && bidder ? bidder.nickname : null,
+      passedClientIds: room.passedClientIds || [],
       highestBid: room.highestBid
         ? {
             nickname: room.highestBid.nickname,
@@ -1003,6 +1041,8 @@ class RoomManager {
           })()
         : {}),
       lastResult: room.status === "finished" ? room.lastResult : null,
+      // 바닥패 장수(내용은 비공개). 입찰 중 중앙에 뒷면으로 표시용.
+      kittyCount: Array.isArray(room.kitty) ? room.kitty.length : 0,
       tableCards: (room.tableCards || []).map((t) => ({
         playerNickname: t.playerNickname,
         card: t.card,

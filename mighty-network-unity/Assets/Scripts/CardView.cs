@@ -31,9 +31,47 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private Color baseTint = Color.white;
     private bool playable = true;
 
+    // 바닥패 버리기 선택: LayoutGroup이 LateUpdate 이후 위치를 덮어쓰므로
+    // willRenderCanvases에서 Y 오프셋을 다시 적용한다.
+    private const float SelectRaiseY = 36f;
+    private bool raised;
+    private bool subscribedToCanvas;
+
     private void OnEnable()
     {
         EnsureDropShadow();
+        SubscribeCanvas();
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeCanvas();
+    }
+
+    private void SubscribeCanvas()
+    {
+        if (subscribedToCanvas) return;
+        Canvas.willRenderCanvases += ApplyRaiseAfterLayout;
+        subscribedToCanvas = true;
+    }
+
+    private void UnsubscribeCanvas()
+    {
+        if (!subscribedToCanvas) return;
+        Canvas.willRenderCanvases -= ApplyRaiseAfterLayout;
+        subscribedToCanvas = false;
+    }
+
+    // Layout 적용 직후, 렌더 직전에 선택 카드만 위로 올린다.
+    private void ApplyRaiseAfterLayout()
+    {
+        RectTransform rt = transform as RectTransform;
+        if (rt == null) return;
+        Vector2 p = rt.anchoredPosition;
+        float targetY = raised ? SelectRaiseY : 0f;
+        if (Mathf.Abs(p.y - targetY) < 0.01f) return;
+        p.y = targetY;
+        rt.anchoredPosition = p;
     }
 
     // 손패(160) / 상대(80) 등 sizeDelta 변경 시 그림자 비율도 맞춤
@@ -150,6 +188,17 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         if (background != null) background.raycastTarget = canPlay;
     }
 
+    // 버리기 선택 표시: 카드를 위로 살짝 올림 / 다시 누르면 원위치
+    public void SetSelectedRaised(bool selected)
+    {
+        raised = selected;
+        SubscribeCanvas();
+        ApplyRaiseAfterLayout();
+        ApplyTint();
+    }
+
+    public bool IsSelectedRaised { get { return raised; } }
+
     private void ApplySprite(Sprite sprite)
     {
         baseTint = Color.white;
@@ -196,11 +245,15 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private void ApplyTint()
     {
         if (background == null) return;
-        background.color = playable ? baseTint : new Color(
+        Color c = playable ? baseTint : new Color(
             baseTint.r * DimMul.r,
             baseTint.g * DimMul.g,
             baseTint.b * DimMul.b,
             baseTint.a);
+        // 선택 강조 (올림과 함께 살짝 밝게)
+        if (raised && playable)
+            c = Color.Lerp(c, Color.white, 0.18f);
+        background.color = c;
     }
 
     private void EnsureLabelFont()
