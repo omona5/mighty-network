@@ -5,12 +5,19 @@ using UnityEngine.EventSystems;
 // ============================================================================
 // CardView: 카드 한 장(프리팹)에 붙는 스크립트.
 //   - SetCard / SetFaceDown / SetPlayable(음영·클릭)
+//   - 겹침 구분용 우측·하단 드롭 섀도 (UI Shadow)
 // ============================================================================
 public class CardView : MonoBehaviour, IPointerClickHandler
 {
     [Header("Inspector에서 연결")]
     public Image background; // 카드 이미지 (보통 자기 자신의 Image)
     public Text label;       // 스프라이트 폴백용 텍스트 (있으면)
+
+    [Header("겹침 그림자")]
+    public Vector2 shadowOffset = new Vector2(10f, -10f); // 우하단 (기존)
+    [Range(0f, 1f)] public float shadowAlpha = 0.65f;
+    public Vector2 sideShadowOffset = new Vector2(5f, 5f); // 좌·상 각각 5
+    [Range(0f, 1f)] public float sideShadowAlpha = 0.4f;
 
     public CardData Card { get; private set; }
     public System.Action<CardData> Clicked;
@@ -23,6 +30,69 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     private Color baseTint = Color.white;
     private bool playable = true;
+
+    private void OnEnable()
+    {
+        EnsureDropShadow();
+    }
+
+    // 손패(160) / 상대(80) 등 sizeDelta 변경 시 그림자 비율도 맞춤
+    private void OnRectTransformDimensionsChange()
+    {
+        EnsureDropShadow();
+    }
+
+    public void RefreshDropShadow()
+    {
+        EnsureDropShadow();
+    }
+
+    private void EnsureDropShadow()
+    {
+        if (background == null)
+            background = GetComponent<Image>();
+        if (background == null) return;
+
+        float scale = ShadowScale();
+        float side = Mathf.Abs(sideShadowOffset.x) > 0.01f
+            ? Mathf.Abs(sideShadowOffset.x)
+            : Mathf.Abs(sideShadowOffset.y);
+        if (side < 0.01f) side = 5f;
+
+        // 기준 손패 크기 대비 스케일 (상대 카드 0.5배 → 그림자도 절반)
+        ApplyOrAddShadow(0, shadowOffset * scale, shadowAlpha);
+        ApplyOrAddShadow(1, new Vector2(-side * scale, 0f), sideShadowAlpha); // 좌
+        ApplyOrAddShadow(2, new Vector2(0f, side * scale), sideShadowAlpha);  // 상
+    }
+
+    private float ShadowScale()
+    {
+        RectTransform rt = background != null ? background.rectTransform : transform as RectTransform;
+        if (rt == null || CardSpriteAtlas.DisplayWidth < 0.01f) return 1f;
+        float s = rt.sizeDelta.x / CardSpriteAtlas.DisplayWidth;
+        if (s < 0.01f)
+        {
+            // sizeDelta가 스트레치 모드일 때 rect 사용
+            float w = rt.rect.width;
+            if (w > 0.01f) s = w / CardSpriteAtlas.DisplayWidth;
+        }
+        return Mathf.Clamp(s, 0.2f, 2f);
+    }
+
+    private void ApplyOrAddShadow(int index, Vector2 offset, float alpha)
+    {
+        Shadow[] existing = background.GetComponents<Shadow>();
+        Shadow s;
+        if (index < existing.Length)
+            s = existing[index];
+        else
+            s = background.gameObject.AddComponent<Shadow>();
+
+        s.enabled = true;
+        s.effectDistance = offset;
+        s.effectColor = new Color(0f, 0f, 0f, alpha);
+        s.useGraphicAlpha = true;
+    }
 
     public void OnPointerClick(PointerEventData eventData)
     {
@@ -137,7 +207,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     {
         if (label == null) return;
         if (sharedUiFont == null)
-            sharedUiFont = Resources.Load<Font>("Fonts/NotoSansKR-Regular");
+            sharedUiFont = UiFonts.Primary;
         if (sharedUiFont != null)
             label.font = sharedUiFont;
     }

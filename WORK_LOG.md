@@ -730,3 +730,158 @@
 ## 2026-08-03 23:37 (UTC+9)
 
 - **확인**: 조커 선 리드 시 그 트릭에 한해 따라낼 무늬 선언 — 맞음. 이미 declaredSuit로 구현됨.
+
+## 2026-08-03 23:39 (UTC+9)
+
+- **요청**: 여기까지 커밋·푸시 후 서버 종료.
+- **커밋**: `8ccad63` Improve Unity play UX: table order, illegal-card dim, lobby return.
+- **푸시**: `origin/main` (`531c4f8..8ccad63`, SSH).
+- **서버**: PID 29327 종료, :3000 해제.
+
+## 2026-08-03 23:39 (UTC+9)
+
+- **알림**: 서버 태스크 exit 143 — 요청하신 수동 종료(SIGTERM)와 동일. 이상 아님.
+
+## 2026-08-04 22:33 (UTC+9)
+
+- **요청**: 서버 재기동.
+- **조치**: `node server.js` 기동 (PID 55634). ws://localhost:3000 대기.
+
+## 2026-08-05 14:52 (UTC+9)
+
+- **질문**: 커서 종료 후 서버 상태.
+- **결과**: :3000 비어 있음 — 서버 내려간 상태.
+
+## 2026-08-05 14:53 (UTC+9)
+
+- **질문**: 커밋/푸시할 내용 있는지.
+- **결과**: 코드는 origin/main과 동기화. 미커밋은 WORK_LOG.md만.
+
+## 2026-08-05 14:54 (UTC+9)
+
+- **질문**: 이전에 리스트업한 추가 개발 항목 회상.
+- **답변**: (1) 상시 리더보드 (2) 기루다/마이티/조커콜 표시 (3) 실시간 점수카드 시각화.
+
+## 2026-08-05 16:12 (UTC+9)
+
+- **질문**: 카드 스프라이트 적용이 프리팹+스크립트 자동인지 수동 오브젝트 생성인지.
+- **답변**: Card 프리팹 1장 + CardSpriteAtlas가 시트에서 런타임 슬라이스/매핑. HandView가 인스턴스화 후 SetCard.
+
+## 2026-08-05 16:43 (UTC+9)
+
+- **요청**: 서버 기동.
+- **조치**: `node server.js` (PID 66230). ws://localhost:3000.
+
+## 2026-08-09 16:12 (UTC+9)
+
+- **요청**: 복귀 후 서버 기동 + 작업 시작.
+- **조치**: `node server.js` 기동. 대기 중인 TODO: 리더보드 / 기루다·마이티·조커콜 표시 / 점수카드 시각화 — 우선순위 확인 중.
+
+## 2026-08-09 16:14 (UTC+9)
+
+- **요청**: Fonts/ 갈무리 11로 전체 폰트 업데이트.
+- **적용**: UiFonts → Galmuri11. NetworkManager OnGUI, CardView, OpponentHandsView, Card.prefab Label.
+
+## 2026-08-09 16:16 (UTC+9)
+
+- **요청**: 카드 겹침 구분용 우측·하단 그림자.
+- **적용**: CardView에 UI Shadow (offset 5,-5 / alpha 0.4). 스프라이트 수정 불필요.
+
+## 2026-08-09 16:16 (UTC+9)
+
+- **요청**: 카드 우측·하단 그림자 적용 확인/강화.
+- **조치**: Card.prefab에 UI Shadow 컴포넌트 추가, CardView OnEnable에서 설정 동기화.
+
+## 2026-08-09 16:18 (UTC+9)
+
+- **질문**: 겹친 카드 구분용 그림자가 적용됐는지 확인.
+- **답변**: 예. 카드마다 우측·하단 UI Shadow로 겹침 시 뒤 카드가 살짝 비쳐 구분.
+
+## 2026-08-09 16:18 (UTC+9)
+
+- **요청**: 카드 그림자 더 크게.
+- **적용**: offset 10/-10, alpha 0.65 (CardView + prefab).
+
+## 2026-08-09 16:20 (UTC+9)
+
+- **요청**: 우하단 그림자 유지 + 좌/상 그림자 offset 5 추가.
+- **적용**: Shadow 3개 — BR(10,-10,a0.65), L(-5,0,a0.4), T(0,5,a0.4).
+
+## 2026-08-09 16:26 (UTC+9)
+
+- **요청**: 상대(작은) 카드 그림자도 크기 비율로 축소.
+- **적용**: CardView 그림자 = DisplayWidth 대비 sizeDelta 스케일. 상대 0.5배면 offset도 절반. size 변경 후 RefreshDropShadow.
+
+## 2026-08-09 16:29 (UTC+9)
+
+- **요청**: 카드 제출 시 핸드→테이블 이동 애니. 상대는 작은 손패가 아니라 테이블 크기 카드가 좌석 쪽에서 날아옴.
+- **작업 디렉터리**: mighty-network-unity/Assets/Scripts
+- **추가/수정**:
+  - `CardPlayAnimator.cs` (신규): ease-out 위치·크기 보간 비행
+  - `HandView.cs`: 카드 월드 좌표 / 테이블 슬롯 좌표
+  - `OpponentHandsView.cs`: 닉네임→좌석 월드 좌표
+  - `NetworkManager.cs`: play_card 시 시작점 스냅샷+손패 낙관적 제거, game_state에서 상대 손패 먼저 갱신 후 테이블 애니
+- **결과**: 본인=손패에서 날아감, 상대=좌석에서 테이블 사이즈로 날아와 중앙에 모임
+
+## 2026-08-09 16:31 (UTC+9)
+
+- **요청**: 테이블 카드 아래에 제출자 닉네임 표기.
+- **적용**: HandView.ShowTableCards — 카드+닉 세로 슬롯(Galmuri11). NetworkManager.UpdateTable이 TableCardEntry로 갱신. 긴 닉 8자 절삭.
+
+## 2026-08-09 17:03 (UTC+9)
+
+- **요청**: 카드 배치 결정 방식 / 작은 화면 겹침 가능성 설명.
+- **분석**: 손패·테이블=고정 160×224 + HLG(손패 spacing -40 의도적 겹침, 테이블 +8). CanvasScaler 1920×1080 Match Width. 반응형 축소 없음. 상대=앵커 % + overlap 22. 좁은 높이/장수 많으면 영역 간·화면 밖 겹침 가능.
+
+## 2026-08-09 17:05 (UTC+9)
+
+- **요청**: 테이블 제출 카드 아래 닉네임 폰트 키우기.
+- **적용**: HandView TableLabelFontSize 14→20, TableLabelHeight 22→28.
+
+## 2026-08-09 17:11 (UTC+9)
+
+- **요청**: 트릭 승리 토스트+점수카드 이동 애니, 플레이어별 점수/주공/마이티 표시.
+- **서버**: `trickComplete`, player `score`/`isDeclarer`/`isMightyPlayer`, `mightyRevealed`/`mightyPlayerNickname`. 마이티 제출 시 공개. 트릭 후 봇 딜레이 1.8s.
+- **Unity**: `TrickWinAnimator` (토스트+점수카드 비행). OpponentHandsView/Self에 점수·[주공]·[마이티]. NetworkManager 연동.
+- **서버**: node server.js 재기동.
+
+## 2026-08-09 18:02 (UTC+9)
+
+- **요청**: 승리 토스트 흰 배경, 텍스트 사라지며 비전수 fade / 점수카드는 중앙→승자 이동.
+- **적용**: TrickWinAnimator 시퀀스 재작성. HandView HidePointCardSlots + CoFadeNonPointSlots.
+
+## 2026-08-09 18:39 (UTC+9)
+
+- **요청**: 승리 문구 → 검정 박스 + 흰 글씨 + Galmuri7.
+- **적용**: TrickWinAnimator toastBg 검정, toastText 흰색, Fonts/Galmuri7.
+
+## 2026-08-09 18:41 (UTC+9)
+
+- **요청**: OnGUI 창 화면 가운데 + 좌상단 기루다/마이티/조커콜/주공/프렌드 HUD.
+- **적용**: OnGUI BeginArea 중앙 정렬. GameRuleHud(Canvas) 좌상단. DrawGameHud에서 중복 룰 문구 정리.
+
+## 2026-08-09 18:44 (UTC+9)
+
+- **요청**: 승리 문구 Galmuri11 복귀. 게임 시작 시 중앙 OnGUI를 우상단 최소화 토글.
+- **적용**: TrickWinAnimator 폰트 Primary(Galmuri11). hudCollapsed — 시작 시 자동 최소화, 「메뉴 열기」「최소화」 토글.
+
+## 2026-08-09 18:46 (UTC+9)
+
+- **요청**: 공약 단계는 메뉴 펼침, 본게임(playing)만 최소화, 종료 시 자동 펼침.
+- **적용**: hudCollapsed는 status==playing 진입 시에만 true, finished/bidding/kitty/friend/waiting이면 false.
+
+## 2026-08-09 22:21 (UTC+9)
+
+- **요청**: 서버 끊김 후 재시작 시 손패 ~20장 버그 — 초기화 로직 점검.
+- **원인 후보**: (1) HandView Clear가 spawned만 지워 컨테이너 고아 잔존 (2) startKittyExchange 중복 concat (3) 방 입장 시 클라 손패 미클리어.
+- **수정**: dealCards가 wonCards/테이블도 리셋. kitty 교환 idempotent. addPlayer hand:[]. HandView Clear가 컨테이너 자식 전부 제거. 클라 ResetLocalHandState + your_hand 중복 id 제거.
+
+## 2026-08-09 22:25 (UTC+9)
+
+- **요청**: 서버 재시작.
+- **조치**: :3000 프로세스 종료 후 `server-node/node server.js` 재기동.
+
+## 2026-08-09 22:26 (UTC+9)
+
+- **질문**: 출마 성공 시 패를 한장씩 걷었다가 다시 나누는 룰이 문서에 있는지.
+- **결론**: 프로젝트 문서/5마 구현에 없음. 출마 성공=바닥패 3장 교환. 재배분은 딜미스·전원패스(바닥) 때만. (6마의 제외자 패 재배분과는 별개)

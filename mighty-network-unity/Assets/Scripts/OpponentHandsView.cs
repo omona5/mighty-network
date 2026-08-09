@@ -17,9 +17,12 @@ public class OpponentHandsView : MonoBehaviour
     {
         public string nickname;
         public int handCount;
+        public int score;
         public bool isTurn;
         public bool isBot;
         public bool disconnected;
+        public bool isDeclarer;
+        public bool isMightyPlayer;
     }
 
     // 상대 손패: 내 손패(160×224)의 1/2 → 원본 대비 1/4
@@ -38,6 +41,8 @@ public class OpponentHandsView : MonoBehaviour
     };
 
     private readonly List<GameObject> panels = new List<GameObject>();
+    private readonly Dictionary<string, RectTransform> seatByNickname =
+        new Dictionary<string, RectTransform>();
     private Font uiFont;
 
     public void Clear()
@@ -47,6 +52,7 @@ public class OpponentHandsView : MonoBehaviour
             if (go != null) Destroy(go);
         }
         panels.Clear();
+        seatByNickname.Clear();
     }
 
     // seats: 내 다음 자리부터 시계방향 순서 (최대 4)
@@ -58,7 +64,44 @@ public class OpponentHandsView : MonoBehaviour
 
         int n = Mathf.Min(seats.Length, SeatAnchors.Length);
         for (int i = 0; i < n; i++)
-            panels.Add(BuildPanel(seats[i], SeatAnchors[i]));
+            panels.Add(BuildPanel(seats[i], SeatAnchors[i], false));
+    }
+
+    // 내 정보(하단 손패 위): 닉네임 + 점수 + 주공/마이티
+    public void ShowSelf(SeatInfo self)
+    {
+        EnsureRoot();
+        for (int i = panels.Count - 1; i >= 0; i--)
+        {
+            GameObject go = panels[i];
+            if (go == null || go.name == null || !go.name.StartsWith("Self_")) continue;
+            Destroy(go);
+            panels.RemoveAt(i);
+        }
+        panels.Add(BuildPanel(self, new Vector2(0.5f, 0.22f), true));
+    }
+
+    public bool TryGetSeatWorldPosition(string nickname, out Vector3 worldPos)
+    {
+        worldPos = Vector3.zero;
+        if (string.IsNullOrEmpty(nickname)) return false;
+        RectTransform rt;
+        if (!seatByNickname.TryGetValue(nickname, out rt) || rt == null) return false;
+        worldPos = rt.position;
+        return true;
+    }
+
+    public static string FormatStatusLine(SeatInfo seat, bool isSelf)
+    {
+        string prefix = seat.isBot ? "[봇] " : "";
+        if (seat.disconnected) prefix = "[끊김] ";
+        string badges = "";
+        if (seat.isDeclarer) badges += " [주공]";
+        if (seat.isMightyPlayer) badges += " [마이티]";
+        string turn = seat.isTurn ? " <<" : "";
+        string who = isSelf ? (seat.nickname + " (나)") : seat.nickname;
+        return prefix + who + badges + turn
+            + "\n" + seat.score + "점  ·  패 " + seat.handCount;
     }
 
     private void EnsureRoot()
@@ -83,46 +126,58 @@ public class OpponentHandsView : MonoBehaviour
         root.SetAsFirstSibling();
     }
 
-    private GameObject BuildPanel(SeatInfo seat, Vector2 anchor)
+    private GameObject BuildPanel(SeatInfo seat, Vector2 anchor, bool isSelf)
     {
-        GameObject panel = new GameObject("Opp_" + seat.nickname, typeof(RectTransform));
+        string goName = (isSelf ? "Self_" : "Opp_") + (seat.nickname ?? "?");
+        GameObject panel = new GameObject(goName, typeof(RectTransform));
         panel.transform.SetParent(root, false);
         RectTransform prt = panel.GetComponent<RectTransform>();
         prt.anchorMin = anchor;
         prt.anchorMax = anchor;
         prt.pivot = new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = new Vector2(280f, 140f);
+        prt.sizeDelta = isSelf ? new Vector2(360f, 56f) : new Vector2(300f, 160f);
         prt.anchoredPosition = Vector2.zero;
+        if (!string.IsNullOrEmpty(seat.nickname))
+            seatByNickname[seat.nickname] = prt;
 
-        // 이름
+        // 이름 + 점수/배지
         GameObject nameGo = new GameObject("Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
         nameGo.transform.SetParent(panel.transform, false);
         RectTransform nrt = nameGo.GetComponent<RectTransform>();
-        nrt.anchorMin = new Vector2(0f, 0.72f);
-        nrt.anchorMax = new Vector2(1f, 1f);
+        if (isSelf)
+        {
+            nrt.anchorMin = Vector2.zero;
+            nrt.anchorMax = Vector2.one;
+        }
+        else
+        {
+            nrt.anchorMin = new Vector2(0f, 0.70f);
+            nrt.anchorMax = new Vector2(1f, 1f);
+        }
         nrt.offsetMin = Vector2.zero;
         nrt.offsetMax = Vector2.zero;
         Text nameText = nameGo.GetComponent<Text>();
         nameText.font = GetUiFont();
-        nameText.fontSize = 16;
+        nameText.fontSize = isSelf ? 18 : 15;
         nameText.alignment = TextAnchor.MiddleCenter;
         nameText.horizontalOverflow = HorizontalWrapMode.Overflow;
-        nameText.verticalOverflow = VerticalWrapMode.Truncate;
+        nameText.verticalOverflow = VerticalWrapMode.Overflow;
         nameText.color = seat.isTurn
             ? new Color(1f, 0.85f, 0.3f)
             : (seat.disconnected ? new Color(0.7f, 0.7f, 0.7f) : Color.white);
-        string prefix = seat.isBot ? "[봇] " : "";
-        if (seat.disconnected) prefix = "[끊김] ";
-        nameText.text = prefix + seat.nickname
-            + (seat.isTurn ? " <<" : "")
-            + " (" + seat.handCount + ")";
+        nameText.text = FormatStatusLine(seat, isSelf);
+        Shadow nsh = nameGo.AddComponent<Shadow>();
+        nsh.effectColor = new Color(0f, 0f, 0f, 0.75f);
+        nsh.effectDistance = new Vector2(1f, -1f);
+
+        if (isSelf) return panel;
 
         // 카드 줄
         GameObject row = new GameObject("Cards", typeof(RectTransform));
         row.transform.SetParent(panel.transform, false);
         RectTransform rrt = row.GetComponent<RectTransform>();
         rrt.anchorMin = new Vector2(0.5f, 0f);
-        rrt.anchorMax = new Vector2(0.5f, 0.72f);
+        rrt.anchorMax = new Vector2(0.5f, 0.68f);
         rrt.pivot = new Vector2(0.5f, 0.5f);
         float rowWidth = Mathf.Max(CardSize.x, (Mathf.Max(seat.handCount, 1) - 1) * CardOverlap + CardSize.x);
         rrt.sizeDelta = new Vector2(rowWidth, CardSize.y + 4f);
@@ -145,6 +200,7 @@ public class OpponentHandsView : MonoBehaviour
                 crt.anchoredPosition = new Vector2(startX + c * CardOverlap, 0f);
                 crt.localScale = Vector3.one;
             }
+            view.RefreshDropShadow();
         }
 
         return panel;
@@ -153,7 +209,7 @@ public class OpponentHandsView : MonoBehaviour
     private Font GetUiFont()
     {
         if (uiFont == null)
-            uiFont = Resources.Load<Font>("Fonts/NotoSansKR-Regular");
+            uiFont = UiFonts.Primary;
         if (uiFont == null)
             uiFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
         return uiFont;

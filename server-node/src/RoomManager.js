@@ -108,6 +108,8 @@ class RoomManager {
       disconnectedAt: null,
       isBot: false,
       sessionScore: 0,
+      hand: [],
+      wonCards: [],
       ws,
     };
     // 사람은 항상 봇들보다 앞에 배치한다. (사람들 다음, 첫 봇 앞에 삽입)
@@ -157,6 +159,8 @@ class RoomManager {
       disconnectedAt: null,
       isBot: true,
       sessionScore: 0,
+      hand: [],
+      wonCards: [],
       ws: null,
     };
     room.players.push(player);
@@ -189,13 +193,21 @@ class RoomManager {
   }
 
   // 카드를 섞어 방의 5명에게 10장씩 배분하고, 바닥패 3장을 방에 보관한다.
-  // 각 플레이어에는 p.hand(카드 배열)가 채워진다.
+  // 각 플레이어에는 p.hand(카드 배열)가 채워진다. (기존 손패·획득패는 무조건 교체)
   dealCards(room) {
     const { hands, kitty } = Deck.createShuffledDeal();
     room.players.forEach((p, i) => {
       p.hand = sortHand(hands[i] || []);
+      p.wonCards = [];
     });
     room.kitty = kitty; // 바닥패 (아직 아무에게도 공개 안 함)
+    room.discardedKitty = null;
+    room.mightyRevealed = false;
+    room.mightyPlayerClientId = null;
+    room.tableCards = [];
+    room.trickComplete = false;
+    room.trickHistory = [];
+    room.lastTrickWinner = null;
     return { hands, kitty };
   }
 
@@ -222,10 +234,27 @@ class RoomManager {
   // ===================== 바닥패 교환 =====================
 
   // 주공 손패에 바닥패 3장을 합친다. (10 → 13장)
+  // 이미 합쳐진 상태(재호출)면 무시해 손패 폭증을 막는다.
   startKittyExchange(room) {
     const decl = room.players.find((p) => p.clientId === room.declarerClientId);
     if (!decl) return { error: "주공을 찾을 수 없습니다." };
     const kitty = room.kitty || [];
+    const handLen = decl.hand ? decl.hand.length : 0;
+    if (handLen === 13 && kitty.length === 0) {
+      return { ok: true, handCount: 13, alreadyApplied: true };
+    }
+    if (handLen !== 10) {
+      console.warn(
+        "[kitty] unexpected hand size before exchange:",
+        decl.nickname,
+        handLen,
+        "kitty",
+        kitty.length
+      );
+    }
+    if (kitty.length !== 3) {
+      return { error: "바닥패가 3장이 아닙니다. (현재 " + kitty.length + ")" };
+    }
     decl.hand = sortHand((decl.hand || []).concat(kitty));
     room.kitty = []; // 교환 중에는 손패로 이동
     room.discardedKitty = null;
@@ -507,6 +536,8 @@ class RoomManager {
     room.trickHistory = []; // 완료된 트릭들의 기록
     room.lastTrickWinner = null; // { clientId, nickname }
     room.trickNumber = 1; // 현재 트릭 번호 (1~10)
+    room.mightyRevealed = false;
+    room.mightyPlayerClientId = null;
     // 룰 설정이 아직 없으면(입찰 없이 시작한 경우) 폴백 기루다로 생성
     if (!room.ruleConfig) {
       room.ruleConfig = RuleEngine.makeRuleConfig(FALLBACK_TRUMP_SUIT, false);
@@ -595,6 +626,12 @@ class RoomManager {
       room.friendClientId = player.clientId;
     }
 
+    // 마이티가 테이블에 나오면 보유자 공개
+    if (!room.mightyRevealed && cfg && card.id === cfg.mightyCardId) {
+      room.mightyRevealed = true;
+      room.mightyPlayerClientId = player.clientId;
+    }
+
     let trickResult = null;
     if (room.tableCards.length === room.players.length) {
       // ---- 트릭 완성: 승자 판정 (08단계 룰 적용) ----
@@ -657,6 +694,8 @@ class RoomManager {
     room.lastTrickWinner = null;
     room.trickComplete = false;
     room.trickNumber = 0;
+    room.mightyRevealed = false;
+    room.mightyPlayerClientId = null;
     room.currentTurnIndex = null;
     room.ruleConfig = undefined;
     room.declarerClientId = null;
@@ -917,11 +956,18 @@ class RoomManager {
       currentTurnClientId: turnP ? turnP.clientId : null,
       currentTurnNickname: turnP ? turnP.nickname : null,
       lastTrickWinnerNickname: room.lastTrickWinner ? room.lastTrickWinner.nickname : null,
+      trickComplete: !!room.trickComplete,
       trickNumber: room.trickNumber || 0,
       trumpSuit: room.ruleConfig ? room.ruleConfig.trumpSuit : null,
       noTrump: !!room.noTrump,
       mightyCardId: room.ruleConfig ? room.ruleConfig.mightyCardId : null,
       jokerCallCardId: room.ruleConfig ? room.ruleConfig.jokerCallCardId : null,
+      mightyRevealed: !!room.mightyRevealed,
+      mightyPlayerNickname: (() => {
+        if (!room.mightyRevealed || !room.mightyPlayerClientId) return null;
+        const mp = room.players.find((p) => p.clientId === room.mightyPlayerClientId);
+        return mp ? mp.nickname : null;
+      })(),
       // 입찰 진행 정보
       minBid: room.minBid || MIN_BID,
       currentBidderClientId: room.status === "bidding" && bidder ? bidder.clientId : null,
@@ -979,7 +1025,14 @@ class RoomManager {
         handCount: p.hand ? p.hand.length : 0, // 남은 카드 수 (내용은 비공개)
         wonCount: p.wonCards ? p.wonCards.length : 0, // 획득한 카드 수
         trickCount: p.wonCards ? Math.floor(p.wonCards.length / MAX_PLAYERS) : 0, // 이긴 트릭 수
+        score: Scoring.scoreOfCards(p.wonCards || []), // 이 판 획득 점수(점수카드 합)
         sessionScore: p.sessionScore || 0, // 방 세션 누적 점수
+        isDeclarer: !!(room.declarerClientId && p.clientId === room.declarerClientId),
+        isMightyPlayer: !!(
+          room.mightyRevealed &&
+          room.mightyPlayerClientId &&
+          p.clientId === room.mightyPlayerClientId
+        ),
       })),
     };
   }

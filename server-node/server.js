@@ -419,9 +419,13 @@ wss.on("connection", (ws) => {
         broadcast(room, "game_state", rooms.publicState(room));
         send(ws, "your_hand", { cards: result.player.hand });
         if (result.trickResult && result.trickResult.handOver) {
-          finishAndBroadcast(room);
+          // 마지막 트릭: 승리 연출 여유 후 종료
+          setTimeout(() => {
+            const r = rooms.getRoom(room.roomId);
+            if (r) finishAndBroadcast(r);
+          }, TRICK_RESOLVE_DELAY);
         } else {
-          maybeBotPlay(room);
+          maybeBotPlay(room, result.trickResult ? TRICK_RESOLVE_DELAY : undefined);
         }
         break;
       }
@@ -485,8 +489,12 @@ function sendHandsToHumans(room) {
   for (const p of room.players) {
     if (!p.isBot && p.connected && p.ws) {
       if (p.hand) sortHand(p.hand);
+      const n = p.hand ? p.hand.length : 0;
+      if (n > 13) {
+        console.warn("[your_hand] abnormal hand size", p.nickname, n, "status", room.status);
+      }
       send(p.ws, "your_hand", {
-        cards: p.hand,
+        cards: p.hand || [],
         canDealMiss:
           bidding
           && rooms.canDeclareDealMiss(
@@ -663,11 +671,14 @@ function finishAndBroadcast(room) {
 
 // 현재 차례가 봇(또는 끊긴 사람)이면 잠시 후 자동으로 카드를 낸다.
 const BOT_PLAY_DELAY = 700; // ms
-function maybeBotPlay(room) {
+// 트릭 종료 연출(토스트+점수카드 이동) 여유
+const TRICK_RESOLVE_DELAY = 1800; // ms
+function maybeBotPlay(room, delayMs) {
   if (!room || room.status !== "playing") return;
   const player = rooms.currentTurnPlayer(room);
   if (!rooms.isBotControlled(player)) return;
 
+  const wait = delayMs != null ? delayMs : BOT_PLAY_DELAY;
   setTimeout(() => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "playing") return;
@@ -694,11 +705,14 @@ function maybeBotPlay(room) {
     }
     broadcast(r, "game_state", rooms.publicState(r));
     if (result.trickResult && result.trickResult.handOver) {
-      finishAndBroadcast(r);
+      setTimeout(() => {
+        const rr = rooms.getRoom(r.roomId);
+        if (rr) finishAndBroadcast(rr);
+      }, TRICK_RESOLVE_DELAY);
     } else {
-      maybeBotPlay(r);
+      maybeBotPlay(r, result.trickResult ? TRICK_RESOLVE_DELAY : undefined);
     }
-  }, BOT_PLAY_DELAY);
+  }, wait);
 }
 
 // 끊김/재접속 직후 현재 단계에 맞는 봇 행동을 재개
