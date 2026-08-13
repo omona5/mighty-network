@@ -28,6 +28,13 @@ public class NetworkManager : MonoBehaviour
     [Header("좌상단 판 정보 — 비우면 런타임 생성")]
     public GameRuleHud gameRuleHud;
 
+    [Header("셔플/딜 애니 — 비우면 런타임 생성")]
+    public DealAnimator dealAnimator;
+
+    [Header("디버그: 좌석 도착지 마커 (노랑=좌석, 청록=beyond)")]
+    public bool debugSeatMarkers = false;
+    public SeatDebugOverlay seatDebugOverlay;
+
     private WebSocket websocket;
     private string status = "대기 중...";
     private string activeServerUrl = ""; // 실제로 접속 중인 URL
@@ -98,6 +105,15 @@ public class NetworkManager : MonoBehaviour
     private bool kittyPickupStarted = false;
     private string lastElectionAnnounceKey = "";
     private bool choosingToastVisible = false;
+
+    // 시작/재배분: 셔플+딜 애니 동안 손패 표시 보류
+    private CardData[] pendingDealHand = null;
+    private bool pendingDealAnim = false;
+    private DealAnimator.SeatTarget[] dealSeatSnapshot = null;
+    private int[] dealProgressCounts = null;
+    private Coroutine redealCollectRoutine = null;
+    private bool redealCollecting = false;
+
 
     // ---------- 서버와 주고받는 메시지 형식 (JSON) ----------
     // 공통: { "type": ..., "data": {...} }
@@ -203,6 +219,9 @@ public class NetworkManager : MonoBehaviour
         EnsurePlayAnimator();
         EnsureTrickWinAnimator();
         EnsureKittyView();
+        EnsureDealAnimator();
+        debugSeatMarkers = false; // 좌석 도착 디버그 마커 비활성
+        EnsureSeatDebugOverlay();
 
 #if UNITY_EDITOR
         // 에디터 Play 시작마다 이전 방으로 끌려가는 것 방지 (기본)
@@ -394,8 +413,23 @@ public class NetworkManager : MonoBehaviour
 
             case "game_started":
                 gameStarted = true;
+                BeginDealAnimRequest("game_started");
                 Log("[game_started] 게임이 시작되었습니다!");
                 break;
+
+            case "deal_miss":
+            {
+                RequestRedealWithCollect("deal_miss");
+                Log("[deal_miss] 재배분 (패 회수 후 재딜)");
+                break;
+            }
+
+            case "redeal":
+            {
+                RequestRedealWithCollect("redeal");
+                Log("[redeal] 재배분 (패 회수 후 재딜)");
+                break;
+            }
 
             case "your_hand":
             {
@@ -409,10 +443,21 @@ public class NetworkManager : MonoBehaviour
                     Log("[your_hand] 경고: 손패가 비정상적으로 많음 (" + n + ")");
                 myCanDealMiss = (m.data != null && m.data.canDealMiss);
 
+                // 셔플/딜 애니: game_started / deal_miss / redeal 로만 요청됨
+                if (n == 10 && pendingDealAnim)
+                {
+                    pendingDealHand = cards != null ? HandView.SortCards(cards) : null;
+                    if (handView != null && !redealCollecting) handView.Clear();
+                    Log("[your_hand] 딜 애니 대기 — 손패 표시 보류");
+                    if (!redealCollecting)
+                        TryStartDealAnimation();
+                    break;
+                }
+
                 // 입찰→주공 확정: 13장 손패는 바닥패 비행 애니 후에 반영
                 bool deferForKitty = n == 13
                     && currentState != null
-                    && currentState.status == "bidding";
+                    && (currentState.status == "bidding" || currentState.status == "exchanging_kitty");
                 if (!deferForKitty && kittyView != null && kittyView.IsBusy)
                     deferForKitty = true;
                 if (deferForKitty)
@@ -482,15 +527,39 @@ public class NetworkManager : MonoBehaviour
                 GameStateMsg m = JsonUtility.FromJson<GameStateMsg>(json);
                 string prevStatus = lastPhaseStatus;
                 currentState = m.data;
-                // 상대 손패를 먼저 갱신(장수 감소)한 뒤 테이블 애니 시작
-                UpdateOpponentHands(m.data);
-                MaybeStartKittyPickup(prevStatus, m.data);
-                UpdateKittyPile(m.data);
+
+                // your_hand가 먼저 온 경우: 좌석 정보 생긴 뒤 딜 애니 시작
+                if (pendingDealHand != null && pendingDealAnim)
+                    TryStartDealAnimation();
+
+                bool dealing = IsDealInProgress();
+                if (dealing)
+                {
+                    if (dealProgressCounts != null)
+                        RefreshDealProgressHands();
+                    else
+                        UpdateOpponentHandsZeroed(m.data);
+                }
+                else
+                    UpdateOpponentHands(m.data);
+
+                if (!dealing)
+                {
+                    MaybeStartKittyPickup(prevStatus, m.data);
+                    UpdateKittyPile(m.data);
+                }
+                else if (kittyView != null)
+                {
+                    // 딜 전/중에 바닥패·「바닥패」라벨이 먼저 뜨지 않게
+                    kittyView.Clear();
+                }
                 MaybeAnnounceElection(prevStatus, m.data);
                 UpdateChoosingToast(m.data);
-                UpdateTable(m.data);
+                if (!dealing)
+                    UpdateTable(m.data);
                 UpdateGameRuleHud(m.data);
-                RefreshHandPlayability();
+                if (!dealing)
+                    RefreshHandPlayability();
                 if (m.data != null) lastPhaseStatus = m.data.status ?? "";
                 // 새 입찰 라운드면 당선 토스트 키 리셋
                 if (currentState != null && currentState.status == "bidding"
@@ -506,6 +575,9 @@ public class NetworkManager : MonoBehaviour
                     lastTrickResolveKey = "";
                     kittyPickupStarted = false;
                     pendingHandAfterKitty = null;
+                    pendingDealHand = null;
+                    pendingDealAnim = false;
+                    if (dealAnimator != null) dealAnimator.Cancel();
                     lastPhaseStatus = "waiting";
                     lastElectionAnnounceKey = "";
                     choosingToastVisible = false;
@@ -615,6 +687,9 @@ public class NetworkManager : MonoBehaviour
         if (gameRuleHud != null) gameRuleHud.Clear();
         kittyPickupStarted = false;
         pendingHandAfterKitty = null;
+        pendingDealHand = null;
+        pendingDealAnim = false;
+        if (dealAnimator != null) dealAnimator.Cancel();
         lastPhaseStatus = "";
         lastElectionAnnounceKey = "";
         choosingToastVisible = false;
@@ -778,6 +853,8 @@ public class NetworkManager : MonoBehaviour
         myCanDealMiss = false;
         hasPendingPlayStart = false;
         pendingHandAfterKitty = null;
+        pendingDealHand = null;
+        pendingDealAnim = false;
         if (handView != null) handView.Clear();
     }
 
@@ -820,11 +897,493 @@ public class NetworkManager : MonoBehaviour
         kittyView.Configure(prefab, canvas);
     }
 
+    private void BeginDealAnimRequest(string reason)
+    {
+        pendingDealAnim = true;
+        pendingDealHand = null;
+        if (handView != null) handView.Clear();
+        if (tableView != null) tableView.Clear();
+        if (kittyView != null) kittyView.Clear();
+        if (dealAnimator != null && dealAnimator.IsBusy)
+            dealAnimator.Cancel();
+        Log("[deal] 애니 요청 (" + reason + ")");
+    }
+
+    // 딜미스/재배분: 패를 가운데로 모은 뒤 다시 딜
+    private void RequestRedealWithCollect(string reason)
+    {
+        pendingDealAnim = true;
+        if (redealCollecting || redealCollectRoutine != null)
+        {
+            Log("[deal] 회수 애니 진행 중 — " + reason + " 병합");
+            return;
+        }
+        if (dealAnimator != null && dealAnimator.IsBusy)
+            dealAnimator.Cancel();
+        redealCollectRoutine = StartCoroutine(CoRedealCollectThenDeal(reason));
+    }
+
+    private System.Collections.IEnumerator CoRedealCollectThenDeal(string reason)
+    {
+        redealCollecting = true;
+        EnsureDealAnimator();
+
+        DealAnimator.SeatTarget[] seats = BuildDealSeatTargets(currentState);
+        int[] counts = null;
+        if (seats != null)
+        {
+            counts = new int[seats.Length];
+            for (int i = 0; i < seats.Length; i++)
+            {
+                if (seats[i].isSelf)
+                {
+                    counts[i] = myHandCards != null ? myHandCards.Length : 0;
+                    if (counts[i] == 0 && handView != null)
+                        counts[i] = 10; // 폴백
+                }
+                else
+                {
+                    PlayerInfo p = FindPlayerByNickname(seats[i].nickname);
+                    counts[i] = p != null ? Mathf.Max(0, p.handCount) : 10;
+                }
+            }
+        }
+
+        var kittyStarts = new List<Vector3>();
+        if (kittyView != null && kittyView.VisibleCount > 0)
+            kittyView.CollectPileWorldPositions(kittyStarts);
+        else if (currentState != null && currentState.kittyCount > 0)
+        {
+            Vector3 c = kittyView != null
+                ? kittyView.GetPileCenterWorld()
+                : Vector3.zero;
+            for (int i = 0; i < currentState.kittyCount; i++)
+                kittyStarts.Add(c);
+        }
+
+        // 손패는 회수 중 한 장씩 줄어들게 유지 (바닥패·테이블만 즉시 숨김)
+        if (tableView != null) tableView.Clear();
+        if (kittyView != null) kittyView.Clear();
+
+        dealSeatSnapshot = seats;
+        if (counts != null)
+        {
+            dealProgressCounts = new int[counts.Length];
+            for (int i = 0; i < counts.Length; i++)
+                dealProgressCounts[i] = counts[i];
+            RefreshDealProgressHands();
+        }
+
+        Log("[deal] 패 회수 시작 (" + reason + ")");
+        bool collectDone = false;
+        if (dealAnimator != null && seats != null)
+        {
+            dealAnimator.PlayCollectToCenter(
+                seats, counts, kittyStarts, OnCollectCardShot, () => { collectDone = true; });
+            while (!collectDone)
+                yield return null;
+        }
+        else
+            collectDone = true;
+
+        if (handView != null) handView.Clear();
+        if (opponentHandsView != null && currentState != null)
+            UpdateOpponentHandsZeroed(currentState);
+        dealProgressCounts = null;
+        dealSeatSnapshot = null;
+        myHandCards = null;
+        redealCollecting = false;
+        redealCollectRoutine = null;
+        Log("[deal] 패 회수 완료 → 재딜 대기");
+        TryStartDealAnimation();
+    }
+
+    private void OnCollectCardShot(int seatIndex, int cardsRemaining)
+    {
+        if (dealProgressCounts == null) return;
+        if (seatIndex < 0 || seatIndex >= dealProgressCounts.Length) return;
+        dealProgressCounts[seatIndex] = Mathf.Max(0, cardsRemaining);
+        RefreshDealProgressHands();
+    }
+
+    private void EnsureDealAnimator()
+    {
+        if (dealAnimator == null)
+            dealAnimator = GetComponent<DealAnimator>();
+        if (dealAnimator == null)
+            dealAnimator = gameObject.AddComponent<DealAnimator>();
+
+        CardView prefab = handView != null ? handView.cardPrefab : null;
+        if (prefab == null && opponentHandsView != null)
+            prefab = opponentHandsView.cardPrefab;
+        Canvas canvas = FindFirstObjectByType<Canvas>();
+        dealAnimator.Configure(prefab, canvas);
+    }
+
+    private void EnsureSeatDebugOverlay()
+    {
+        if (!debugSeatMarkers)
+        {
+            if (seatDebugOverlay != null) seatDebugOverlay.SetVisible(false);
+            return;
+        }
+        if (seatDebugOverlay == null)
+            seatDebugOverlay = GetComponent<SeatDebugOverlay>();
+        if (seatDebugOverlay == null)
+            seatDebugOverlay = gameObject.AddComponent<SeatDebugOverlay>();
+        Canvas canvas = FindFirstObjectByType<Canvas>();
+        seatDebugOverlay.Configure(canvas);
+        seatDebugOverlay.SetVisible(true);
+        seatDebugOverlay.Refresh();
+    }
+
+    private void TryStartDealAnimation()
+    {
+        EnsureDealAnimator();
+        if (dealAnimator == null || dealAnimator.IsBusy) return;
+        if (pendingDealHand == null || !pendingDealAnim) return;
+        if (currentState == null || currentState.players == null || currentState.players.Length == 0)
+            return;
+
+        pendingDealAnim = false;
+        if (handView != null) handView.Clear();
+        if (tableView != null) tableView.Clear();
+        if (kittyView != null) kittyView.Clear();
+
+        // 닉/좌석만 먼저 (손패 0장) → 착지마다 뒷면 추가
+        dealSeatSnapshot = BuildDealSeatTargets(currentState);
+        if (dealSeatSnapshot == null || dealSeatSnapshot.Length == 0)
+        {
+            OnDealAnimComplete();
+            return;
+        }
+        dealProgressCounts = new int[dealSeatSnapshot.Length];
+        RefreshDealProgressHands();
+        Canvas.ForceUpdateCanvases();
+
+        Log("[deal] 셔플/딜 애니 시작 (순차 1장씩)");
+        dealAnimator.Play(BuildDealSeatTargets, OnDealCardLanded, OnDealAnimComplete);
+    }
+
+    private void OnDealCardLanded(int seatIndex, int cardsAtSeat)
+    {
+        if (dealProgressCounts == null) return;
+        if (seatIndex < 0 || seatIndex >= dealProgressCounts.Length) return;
+        dealProgressCounts[seatIndex] = cardsAtSeat;
+        RefreshDealProgressHands();
+    }
+
+    // 딜 중: 각 좌석 handCount만큼 뒷면 표시 (나는 handView)
+    private void RefreshDealProgressHands()
+    {
+        if (dealSeatSnapshot == null || dealProgressCounts == null) return;
+        EnsureOpponentHandsView();
+
+        int selfCount = dealProgressCounts.Length > 0 ? dealProgressCounts[0] : 0;
+        if (handView != null)
+        {
+            if (selfCount <= 0) handView.Clear();
+            else handView.ShowFaceDown(selfCount);
+        }
+
+        if (opponentHandsView == null || currentState == null) return;
+        if (opponentHandsView.cardPrefab == null && handView != null)
+            opponentHandsView.cardPrefab = handView.cardPrefab;
+
+        var opp = new List<OpponentHandsView.SeatInfo>();
+        for (int i = 1; i < dealSeatSnapshot.Length; i++)
+        {
+            DealAnimator.SeatTarget t = dealSeatSnapshot[i];
+            PlayerInfo p = FindPlayerByNickname(t.nickname);
+            OpponentHandsView.SeatInfo info = p != null
+                ? ToSeatInfo(p, currentState)
+                : new OpponentHandsView.SeatInfo { nickname = t.nickname };
+            info.handCount = dealProgressCounts[i];
+            opp.Add(info);
+        }
+        opponentHandsView.Show(opp.ToArray());
+
+        if (dealSeatSnapshot.Length > 0)
+        {
+            PlayerInfo me = FindPlayerByNickname(dealSeatSnapshot[0].nickname);
+            if (me == null && currentState.players != null)
+            {
+                for (int i = 0; i < currentState.players.Length; i++)
+                {
+                    if (currentState.players[i] != null
+                        && currentState.players[i].clientId == myClientId)
+                    {
+                        me = currentState.players[i];
+                        break;
+                    }
+                }
+            }
+            if (me != null)
+            {
+                OpponentHandsView.SeatInfo selfInfo = ToSeatInfo(me, currentState);
+                selfInfo.handCount = selfCount;
+                opponentHandsView.ShowSelf(selfInfo);
+            }
+        }
+    }
+
+    private PlayerInfo FindPlayerByNickname(string nick)
+    {
+        if (currentState == null || currentState.players == null || string.IsNullOrEmpty(nick))
+            return null;
+        for (int i = 0; i < currentState.players.Length; i++)
+        {
+            PlayerInfo p = currentState.players[i];
+            if (p != null && p.nickname == nick) return p;
+        }
+        return null;
+    }
+
+    private void OnDealAnimComplete()
+    {
+        dealProgressCounts = null;
+        dealSeatSnapshot = null;
+        if (pendingDealHand != null)
+        {
+            ApplyMyHand(pendingDealHand);
+            pendingDealHand = null;
+        }
+        pendingDealAnim = false;
+
+        // 딜에서 펼친 바닥패를 그대로 인수 (재생성으로 위로 점프하던 문제 해결)
+        EnsureKittyView();
+        if (dealAnimator != null && kittyView != null)
+        {
+            List<CardView> kittyCards = dealAnimator.TakeKittyCards();
+            if (kittyCards != null && kittyCards.Count > 0)
+                kittyView.AdoptFaceDown(kittyCards);
+            else if (currentState != null)
+                UpdateKittyPile(currentState);
+        }
+        else if (currentState != null)
+            UpdateKittyPile(currentState);
+
+        if (currentState != null)
+        {
+            UpdateOpponentHands(currentState);
+            RefreshHandPlayability();
+        }
+        Log("[deal] 딜 애니 완료 — 손패 공개");
+    }
+
+    private DealAnimator.SeatTarget[] BuildDealSeatTargets()
+    {
+        return BuildDealSeatTargets(currentState);
+    }
+
+    private DealAnimator.SeatTarget[] BuildDealSeatTargets(GameState state)
+    {
+        if (state == null || state.players == null) return null;
+
+        Vector2 selfSize = handView != null
+            ? handView.HandCardSize
+            : new Vector2(CardSpriteAtlas.DisplayWidth, CardSpriteAtlas.DisplayHeight);
+        Vector2 oppSize = new Vector2(selfSize.x * 0.5f, selfSize.y * 0.5f);
+
+        EnsureOpponentHandsView();
+        Canvas.ForceUpdateCanvases();
+
+        int myIndex = IndexOfPlayer(myClientId, null);
+        if (myIndex < 0) myIndex = 0;
+
+        var list = new List<DealAnimator.SeatTarget>();
+        int n = state.players.Length;
+        for (int offset = 0; offset < n; offset++)
+        {
+            PlayerInfo p = state.players[(myIndex + offset) % n];
+            if (p == null) continue;
+
+            Vector2 anchor;
+            Vector3 selfWorld;
+            int rel;
+            if (!TryResolveSeatAnchor(p.nickname, p.clientId, out anchor, out selfWorld, out rel))
+                continue;
+
+            bool isSelf = rel == 0;
+            list.Add(new DealAnimator.SeatTarget
+            {
+                nickname = p.nickname,
+                normalizedAnchor = anchor,
+                selfWorldPos = selfWorld,
+                endSize = isSelf ? selfSize * 0.85f : oppSize,
+                isSelf = isSelf,
+            });
+        }
+
+        if (list.Count > 0)
+        {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            sb.Append("[deal] 좌석앵커 ");
+            for (int i = 0; i < list.Count; i++)
+            {
+                DealAnimator.SeatTarget t = list[i];
+                sb.Append(t.nickname).Append('(')
+                    .Append(t.normalizedAnchor.x.ToString("F2")).Append(',')
+                    .Append(t.normalizedAnchor.y.ToString("F2")).Append(") ");
+            }
+            Log(sb.ToString());
+        }
+        return list.ToArray();
+    }
+
+    private int IndexOfPlayer(string clientId, string playerNickname)
+    {
+        if (currentState == null || currentState.players == null) return -1;
+        for (int i = 0; i < currentState.players.Length; i++)
+        {
+            PlayerInfo p = currentState.players[i];
+            if (p == null) continue;
+            if (!string.IsNullOrEmpty(clientId) && p.clientId == clientId) return i;
+            if (!string.IsNullOrEmpty(playerNickname) && p.nickname == playerNickname) return i;
+        }
+        return -1;
+    }
+
+    // 시계방향: 0=나, 1=왼, 2=상좌, 3=상우, 4=오 — 정규화 앵커 반환 (비행은 로컬 변환)
+    private bool TryResolveSeatAnchor(
+        string playerNickname,
+        string playerClientId,
+        out Vector2 normalizedAnchor,
+        out Vector3 selfWorldPos,
+        out int relativeFromSelf)
+    {
+        normalizedAnchor = OpponentHandsView.SelfHandAnchor;
+        selfWorldPos = Vector3.zero;
+        relativeFromSelf = -1;
+        if (currentState == null || currentState.players == null) return false;
+
+        int myIndex = -1;
+        int targetIndex = -1;
+        for (int i = 0; i < currentState.players.Length; i++)
+        {
+            PlayerInfo p = currentState.players[i];
+            if (p == null) continue;
+            if (myIndex < 0 && !string.IsNullOrEmpty(myClientId) && p.clientId == myClientId)
+                myIndex = i;
+            if (targetIndex < 0)
+            {
+                if (!string.IsNullOrEmpty(playerClientId) && p.clientId == playerClientId)
+                    targetIndex = i;
+                else if (!string.IsNullOrEmpty(playerNickname) && p.nickname == playerNickname)
+                    targetIndex = i;
+            }
+        }
+        if (myIndex < 0) myIndex = 0;
+        if (targetIndex < 0) return false;
+
+        int n = currentState.players.Length;
+        relativeFromSelf = (targetIndex - myIndex + n) % n;
+
+        if (relativeFromSelf == 0)
+        {
+            normalizedAnchor = OpponentHandsView.SelfHandAnchor;
+            selfWorldPos = handView != null
+                ? handView.GetLayoutCenterWorldPosition()
+                : Vector3.zero;
+            return true;
+        }
+
+        normalizedAnchor = OpponentHandsView.GetRelativeSeatAnchor(relativeFromSelf - 1);
+        return true;
+    }
+
+    // 레거시 월드 해석 — 가능하면 앵커→같은 Canvas 로컬로 변환
+    private bool TryResolveSeatWorld(
+        string playerNickname, string playerClientId, out Vector3 worldPos, out int relativeFromSelf)
+    {
+        worldPos = Vector3.zero;
+        Vector2 anchor;
+        Vector3 selfWorld;
+        if (!TryResolveSeatAnchor(playerNickname, playerClientId, out anchor, out selfWorld, out relativeFromSelf))
+            return false;
+
+        if (relativeFromSelf == 0)
+        {
+            worldPos = selfWorld;
+            return true;
+        }
+
+        EnsureOpponentHandsView();
+        RectTransform space = null;
+        if (opponentHandsView != null && opponentHandsView.root != null)
+            space = opponentHandsView.root;
+        else
+        {
+            Canvas canvas = FindFirstObjectByType<Canvas>();
+            if (canvas != null) space = canvas.transform as RectTransform;
+        }
+        if (space == null) return false;
+
+        Vector2 ap = OpponentHandsView.NormalizedToAnchored(space, anchor);
+        worldPos = space.TransformPoint(new Vector3(ap.x, ap.y, 0f));
+        return true;
+    }
+
+    private void UpdateOpponentHandsZeroed(GameState state)
+    {
+        if (state == null || state.players == null) return;
+        EnsureOpponentHandsView();
+        if (opponentHandsView == null) return;
+
+        // handCount만 0으로 복사해 닉 패널/좌석만 유지
+        var copy = new GameState
+        {
+            status = state.status,
+            currentTurnClientId = state.currentTurnClientId,
+            declarerClientId = state.declarerClientId,
+            mightyRevealed = state.mightyRevealed,
+            mightyPlayerNickname = state.mightyPlayerNickname,
+            players = new PlayerInfo[state.players.Length],
+        };
+        for (int i = 0; i < state.players.Length; i++)
+        {
+            PlayerInfo src = state.players[i];
+            if (src == null) continue;
+            copy.players[i] = new PlayerInfo
+            {
+                clientId = src.clientId,
+                nickname = src.nickname,
+                isReady = src.isReady,
+                connected = src.connected,
+                isHost = src.isHost,
+                isBot = src.isBot,
+                botControlled = src.botControlled,
+                handCount = 0,
+                wonCount = src.wonCount,
+                trickCount = src.trickCount,
+                score = src.score,
+                sessionScore = src.sessionScore,
+                isDeclarer = src.isDeclarer,
+                isMightyPlayer = src.isMightyPlayer,
+            };
+        }
+        UpdateOpponentHands(copy);
+    }
+
+    private bool IsDealInProgress()
+    {
+        return pendingDealAnim
+            || pendingDealHand != null
+            || redealCollecting
+            || (dealAnimator != null && dealAnimator.IsBusy);
+    }
+
     private void UpdateKittyPile(GameState state)
     {
         EnsureKittyView();
         if (kittyView == null) return;
         if (kittyView.IsBusy || kittyPickupStarted) return;
+        // 셔플/딜 끝나기 전에는 바닥패(및 라벨) 숨김
+        if (IsDealInProgress())
+        {
+            kittyView.Clear();
+            return;
+        }
 
         if (state != null && state.status == "bidding" && state.kittyCount > 0)
         {
@@ -867,22 +1426,43 @@ public class NetworkManager : MonoBehaviour
         kittyView.FlyToTarget(target, OnKittyPickupComplete);
     }
 
+    private RectTransform GetSeatSpaceRect()
+    {
+        // 딜 비행/디버그 마커와 동일한 Canvas 좌표계 사용
+        Canvas canvas = FindFirstObjectByType<Canvas>();
+        if (canvas != null)
+        {
+            RectTransform crt = canvas.transform as RectTransform;
+            if (crt != null) return crt;
+        }
+        EnsureOpponentHandsView();
+        if (opponentHandsView != null && opponentHandsView.root != null)
+            return opponentHandsView.root;
+        return null;
+    }
+
     private Vector3 ResolveKittyPickupTarget(GameState state)
     {
         Vector3 from = kittyView != null ? kittyView.GetPileCenterWorld() : Vector3.zero;
-        Vector3 seat;
 
-        if (state != null && state.declarerClientId == myClientId && handView != null)
-            seat = handView.GetLayoutCenterWorldPosition();
-        else
-        {
-            string nick = state != null ? state.declarerNickname : null;
-            if (string.IsNullOrEmpty(nick) || opponentHandsView == null
-                || !opponentHandsView.TryGetSeatWorldPosition(nick, out seat))
-                return from;
-        }
+        string nick = state != null ? state.declarerNickname : null;
+        string cid = state != null ? state.declarerClientId : null;
+        Vector2 seatAnchor;
+        Vector3 selfWorld;
+        int rel;
+        if (!TryResolveSeatAnchor(nick, cid, out seatAnchor, out selfWorld, out rel))
+            return from;
 
-        return OpponentHandsView.BeyondSeatWorld(from, seat, 2.7f);
+        RectTransform space = GetSeatSpaceRect();
+        if (space == null)
+            return OpponentHandsView.BeyondSeatWorld(from, selfWorld.sqrMagnitude > 0.01f ? selfWorld : from, 2.7f);
+
+        Vector2 fromAp = OpponentHandsView.WorldToAnchored(space, from);
+        Vector2 seatAp = rel == 0 && selfWorld.sqrMagnitude > 0.01f
+            ? OpponentHandsView.WorldToAnchored(space, selfWorld)
+            : OpponentHandsView.NormalizedToAnchored(space, seatAnchor);
+        Vector2 beyondAp = OpponentHandsView.BeyondAnchored(fromAp, seatAp, 2.7f);
+        return space.TransformPoint(new Vector3(beyondAp.x, beyondAp.y, 0f));
     }
 
     private void OnKittyPickupComplete()
@@ -1185,8 +1765,8 @@ public class NetworkManager : MonoBehaviour
             else
             {
                 startSize = tableSize;
-                if (opponentHandsView == null
-                    || !opponentHandsView.TryGetSeatWorldPosition(who, out startPos))
+                int rel;
+                if (!TryResolveSeatWorld(who, null, out startPos, out rel))
                 {
                     startPos = destCardRt.position + new Vector3(0f, 250f, 0f);
                     Canvas canvas = FindFirstObjectByType<Canvas>();
@@ -1244,23 +1824,48 @@ public class NetworkManager : MonoBehaviour
             ? tableView.GetLayoutCenterWorldPosition()
             : Vector3.zero;
 
-        Vector3 seatWorld;
-        if (opponentHandsView == null
-            || !opponentHandsView.TryGetSeatWorldPosition(state.lastTrickWinnerNickname, out seatWorld))
+        Vector2 seatAnchor;
+        Vector3 selfWorld;
+        int rel;
+        if (!TryResolveSeatAnchor(
+                state.lastTrickWinnerNickname, null, out seatAnchor, out selfWorld, out rel))
         {
-            // 내가 승자면 Self 좌석
-            if (!string.IsNullOrEmpty(nickname)
-                && state.lastTrickWinnerNickname == nickname
-                && handView != null)
-                seatWorld = handView.GetLayoutCenterWorldPosition();
-            else
-                seatWorld = centerWorld + new Vector3(0f, -200f, 0f);
+            seatAnchor = OpponentHandsView.SelfHandAnchor;
+            rel = 0;
+            if (handView != null)
+                selfWorld = handView.GetLayoutCenterWorldPosition();
         }
 
-        Vector3 winnerWorld = OpponentHandsView.BeyondSeatWorld(centerWorld, seatWorld, 2.7f);
+        // 점수패 비행: Canvas 로컬 앵커 공간에서 beyond 계산 → 월드로 (Y 붕괴 방지)
+        RectTransform space = GetSeatSpaceRect();
+        if (space == null)
+        {
+            Log("[trick] seat space 없음 — 폴백");
+            Vector3 seatWorld = rel == 0 && selfWorld.sqrMagnitude > 0.01f
+                ? selfWorld
+                : centerWorld + new Vector3(0f, -200f, 0f);
+            Vector3 winnerWorldFallback = OpponentHandsView.BeyondSeatWorld(centerWorld, seatWorld, 2.7f);
+            trickWinAnimator.Play(
+                state.lastTrickWinnerNickname,
+                pointCards,
+                centerWorld,
+                winnerWorldFallback,
+                tableView,
+                null);
+            return;
+        }
 
-        Log("[trick] " + state.lastTrickWinnerNickname + " 승리! 점수카드 "
-            + pointCards.Count + "장 → 화면 밖으로 이동");
+        Vector2 centerAp = OpponentHandsView.WorldToAnchored(space, centerWorld);
+        Vector2 seatAp = rel == 0 && selfWorld.sqrMagnitude > 0.01f
+            ? OpponentHandsView.WorldToAnchored(space, selfWorld)
+            : OpponentHandsView.NormalizedToAnchored(space, seatAnchor);
+
+        Vector2 beyondAp = OpponentHandsView.BeyondAnchored(centerAp, seatAp, 2.7f);
+        Vector3 winnerWorld = space.TransformPoint(new Vector3(beyondAp.x, beyondAp.y, 0f));
+
+        Log("[trick] " + state.lastTrickWinnerNickname + " 승리(rel=" + rel
+            + " anchor=" + seatAnchor.x.ToString("F2") + "," + seatAnchor.y.ToString("F2")
+            + ") 점수카드 " + pointCards.Count + "장 → 화면 밖으로 이동");
         trickWinAnimator.Play(
             state.lastTrickWinnerNickname,
             pointCards,
@@ -1837,6 +2442,15 @@ public class NetworkManager : MonoBehaviour
     {
         GUILayout.Label("입찰 단계");
         if (currentState == null) return;
+
+        bool dealing = (dealAnimator != null && dealAnimator.IsBusy)
+            || pendingDealHand != null
+            || pendingDealAnim;
+        if (dealing)
+        {
+            GUILayout.Label("카드를 섞고 나누는 중...");
+            return;
+        }
 
         if (currentState.highestBid != null)
         {

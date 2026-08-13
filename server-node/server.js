@@ -513,6 +513,8 @@ function sendHandsToHumans(room) {
 function redealAndRestartBidding(room) {
   rooms.dealCards(room);
   rooms.startBidding(room);
+  // 클라이언트 셔플/딜 애니 트리거 (pass_bid의 your_hand 재전송과 구분)
+  broadcast(room, "redeal", { reason: "redeal" });
   sendHandsToHumans(room);
   broadcast(room, "game_state", rooms.publicState(room));
   maybeBotBid(room);

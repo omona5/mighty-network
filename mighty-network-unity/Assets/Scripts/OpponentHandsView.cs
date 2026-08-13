@@ -31,14 +31,78 @@ public class OpponentHandsView : MonoBehaviour
         CardSpriteAtlas.DisplayHeight * 0.5f);
     private const float CardOverlap = 22f;
 
-    // 상대 4석 앵커 (Canvas 정규화 좌표). 나=하단 손패 가정.
+    // 상대 4석 앵커 (Canvas 정규화 0~1). 나=하단.
+    // Y를 좌·우(중) / 상단으로 명확히 분리.
     private static readonly Vector2[] SeatAnchors =
     {
-        new Vector2(0.07f, 0.48f), // +1 왼쪽
+        new Vector2(0.08f, 0.52f), // +1 왼쪽
         new Vector2(0.28f, 0.90f), // +2 상단 왼쪽
         new Vector2(0.72f, 0.90f), // +3 상단 오른쪽
-        new Vector2(0.93f, 0.48f), // +4 오른쪽
+        new Vector2(0.92f, 0.52f), // +4 오른쪽
     };
+
+    public static Vector2 SelfHandAnchor = new Vector2(0.5f, 0.14f);
+
+    // 딜/비행용: 시계방향 상대 좌석 정규화 앵커 (인덱스 0 = 내 다음)
+    public static Vector2 GetRelativeSeatAnchor(int relativeIndex)
+    {
+        if (relativeIndex < 0 || relativeIndex >= SeatAnchors.Length)
+            return new Vector2(0.5f, 0.5f);
+        return SeatAnchors[relativeIndex];
+    }
+
+    // stretch 부모(앵커 풀스크린) 기준: 정규화 → 중앙 피벗 자식의 anchoredPosition
+    // CanvasScaler/월드좌표 혼선으로 Y가 뭉개지는 문제를 피하기 위함.
+    public static Vector2 NormalizedToAnchored(RectTransform stretchParent, Vector2 normalized)
+    {
+        if (stretchParent == null) return Vector2.zero;
+        Canvas.ForceUpdateCanvases();
+        Rect r = stretchParent.rect;
+        if (r.width < 1f || r.height < 1f)
+        {
+            // 레이아웃 전: 스크린 기준으로라도 Y 분리
+            return new Vector2(
+                (normalized.x - 0.5f) * Screen.width,
+                (normalized.y - 0.5f) * Screen.height);
+        }
+        return new Vector2(
+            (normalized.x - 0.5f) * r.width,
+            (normalized.y - 0.5f) * r.height);
+    }
+
+    public static Vector2 WorldToAnchored(RectTransform stretchParent, Vector3 worldPos)
+    {
+        if (stretchParent == null) return Vector2.zero;
+        Vector3 local = stretchParent.InverseTransformPoint(worldPos);
+        return new Vector2(local.x, local.y);
+    }
+
+    public static Vector2 BeyondAnchored(Vector2 from, Vector2 seat, float overshoot = 2.6f)
+    {
+        Vector2 delta = seat - from;
+        if (delta.sqrMagnitude < 100f)
+            return seat + new Vector2(0f, -600f);
+        return Vector2.LerpUnclamped(from, seat, overshoot);
+    }
+
+    // 정규화 앵커 → 월드 (레거시/디버그용). 비행은 NormalizedToAnchored 권장.
+    public bool TryGetAnchorWorldPosition(Vector2 normalizedAnchor, out Vector3 worldPos)
+    {
+        worldPos = Vector3.zero;
+        EnsureRoot();
+        if (root == null) return false;
+        Canvas.ForceUpdateCanvases();
+        Vector2 ap = NormalizedToAnchored(root, normalizedAnchor);
+        worldPos = root.TransformPoint(new Vector3(ap.x, ap.y, 0f));
+        return true;
+    }
+
+    public bool TryGetRelativeSeatWorldPosition(int relativeFromSelf, out Vector3 worldPos)
+    {
+        worldPos = Vector3.zero;
+        if (relativeFromSelf <= 0) return false;
+        return TryGetAnchorWorldPosition(GetRelativeSeatAnchor(relativeFromSelf - 1), out worldPos);
+    }
 
     private readonly List<GameObject> panels = new List<GameObject>();
     private readonly Dictionary<string, RectTransform> seatByNickname =

@@ -1031,3 +1031,124 @@
 
 - **요청**: 여기까지 커밋 푸시.
 - **포함**: kitty/play UX, 테이블 애니, 손패 아래 닉·점수, 좌상단 주공팀·공약 HUD, 카드 시트 동기화, KittyView 등.
+
+## 2026-08-13 23:03 (UTC+9)
+
+- **요청**: 서버 재기동 + 최근 작업 요약.
+- **서버**: `server-node` `node server.js` → ws/http `localhost:3000`.
+- **최근(8/9)**: kitty/플레이 UX·테이블 애니·손패 아래 닉·좌상단 주공팀/공약 HUD 후 `3cbdb4c` 푸시. 이후 새 작업 없음.
+
+## 2026-08-13 23:14 (UTC+9)
+
+- **요청**: Unity+Node 딜/핸드 분배·카드 애니 패턴 탐색 리포트.
+- **작업 디렉터리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **조사**: `server.js`/`RoomManager.js`/`Deck.js`, `NetworkManager.cs`, `HandView`/`OpponentHandsView`/`CardPlayAnimator`/`TrickWinAnimator`/`KittyView`.
+- **결과**: 딜 시점=start_game·redeal(딜미스/바닥패스); 클라 즉시 ShowHand/Show(handCount); 딜 애니 스텁 없음; 훅 권장=`game_started`/bidding 진입 + kitty식 pendingHand.
+
+## 2026-08-13 23:19 (UTC+9)
+
+- **요청**: 게임 시작/재시작 시 셔플+딜 애니.
+- **추가**: `DealAnimator.cs` (중앙 셔플 → 5좌석 라운드로빈 뒷면 딜).
+- **연동**: `NetworkManager` — `game_started`/`deal_miss`/재배분 `your_hand`(10장)에서 손패 보류 후 애니, 완료 시 공개. 애니 중 상대 handCount=0·키티/입찰 UI 대기.
+- **확인**: Unity Play → 게임 시작 또는 딜미스/전원패스 재배분.
+
+## 2026-08-13 23:24 (UTC+9)
+
+- **버그**: 딜 애니가 한 명(한 지점)으로만 날아감.
+- **원인**: 상대 좌석을 닉네임 패널 `position` 조회로만 잡아 실패 시 전부 (0,0) 또는 동일 좌표.
+- **수정**: `OpponentHandsView.TryGetAnchorWorldPosition`으로 고정 4석 앵커→월드 변환. 셔플 직후 `BuildDealSeatTargets` 재계산. 나=손패 중앙, 상대=좌/상좌/상우/우.
+
+## 2026-08-13 23:26 (UTC+9)
+
+- **버그**: 게임 시작 직후(딜 전) 「바닥패」 텍스트가 보임.
+- **원인**: `game_state`가 `your_hand`/딜 애니보다 먼저 오면 `UpdateKittyPile`이 즉시 표시.
+- **수정**: `IsDealInProgress`(pending/busy)면 kitty Clear·표시 스킵. 딜 완료 후에만 바닥패 표시.
+
+## 2026-08-13 23:29 (UTC+9)
+
+- **버그**: 딜/점수패 비행이 가운데·왼쪽·오른쪽만 (상단 2석이 좌우와 중복).
+- **원인**: 좌석 좌표를 패널/`root.rect` TransformPoint로 구해 Y가 붕괴.
+- **수정**: Canvas `GetWorldCorners` 보간으로 5앵커 좌표. `TryResolveSeatWorld`(플레이어 시계방향 인덱스)로 딜·트릭승·키티·제출 시작점 통일.
+
+## 2026-08-13 23:37 (UTC+9)
+
+- **리뷰/수정**: 비행 목적지 Y가 동일해 보이던 문제.
+- **원인**: Screen Space Overlay + CanvasScaler 환경에서 `transform.position`(월드)로 비행 → Y가 뭉개지거나 좌우만 구분됨.
+- **수정**: 좌석은 정규화 앵커(왼 0.52 / 상 0.90 / 오 0.52 / 나 0.14). 비행은 `flyLayer.anchoredPosition` 로컬 보간. 딜·트릭승·키티 동일.
+
+## 2026-08-13 23:39 (UTC+9)
+
+- **요청**: 애니 도착지 디버그 표시.
+- **추가**: `SeatDebugOverlay` — 노란 십자=좌석(나/왼/상좌/상우/오+좌표), 청록=beyond(화면 밖이면 가장자리 클램프). `NetworkManager.debugSeatMarkers=true` 기본 ON.
+
+## 2026-08-13 23:43 (UTC+9)
+
+- **관찰**: 노란 마커(좌석)는 5곳 정상, 카드는 좌·우 중석으로만 비행.
+- **원인 추정**: DealFlyLayer가 DealAnimatorRoot 하위라 활성 직후 rect/좌표가 마커(Canvas 직속)와 달랐음.
+- **수정**: DealFlyLayer를 Canvas 직속으로. 비행 전 1프레임 대기. 실제 endLocal에 **마젠타 점+닉** 표시 + Console `[DealFly]` 로그.
+- **확인**: 노란 마커와 마젠타 FLY 점이 겹치는지, 카드가 그쪽으로 가는지.
+
+## 2026-08-13 23:46 (UTC+9)
+
+- **원인(확정)**: `CardView.ApplyRaiseAfterLayout`가 `willRenderCanvases`마다 `anchoredPosition.y`를 0(또는 raise 36)으로 강제 → 비행 카드가 수평만 이동.
+- **수정**: `SetFlightMode(true)`로 비행 중 raise 보정 비활성. Deal/Trick/Kitty/CardPlay/덱 셔플 카드에 적용.
+
+## 2026-08-13 23:50 (UTC+9)
+
+- **요청**: 딜을 1P부터 한 장씩 순회 + 착지 시 뒷면 손패 1장씩 생성.
+- **수정**: `DealAnimator` 순차 yield 딜. `OnDealCardLanded` → `ShowFaceDown`/상대 handCount 증가. 완료 시 내 손패 앞면 공개.
+
+## 2026-08-13 23:52 (UTC+9)
+
+- **요청**: 딜 중 중앙 더미 흔들림, 남은 더미→바닥패 펼침, 딜 속도 ~3배.
+- **수정**: `flyDuration` 0.07 / `dealGap` 0.005. `CoShakeDeckLoop` 딜 중 유지. `TrimDeckTowardRemain`으로 더미 감소 후 `CoSpreadKittyFromDeck(3)`.
+
+## 2026-08-13 23:54 (UTC+9)
+
+- **요청**: 바닥패 텍스트 제거(위치 밀림), 좌석 디버그 마커 OFF.
+- **수정**: `KittyView`/`DealAnimator` hint 비표시. `debugSeatMarkers=false`.
+
+## 2026-08-13 23:59 (UTC+9)
+
+- **버그**: 바닥패 3장 펼침 후 살짝 위로 점프.
+- **원인**: DealDeck y=36 → KittyPile y=40 교체 + Kitty HLG 높이 240.
+- **수정**: DealDeck y=40으로 통일, Kitty pile 높이를 카드 크기에 맞춤.
+
+## 2026-08-14 00:04 (UTC+9)
+
+- **버그**: 바닥패 펼침 종료 후에도 위로 점프.
+- **원인**: ClearDeck 후 KittyView가 HLG로 재생성 + CardView raise Y 보정.
+- **수정**: 펼친 카드를 `AdoptFaceDown`(worldPositionStays)로 인계. Kitty HLG 제거·절대배치. FlightMode 유지.
+
+## 2026-08-14 00:09 (UTC+9)
+
+- **버그**: 딜 애니가 입장/패스/공약 때마다 반복 재생.
+- **원인**: `pass_bid` 등도 `your_hand`(10장) 재전송 → 클라이언트가 재배분(`isRedeal`)으로 오인.
+- **수정**: 애니는 `game_started`/`deal_miss`/`redeal`일 때만. 서버 `redealAndRestartBidding`에 `redeal` 브로드캐스트 추가. 서버 재기동.
+
+## 2026-08-14 00:09 (UTC+9)
+
+- **요청**: 딜미스 시 패를 가운데로 모은 뒤 재배분 + 테스트용 딜미스 버튼/서버 강제 허용.
+- **클라이언트**: `DealAnimator.PlayCollectToCenter` 회수 애니. `NetworkManager`는 `deal_miss`/`redeal`에서 회수→클리어→재딜. `forceDealMissButton=true`로 입찰 HUD에 「딜미스 [테스트 강제]」 표시.
+- **서버**: `RoomManager.FORCE_DEAL_MISS_FOR_TEST=true` (조건/기행 무시 허용). 서버 :3000 재기동.
+- **테스트 후**: `FORCE_DEAL_MISS_FOR_TEST=false`, `forceDealMissButton=false`로 되돌릴 것.
+
+## 2026-08-14 00:09 (UTC+9)
+
+- **수정**: `RoomManager.js`에서 클래스 본문에 잘못 넣은 `const FORCE_DEAL_MISS_FOR_TEST` → 모듈 상단 상수로 이동 (SyntaxError 해결). 서버 재기동 확인.
+
+## 2026-08-14 00:12 (UTC+9)
+
+- **요청**: 딜미스 회수 애니가 좌석별 순차가 아니라, 손패가 한 장씩 줄면서 5명이 라운드마다 동시에 한 장씩 쏘도록.
+- **수정**: `DealAnimator.CoCollectToCenter` — 라운드 루프 + 좌석 병렬 `CoFlyOneLocalThenAppend`, `onCardCollected` 콜백. `NetworkManager`는 회수 중 `dealProgressCounts`로 손패 감소 표시.
+
+## 2026-08-14 00:15 (UTC+9)
+
+- **요청**: 딜미스 회수 시에도 가운데 모이는 패 더미가 보이고, 회수 애니 끝난 뒤 흔들리는 더미가 유지되도록.
+- **수정**: 카드 발사 즉시 `AppendDeckCardVisual`. 회수 종료 후 `BeginIdleDeckShake`로 더미 유지. `CoPlay`는 모인 더미를 재사용해 셔플·재딜.
+
+## 2026-08-14 00:17 (UTC+9)
+
+- **요청**: 강제 딜미스 테스트 조건 제거.
+- **서버**: `FORCE_DEAL_MISS_FOR_TEST` 및 관련 분기 삭제 → 정상 점수/기행 조건만 허용. 서버 재기동.
+- **클라**: `forceDealMissButton` 제거, 딜미스 버튼은 `myCanDealMiss`일 때만 표시.

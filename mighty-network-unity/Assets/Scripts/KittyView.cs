@@ -38,15 +38,8 @@ public class KittyView : MonoBehaviour
             pileRoot.anchorMax = new Vector2(0.5f, 0.5f);
             pileRoot.pivot = new Vector2(0.5f, 0.5f);
             pileRoot.anchoredPosition = new Vector2(0f, 40f);
-            pileRoot.sizeDelta = new Vector2(400f, 240f);
-
-            HorizontalLayoutGroup hlg = go.AddComponent<HorizontalLayoutGroup>();
-            hlg.childAlignment = TextAnchor.MiddleCenter;
-            hlg.spacing = 10f;
-            hlg.childForceExpandWidth = false;
-            hlg.childForceExpandHeight = false;
-            hlg.childControlWidth = false;
-            hlg.childControlHeight = false;
+            pileRoot.sizeDelta = new Vector2(480f, CardSpriteAtlas.DisplayHeight * 0.75f + 8f);
+            // HLG 사용 안 함 — 딜 펼침과 동일 절대좌표 (전환 시 점프 방지)
 
             GameObject hintGo = new GameObject("Hint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
             hintGo.transform.SetParent(pileRoot, false);
@@ -63,6 +56,14 @@ public class KittyView : MonoBehaviour
             hintText.color = new Color(0.9f, 0.9f, 0.85f, 0.9f);
             hintText.text = "바닥패";
             hintText.raycastTarget = false;
+            hintGo.SetActive(false);
+        }
+        else
+        {
+            // 기존 세션에 HLG가 남아 있으면 제거
+            HorizontalLayoutGroup hlg = pileRoot.GetComponent<HorizontalLayoutGroup>();
+            if (hlg != null) Destroy(hlg);
+            pileRoot.anchoredPosition = new Vector2(0f, 40f);
         }
 
         if (flyLayer == null)
@@ -85,32 +86,69 @@ public class KittyView : MonoBehaviour
         if (count <= 0 || cardPrefab == null || pileRoot == null) return;
 
         if (hintText != null)
-        {
-            hintText.gameObject.SetActive(true);
-            hintText.text = "바닥패 " + count;
-        }
+            hintText.gameObject.SetActive(false);
+
+        HorizontalLayoutGroup hlg = pileRoot.GetComponent<HorizontalLayoutGroup>();
+        if (hlg != null) Destroy(hlg);
+
+        pileRoot.anchoredPosition = new Vector2(0f, 40f);
+        pileRoot.sizeDelta = new Vector2(480f, CardSpriteAtlas.DisplayHeight * 0.75f + 8f);
 
         float w = CardSpriteAtlas.DisplayWidth * 0.75f;
         float h = CardSpriteAtlas.DisplayHeight * 0.75f;
+        float spacing = w + 10f;
+        float startX = -((count - 1) * spacing) * 0.5f;
+
         for (int i = 0; i < count; i++)
         {
             CardView view = Instantiate(cardPrefab, pileRoot);
             view.Clicked = null;
+            view.SetFlightMode(true); // raise Y=0 보정 끄기 (위치 고정)
             view.SetFaceDown();
             RectTransform rt = view.GetComponent<RectTransform>();
-            if (rt != null) rt.sizeDelta = new Vector2(w, h);
+            if (rt != null)
+            {
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(w, h);
+                rt.anchoredPosition = new Vector2(startX + i * spacing, 0f);
+                rt.localRotation = Quaternion.identity;
+            }
             view.RefreshDropShadow();
-            // hint가 HorizontalLayout 형제이면 카드만 레이아웃에 들어가게 — hint는 레이아웃 무시
             pileViews.Add(view);
         }
-        // hint를 레이아웃 밖으로: ignore layout
-        if (hintText != null)
-        {
-            LayoutElement le = hintText.GetComponent<LayoutElement>();
-            if (le == null) le = hintText.gameObject.AddComponent<LayoutElement>();
-            le.ignoreLayout = true;
-        }
         pileRoot.gameObject.SetActive(true);
+    }
+
+    // 딜 펼침 카드를 월드 위치 유지한 채 인수 (점프 없음)
+    public void AdoptFaceDown(List<CardView> cards)
+    {
+        EnsureConfigured();
+        ClearPileOnly();
+        if (cards == null || cards.Count == 0 || pileRoot == null) return;
+
+        if (hintText != null)
+            hintText.gameObject.SetActive(false);
+
+        HorizontalLayoutGroup hlg = pileRoot.GetComponent<HorizontalLayoutGroup>();
+        if (hlg != null) Destroy(hlg);
+
+        pileRoot.anchoredPosition = new Vector2(0f, 40f);
+        pileRoot.sizeDelta = new Vector2(480f, CardSpriteAtlas.DisplayHeight * 0.75f + 8f);
+        pileRoot.gameObject.SetActive(true);
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            CardView view = cards[i];
+            if (view == null) continue;
+            view.SetFlightMode(true);
+            view.Clicked = null;
+            RectTransform rt = view.GetComponent<RectTransform>();
+            if (rt != null)
+                rt.SetParent(pileRoot, true); // worldPositionStays
+            pileViews.Add(view);
+        }
     }
 
     public void Clear()
@@ -173,13 +211,18 @@ public class KittyView : MonoBehaviour
         ClearPileOnly();
         if (hintText != null) hintText.gameObject.SetActive(false);
 
+        Canvas.ForceUpdateCanvases();
+        Vector2 endLocal = OpponentHandsView.WorldToAnchored(flyLayer, targetWorld);
         Vector2 size = new Vector2(
             CardSpriteAtlas.DisplayWidth * 0.75f,
             CardSpriteAtlas.DisplayHeight * 0.75f);
         Vector2 endSize = size * 0.55f;
 
         for (int i = 0; i < n; i++)
-            StartCoroutine(CoFlyOne(starts[i], targetWorld, size, endSize, i * flyStagger));
+        {
+            Vector2 startLocal = OpponentHandsView.WorldToAnchored(flyLayer, starts[i]);
+            StartCoroutine(CoFlyOneLocal(startLocal, endLocal, size, endSize, i * flyStagger));
+        }
 
         float total = flyDuration + flyStagger * Mathf.Max(0, n - 1) + 0.05f;
         yield return new WaitForSecondsRealtime(total);
@@ -189,21 +232,22 @@ public class KittyView : MonoBehaviour
         if (onComplete != null) onComplete();
     }
 
-    private IEnumerator CoFlyOne(
-        Vector3 start, Vector3 end, Vector2 startSize, Vector2 endSize, float delay)
+    private IEnumerator CoFlyOneLocal(
+        Vector2 start, Vector2 end, Vector2 startSize, Vector2 endSize, float delay)
     {
         if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
         if (cardPrefab == null || flyLayer == null) yield break;
 
         CardView view = Instantiate(cardPrefab, flyLayer);
         view.Clicked = null;
+        view.SetFlightMode(true);
         view.SetFaceDown();
         RectTransform rt = view.GetComponent<RectTransform>();
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.sizeDelta = startSize;
-        rt.position = start;
+        rt.anchoredPosition = start;
         view.RefreshDropShadow();
         Graphic[] graphics = view.GetComponentsInChildren<Graphic>(true);
         for (int i = 0; i < graphics.Length; i++)
@@ -215,7 +259,7 @@ public class KittyView : MonoBehaviour
             t += Time.unscaledDeltaTime;
             float u = Mathf.Clamp01(t / flyDuration);
             float e = 1f - Mathf.Pow(1f - u, 3f);
-            rt.position = Vector3.LerpUnclamped(start, end, e);
+            rt.anchoredPosition = Vector2.LerpUnclamped(start, end, e);
             rt.sizeDelta = Vector2.LerpUnclamped(startSize, endSize, e);
             if (u > 0.65f && view.background != null)
             {

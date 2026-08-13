@@ -33,9 +33,11 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     // 바닥패 버리기 선택: LayoutGroup이 LateUpdate 이후 위치를 덮어쓰므로
     // willRenderCanvases에서 Y 오프셋을 다시 적용한다.
+    // ※ 비행 중인 카드에는 적용하면 안 됨 — Y가 매 프레임 0으로 고정되어 수평 이동만 남음.
     private const float SelectRaiseY = 36f;
     private bool raised;
     private bool subscribedToCanvas;
+    private bool applyHandRaiseLayout = true;
 
     private void OnEnable()
     {
@@ -46,6 +48,13 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private void OnDisable()
     {
         UnsubscribeCanvas();
+    }
+
+    // 딜/트릭/키티 비행 카드: 손패 raise Y 보정 끄기
+    public void SetFlightMode(bool flying)
+    {
+        applyHandRaiseLayout = !flying;
+        if (flying) raised = false;
     }
 
     private void SubscribeCanvas()
@@ -65,6 +74,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     // Layout 적용 직후, 렌더 직전에 선택 카드만 위로 올린다.
     private void ApplyRaiseAfterLayout()
     {
+        if (!applyHandRaiseLayout) return;
         RectTransform rt = transform as RectTransform;
         if (rt == null) return;
         Vector2 p = rt.anchoredPosition;

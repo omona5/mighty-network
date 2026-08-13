@@ -102,6 +102,7 @@ public class CardPlayAnimator : MonoBehaviour
 
             flyView = Instantiate(cardPrefab, destParent);
             flyView.Clicked = null;
+            flyView.SetFlightMode(true);
             flyView.SetCard(req.card);
             flyView.SetPlayable(true);
 

@@ -290,25 +290,28 @@ public class TrickWinAnimator : MonoBehaviour
         if (pointCards == null || pointCards.Count == 0 || cardPrefab == null || flyLayer == null)
             yield break;
 
+        Canvas.ForceUpdateCanvases();
+        Vector2 centerLocal = OpponentHandsView.WorldToAnchored(flyLayer, centerWorld);
+        Vector2 winnerLocal = OpponentHandsView.WorldToAnchored(flyLayer, winnerWorld);
+
         Vector2 startSize = new Vector2(CardSpriteAtlas.DisplayWidth, CardSpriteAtlas.DisplayHeight);
         Vector2 endSize = startSize * 0.55f;
         int n = 0;
         for (int i = 0; i < pointCards.Count; i++)
         {
             if (pointCards[i] == null) continue;
-            // 중앙에서 살짝 겹쳐 쌓인 뒤 출발
-            Vector3 start = centerWorld + new Vector3((n - (pointCards.Count - 1) * 0.5f) * 12f, 0f, 0f);
-            StartCoroutine(CoFlyOne(pointCards[i], start, winnerWorld, startSize, endSize, n * flyStagger));
+            Vector2 start = centerLocal + new Vector2((n - (pointCards.Count - 1) * 0.5f) * 12f, 0f);
+            StartCoroutine(CoFlyOneLocal(pointCards[i], start, winnerLocal, startSize, endSize, n * flyStagger));
             n++;
         }
         float total = flyDuration + flyStagger * Mathf.Max(0, n - 1) + 0.05f;
         yield return new WaitForSecondsRealtime(total);
     }
 
-    private IEnumerator CoFlyOne(
+    private IEnumerator CoFlyOneLocal(
         CardData card,
-        Vector3 startWorld,
-        Vector3 endWorld,
+        Vector2 startLocal,
+        Vector2 endLocal,
         Vector2 startSize,
         Vector2 endSize,
         float delay)
@@ -317,6 +320,7 @@ public class TrickWinAnimator : MonoBehaviour
 
         CardView view = Instantiate(cardPrefab, flyLayer);
         view.Clicked = null;
+        view.SetFlightMode(true);
         view.SetCard(card);
         view.SetPlayable(true);
         RectTransform rt = view.GetComponent<RectTransform>();
@@ -324,7 +328,7 @@ public class TrickWinAnimator : MonoBehaviour
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.sizeDelta = startSize;
-        rt.position = startWorld;
+        rt.anchoredPosition = startLocal;
         rt.localScale = Vector3.one;
         view.RefreshDropShadow();
         Graphic[] graphics = view.GetComponentsInChildren<Graphic>(true);
@@ -337,7 +341,7 @@ public class TrickWinAnimator : MonoBehaviour
             t += Time.unscaledDeltaTime;
             float u = Mathf.Clamp01(t / flyDuration);
             float e = 1f - Mathf.Pow(1f - u, 3f);
-            rt.position = Vector3.LerpUnclamped(startWorld, endWorld, e);
+            rt.anchoredPosition = Vector2.LerpUnclamped(startLocal, endLocal, e);
             rt.sizeDelta = Vector2.LerpUnclamped(startSize, endSize, e);
             if (u > 0.7f && view.background != null)
             {
