@@ -1152,3 +1152,7 @@
 - **요청**: 강제 딜미스 테스트 조건 제거.
 - **서버**: `FORCE_DEAL_MISS_FOR_TEST` 및 관련 분기 삭제 → 정상 점수/기행 조건만 허용. 서버 재기동.
 - **클라**: `forceDealMissButton` 제거, 딜미스 버튼은 `myCanDealMiss`일 때만 표시.
+
+## 2026-08-14 00:18 (UTC+9)
+
+- **커밋/푸시**: `613bafc` — deal/redeal 비행 애니 + 딜미스 회수→재딜, 서버 `redeal` 브로드캐스트. `main` → `origin/main` 푸시 완료.
