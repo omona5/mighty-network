@@ -1272,3 +1272,5 @@
 - **요청**: 여기까지 커밋·푸시.
 - **작업 디렉터리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
 - **포함**: 아이콘 HUD, 역할 배지 비행, 공약/당선 토스트, 조커 팝업, 메뉴 선택시에만 표시, UI 1.5배, 봇 이름.
+
+- **결과**: `ed58f5a` 커밋 후 `origin/main` 푸시 완료.
