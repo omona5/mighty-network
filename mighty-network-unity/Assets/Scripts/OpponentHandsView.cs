@@ -23,6 +23,7 @@ public class OpponentHandsView : MonoBehaviour
         public bool disconnected;
         public bool isDeclarer;
         public bool isMightyPlayer;
+        public bool isFriend;
     }
 
     // 상대 손패: 내 손패(160×224)의 1/2 → 원본 대비 1/4
@@ -176,18 +177,20 @@ public class OpponentHandsView : MonoBehaviour
     }
 
     // 좌상단 GameRuleHud body(15)와 동일
-    private const int StatusFontSize = 15;
+    private const int StatusFontSize = 22;
 
     public static string FormatStatusLine(SeatInfo seat, bool isSelf)
     {
         string prefix = seat.isBot ? "[봇] " : "";
         if (seat.disconnected) prefix = "[끊김] ";
-        string badges = "";
-        if (seat.isDeclarer) badges += " [주공]";
-        if (seat.isMightyPlayer) badges += " [마이티]";
         string turn = seat.isTurn ? " <<" : "";
         string who = isSelf ? (seat.nickname + " (나)") : seat.nickname;
-        return prefix + who + badges + turn + "\n" + seat.score + "점";
+        return prefix + who + turn;
+    }
+
+    public static string FormatScoreLine(SeatInfo seat)
+    {
+        return seat.score + "점";
     }
 
     private void EnsureRoot()
@@ -221,41 +224,98 @@ public class OpponentHandsView : MonoBehaviour
         prt.anchorMin = anchor;
         prt.anchorMax = anchor;
         prt.pivot = isSelf ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = isSelf ? new Vector2(420f, 56f) : new Vector2(300f, 180f);
+        prt.sizeDelta = isSelf ? new Vector2(520f, 64f) : new Vector2(340f, 210f);
         prt.anchoredPosition = Vector2.zero;
         if (!string.IsNullOrEmpty(seat.nickname))
             seatByNickname[seat.nickname] = prt;
 
-        // 이름 + 점수/배지 (손패 아래)
-        GameObject nameGo = new GameObject("Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        nameGo.transform.SetParent(panel.transform, false);
-        RectTransform nrt = nameGo.GetComponent<RectTransform>();
+        // 아이콘 + 이름/점수(아이콘 기준 왼쪽 정렬) 묶음
+        GameObject nameRow = new GameObject("NameRow", typeof(RectTransform));
+        nameRow.transform.SetParent(panel.transform, false);
+        RectTransform nrrt = nameRow.GetComponent<RectTransform>();
         if (isSelf)
         {
-            nrt.anchorMin = Vector2.zero;
-            nrt.anchorMax = Vector2.one;
+            nrrt.anchorMin = Vector2.zero;
+            nrrt.anchorMax = Vector2.one;
         }
         else
         {
-            nrt.anchorMin = new Vector2(0f, 0f);
-            nrt.anchorMax = new Vector2(1f, 0.32f);
+            nrrt.anchorMin = new Vector2(0f, 0f);
+            nrrt.anchorMax = new Vector2(1f, 0.32f);
         }
-        nrt.offsetMin = Vector2.zero;
+        nrrt.offsetMin = Vector2.zero;
+        nrrt.offsetMax = Vector2.zero;
+
+        Vector2 sq = IconSpriteAtlas.DisplaySquare;
+        int roleN = (seat.isDeclarer ? 1 : 0) + (seat.isFriend ? 1 : 0);
+        float roleGap = 4f;
+        float iconW = roleN > 0 ? roleN * sq.x + (roleN - 1) * roleGap : 0f;
+        float textW = isSelf ? 220f : 160f;
+        float clusterW = iconW + (roleN > 0 ? 8f : 0f) + textW;
+
+        GameObject cluster = new GameObject("Cluster", typeof(RectTransform));
+        cluster.transform.SetParent(nameRow.transform, false);
+        RectTransform clusterRt = cluster.GetComponent<RectTransform>();
+        clusterRt.anchorMin = new Vector2(0.5f, 0.5f);
+        clusterRt.anchorMax = new Vector2(0.5f, 0.5f);
+        clusterRt.pivot = new Vector2(0.5f, 0.5f);
+        clusterRt.sizeDelta = new Vector2(clusterW, 84f);
+        clusterRt.anchoredPosition = Vector2.zero;
+
+        if (roleN > 0)
+        {
+            GameObject roles = new GameObject("Roles", typeof(RectTransform));
+            roles.transform.SetParent(cluster.transform, false);
+            RectTransform roleRt = roles.GetComponent<RectTransform>();
+            roleRt.anchorMin = new Vector2(0f, 0.5f);
+            roleRt.anchorMax = new Vector2(0f, 0.5f);
+            roleRt.pivot = new Vector2(0f, 0.5f);
+            roleRt.anchoredPosition = Vector2.zero;
+            roleRt.sizeDelta = new Vector2(iconW, sq.y);
+            IconGui.PlaceRoleIcons(roles.transform, seat.isDeclarer, seat.isFriend, Vector2.zero);
+        }
+
+        float textX = iconW + (roleN > 0 ? 8f : 0f);
+
+        GameObject nameGo = new GameObject("Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        nameGo.transform.SetParent(cluster.transform, false);
+        RectTransform nrt = nameGo.GetComponent<RectTransform>();
+        nrt.anchorMin = new Vector2(0f, 0.5f);
+        nrt.anchorMax = new Vector2(1f, 1f);
+        nrt.offsetMin = new Vector2(textX, 0f);
         nrt.offsetMax = Vector2.zero;
         Text nameText = nameGo.GetComponent<Text>();
         nameText.font = GetUiFont();
         nameText.fontSize = StatusFontSize;
-        nameText.alignment = TextAnchor.MiddleCenter;
+        nameText.alignment = TextAnchor.MiddleLeft;
         nameText.horizontalOverflow = HorizontalWrapMode.Overflow;
         nameText.verticalOverflow = VerticalWrapMode.Overflow;
         nameText.color = seat.isTurn
             ? new Color(1f, 0.85f, 0.3f)
             : (seat.disconnected ? new Color(0.7f, 0.7f, 0.7f) : Color.white);
         nameText.text = FormatStatusLine(seat, isSelf);
-        nameText.raycastTarget = false; // 손패 클릭을 가로채지 않도록
+        nameText.raycastTarget = false;
         Shadow nsh = nameGo.AddComponent<Shadow>();
         nsh.effectColor = new Color(0f, 0f, 0f, 0.75f);
         nsh.effectDistance = new Vector2(1f, -1f);
+
+        GameObject scoreGo = new GameObject("Score", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        scoreGo.transform.SetParent(cluster.transform, false);
+        RectTransform srt = scoreGo.GetComponent<RectTransform>();
+        srt.anchorMin = new Vector2(0f, 0f);
+        srt.anchorMax = new Vector2(1f, 0.5f);
+        srt.offsetMin = new Vector2(textX, 0f);
+        srt.offsetMax = Vector2.zero;
+        Text scoreText = scoreGo.GetComponent<Text>();
+        scoreText.font = GetUiFont();
+        scoreText.fontSize = StatusFontSize;
+        scoreText.alignment = TextAnchor.MiddleLeft;
+        scoreText.color = nameText.color;
+        scoreText.text = FormatScoreLine(seat);
+        scoreText.raycastTarget = false;
+        Shadow ssh = scoreGo.AddComponent<Shadow>();
+        ssh.effectColor = new Color(0f, 0f, 0f, 0.75f);
+        ssh.effectDistance = new Vector2(1f, -1f);
 
         if (isSelf) return panel;
 

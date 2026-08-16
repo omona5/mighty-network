@@ -1156,3 +1156,119 @@
 ## 2026-08-14 00:18 (UTC+9)
 
 - **커밋/푸시**: `613bafc` — deal/redeal 비행 애니 + 딜미스 회수→재딜, 서버 `redeal` 브로드캐스트. `main` → `origin/main` 푸시 완료.
+
+## 2026-08-15 23:02 (UTC+9)
+
+- **요청**: 서버 재기동.
+- **결과**: `server-node/server.js`를 `:3000`에서 재시작. WebSocket 정상 기동.
+
+## 2026-08-15 23:04 (UTC+9)
+
+- **요청**: 딜미스 시 검정 박스 흰 글씨로 「닉네임 딜미스! / 카드 재분배 중...」 표시. 테스트용 강제 딜미스 버튼 재활성화.
+- **클라**: `ShowDealMissToast` sticky 토스트, 딜 애니 완료 시 해제. `forceDealMissButton=true`.
+- **서버**: `FORCE_DEAL_MISS_FOR_TEST=true` 복구 후 :3000 재기동.
+
+## 2026-08-15 23:06 (UTC+9)
+
+- **요청**: 딜미스 강제 테스트 해제.
+- **서버**: `FORCE_DEAL_MISS_FOR_TEST` 제거, 정상 점수/기행 조건만 허용. :3000 재기동.
+- **클라**: `forceDealMissButton` 제거, 조건 충족 시에만 버튼 표시.
+
+## 2026-08-16 22:41 (UTC+9)
+
+- **요청**: 서버 기동 + 카드/문양/주공·프렌드 아이콘 시트 적용.
+- **리소스**: `Resources/Icons/icon_card|shape|etc.png` (128×64 / 64×64). `IconSpriteAtlas` + `IconGui`.
+- **UI**: 좌상단 HUD 기루다·마이티·조커콜 아이콘. 입찰 기루 선택 / 프렌드 카드 선택 / 조커 무늬·조커콜을 아이콘 버튼으로 대체. 주공(왕관)·프렌드(F)를 닉네임·테이블 제출자 옆에 표시.
+- **서버**: `:3000` 기동.
+
+## 2026-08-16 22:48 (UTC+9)
+
+- **요청**: 주공/프렌드 아이콘을 카드 상단으로. 새 아이콘 스케일을 마이티(96×48, 정사각 48×48)와 통일. 좌상단 HUD 조커콜 아래 겹침 해소.
+- **수정**: `IconSpriteAtlas.DisplayCard/DisplaySquare`. `GameRuleHud` 행 간격·패널 높이 확대. 테이블/상대 손패/내 손패 카드 위에 역할 아이콘.
+
+## 2026-08-16 22:57 (UTC+9)
+
+- **수정**: `HandView.cs`에서 `FormatTableNickname` 메서드 시그니처가 잘려 CS1519 등 컴파일 오류 발생 → 복구.
+
+## 2026-08-16 23:08 (UTC+9)
+
+- **수정**: `GameRuleHud.cs`에서 누락된 `uiFont`/`canvasGroup` 필드 복구.
+
+## 2026-08-16 23:15 (UTC+9)
+
+- **요청**: 좌상단에서 주공/프렌드 텍스트 제거. 핸드 쪽은 이름 아래에 아이콘, 테이블 카드는 상단 유지.
+- **수정**: `GameRuleHud` body는 주공팀/공약만. `OpponentHandsView` 이름 아래 역할 아이콘. 손패 위 배지 표시 중단.
+
+## 2026-08-16 23:23 (UTC+9)
+
+- **수정**: `OpponentHandsView.BuildPanel`에서 `rrt` 중복 선언(CS0136) → `roleRt`로 변경. 연결 끊김은 컴파일 오류로 Play 종료 시 발생.
+
+## 2026-08-16 23:26 (UTC+9)
+
+- **요청**: 주공/프렌드(핸드 이름) 아이콘을 이름·점수 좌측으로.
+- **수정**: `OpponentHandsView` NameRow — 아이콘 왼쪽 세로 중앙, 이름/점수는 그 오른쪽.
+
+## 2026-08-16 23:55 (UTC+9)
+
+- **요청**: 핸드 아이콘을 더 오른쪽+이름/점수 좌측 정렬. 플레이어 프렌드면 프렌드카드 없음. 공약 제출 시 중앙 토스트(기루 아이콘). 내 차례 아니면/제출 후 메뉴 숨김.
+- **수정**: OpponentHandsView 클러스터. GameRuleHud `friendCardNone`. TrickWinAnimator.AnnounceBid. 입찰 대기 시 HUD 접고 방 나가기만.
+
+## 2026-08-17 00:02 (UTC+9)
+
+- **수정**: `dealMissToastVisible` 필드 복구 (공약 토스트 키 추가 시 덮어씀).
+
+## 2026-08-17 00:15 (UTC+9)
+
+- **요청**: 중앙 패 주공/프렌드 아이콘을 카드와 같이 비행. 봇 이름 노태우/김영삼/김대중/이승만.
+- **작업 디렉터리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **수정**: `CardPlayAnimator` — 비행 카드에 역할·조커무늬 배지 부착, 목적지 TopIcon은 비행 중 숨김. `NetworkManager.AnimateToTable`에 isDeclarer/isFriend/declaredSuit 전달. `RoomManager.addBot` 고정 닉네임 풀.
+- **다음**: 봇 이름 반영을 위해 Node 서버 재시작. 이미 방에 있는 봇은 새 방에서만 새 이름.
+
+## 2026-08-17 00:12 (UTC+9)
+
+- **요청**: 서버 재시작 여부 확인.
+- **명령**: PID 13288(구 서버) 종료 후 `server-node`에서 `node server.js` 재기동.
+- **결과**: `WebSocket server running on ws://localhost:3000`. 봇 이름은 새 방부터 적용.
+
+## 2026-08-17 00:16 (UTC+9)
+
+- **요청**: 공약 제출·당선 토스트를 약 1초 더 길게. 당선에 기루 아이콘+장수 표시.
+- **수정**: `TrickWinAnimator` 홀드 1.7→2.7(제출), 당선 1.35→2.35. `AnnounceElection`이 기루 아이콘+N장. `NetworkManager`가 bid_result/state의 trump 전달.
+
+## 2026-08-17 00:22 (UTC+9)
+
+- **요청**: 테스트용으로 내 손에 조커+조커콜 고정, 기루다 고정.
+- **수정**: `RoomManager.js` `DEBUG_FORCE_JOKER_HAND` — 사람 손에 JOKER+C_3, 입찰 마감 시 주공=사람·기루다 HEART 13. 봇은 패스. 딜/키티 후에도 재주입.
+- **다음**: 확인 끝나면 `DEBUG_FORCE_JOKER_HAND`를 false.
+
+## 2026-08-17 00:26 (UTC+9)
+
+- **요청**: 조커콜/조커 무늬 선택 UI가 안 보임.
+- **원인**: 선택은 OnGUI 게임 HUD 안에 있었고, 플레이 중 HUD는 기본 최소화라 숨겨짐.
+- **수정**: `DrawPlayExtraChoice` 중앙 오버레이. 최소화 상태에서도 조커 리드 무늬·조커콜 여부 표시.
+
+## 2026-08-17 00:27 (UTC+9)
+
+- **요청**: 조커 무늬/조커콜 선택을 메뉴가 아니라 팝업으로.
+- **수정**: `PlayChoicePopup.cs` uGUI 중앙 팝업(딤+검정 박스). 조커 리드 시 무늬 아이콘, 조커콜 카드 리드 시 사용/일반. OnGUI 메뉴 선택 UI 제거.
+
+## 2026-08-17 00:32 (UTC+9)
+
+- **요청**: 조커/조커콜 강제 디버그 해제. 선택이 필요할 때만 메뉴 활성.
+- **수정**: `DEBUG_FORCE_JOKER_HAND=false`. OnGUI 전체 메뉴는 대기/내 입찰/프렌드/종료만. 그 외는 우상단 방 나가기(+주공 키티 버리기). 서버 재시작.
+
+## 2026-08-17 00:35 (UTC+9)
+
+- **요청**: 메뉴에서 로그 제거. 셔플/딜 중·주공 버리기 직후(비주공 프렌드 대기) 메뉴 숨김.
+- **수정**: OnGUI 로그 스크롤 삭제. `IsDealInProgress`면 메뉴 비활성. `choosing_friend`는 주공만 메뉴.
+
+## 2026-08-17 00:39 (UTC+9)
+
+- **요청**: 글씨 크기 전체 약 1.5배.
+- **수정**: `UiFonts.Size` (Scale 1.5). HUD/핸드 이름/테이블 닉/토스트/팝업/OnGUI/딜 힌트에 적용. HUD·토스트 박스도 조금 키움.
+
+## 2026-08-17 00:41 (UTC+9)
+
+- **요청**: 여기까지 커밋·푸시.
+- **작업 디렉터리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **포함**: 아이콘 HUD, 역할 배지 비행, 공약/당선 토스트, 조커 팝업, 메뉴 선택시에만 표시, UI 1.5배, 봇 이름.

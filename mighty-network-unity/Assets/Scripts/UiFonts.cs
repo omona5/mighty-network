@@ -6,6 +6,12 @@ using UnityEngine;
 public static class UiFonts
 {
     public const string PrimaryResourcePath = "Fonts/Galmuri11";
+    public const float Scale = 1.5f;
+
+    public static int Size(int px)
+    {
+        return Mathf.Max(1, Mathf.RoundToInt(px * Scale));
+    }
 
     private static Font primary;
 

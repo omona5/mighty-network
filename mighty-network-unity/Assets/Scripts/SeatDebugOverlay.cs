@@ -136,7 +136,7 @@ public class SeatDebugOverlay : MonoBehaviour
         rt.sizeDelta = new Vector2(120f, 48f);
         Text t = go.GetComponent<Text>();
         t.font = GetFont();
-        t.fontSize = 14;
+        t.fontSize = UiFonts.Size(14);
         t.alignment = TextAnchor.LowerCenter;
         t.color = Color.white;
         t.text = text;

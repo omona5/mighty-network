@@ -30,6 +30,10 @@ const { sortHand } = require("./game/Card");
 
 const MAX_PLAYERS = 5;
 const NUM_TRICKS = 10;
+const BOT_NAMES = ["노태우", "김영삼", "김대중", "이승만"];
+// 테스트: 사람 손에 조커+조커콜 고정, 기루다 HEART(조커콜=C_3). 끝나면 false.
+const DEBUG_FORCE_JOKER_HAND = false;
+const DEBUG_FIXED_TRUMP = "HEART";
 // 끊김 후 재접속 허용 시간. 그동안 봇이 대신 플레이한다.
 const RECONNECT_GRACE_MS = 5 * 60 * 1000;
 
@@ -150,9 +154,11 @@ class RoomManager {
       return { error: "자리가 가득 찼습니다. (최대 5명)" };
     }
     const botNumber = room.players.filter((p) => p.isBot).length + 1;
+    const used = new Set(room.players.map((p) => p.nickname));
+    const baseName = BOT_NAMES.find((n) => !used.has(n)) || ("봇" + botNumber);
     const player = {
       clientId: "BOT" + ++botSeq,
-      nickname: this.uniqueNickname(room, "봇" + botNumber),
+      nickname: this.uniqueNickname(room, baseName),
       isReady: true, // 봇은 항상 준비 완료
       reconnectToken: null,
       connected: true,
@@ -201,6 +207,7 @@ class RoomManager {
       p.wonCards = [];
     });
     room.kitty = kitty; // 바닥패 (아직 아무에게도 공개 안 함)
+    this.applyDebugJokerHand(room);
     room.discardedKitty = null;
     room.mightyRevealed = false;
     room.mightyPlayerClientId = null;
@@ -259,6 +266,7 @@ class RoomManager {
     decl.hand = sortHand((decl.hand || []).concat(kitty));
     room.kitty = []; // 교환 중에는 손패로 이동
     room.discardedKitty = null;
+    this.applyDebugJokerHand(room);
     return { ok: true, handCount: decl.hand.length };
   }
 
@@ -290,7 +298,8 @@ class RoomManager {
     room.discardedKitty = discarded;
     room.kitty = discarded; // 점수 계산용 (묻힌 카드)
     sortHand(decl.hand);
-    return { ok: true, discarded, hand: decl.hand };
+    this.applyDebugJokerHand(room);
+    return { ok: true, discarded: room.discardedKitty, hand: decl.hand };
   }
 
   // 봇이 버릴 3장 선택: 기루다/마이티/조커/점수카드를 최대한 남기고 약한 카드부터
@@ -396,9 +405,58 @@ class RoomManager {
     return { ok: true, complete: this._finishOrAdvanceBidder(room) };
   }
 
+  debugJokerCallId() {
+    return DEBUG_FIXED_TRUMP === "CLUB" ? "S_3" : "C_3";
+  }
+
+  applyDebugJokerHand(room) {
+    if (!DEBUG_FORCE_JOKER_HAND || !room) return;
+    const human = room.players.find((p) => p && !p.isBot) || room.players[0];
+    if (!human || !human.hand) return;
+    const needed = ["JOKER", this.debugJokerCallId()];
+    const piles = room.players
+      .filter((p) => p !== human)
+      .map((p) => p.hand || [])
+      .concat([room.kitty || [], room.discardedKitty || []]);
+    for (const id of needed) {
+      if (human.hand.some((c) => c.id === id)) continue;
+      let found = null;
+      for (const pile of piles) {
+        const i = pile.findIndex((c) => c && c.id === id);
+        if (i < 0) continue;
+        found = { pile, index: i };
+        break;
+      }
+      if (!found) continue;
+      const drop = human.hand.findIndex((c) => c && needed.indexOf(c.id) < 0);
+      if (drop < 0) continue;
+      const tmp = human.hand[drop];
+      human.hand[drop] = found.pile[found.index];
+      found.pile[found.index] = tmp;
+    }
+    human.hand = sortHand(human.hand);
+    room.players.forEach((p) => {
+      if (p !== human) p.hand = sortHand(p.hand || []);
+    });
+    if (room.kitty) room.kitty = sortHand(room.kitty);
+    console.log("[debug] 조커/조커콜을", human.nickname, "손에 고정. 기루다", DEBUG_FIXED_TRUMP);
+  }
+
   // 입찰 마감 후 주공/기루다/목표점 확정.
   // 아무도 공약 안 했으면: 최소공약을 아직 낮출 수 있으면 { lowerBid, newMin }, 바닥이면 { redeal }.
   resolveBidding(room) {
+    if (DEBUG_FORCE_JOKER_HAND) {
+      const human = room.players.find((p) => p && !p.isBot) || room.players[0];
+      if (human) {
+        room.highestBid = {
+          clientId: human.clientId,
+          nickname: human.nickname,
+          targetScore: 13,
+          trumpSuit: DEBUG_FIXED_TRUMP,
+          noTrump: false,
+        };
+      }
+    }
     if (!room.highestBid) {
       const cur = room.minBid || MIN_BID;
       if (cur > BID_FLOOR) return { lowerBid: true, newMin: cur - 1 };
@@ -517,6 +575,7 @@ class RoomManager {
 
   // 봇의 입찰 결정. 공약하면 { targetScore, trumpSuit, noTrump }, 패스면 null.
   botDecideBid(room, player) {
+    if (DEBUG_FORCE_JOKER_HAND) return null; // 테스트: 봇은 패스, 사람 주공+하트 고정
     const ev = this._evaluateHandForBid(player.hand || []);
     const myMax = Math.min(MAX_BID, Math.floor(ev.tricks));
     const roundMin = room.minBid || MIN_BID;

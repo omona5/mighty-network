@@ -18,6 +18,9 @@ public class CardPlayAnimator : MonoBehaviour
         public RectTransform destCard;
         public Vector2 startSize;
         public Vector2 endSize;
+        public bool isDeclarer;
+        public bool isFriend;
+        public string declaredSuit;
         public Action onComplete;
     }
 
@@ -49,6 +52,9 @@ public class CardPlayAnimator : MonoBehaviour
         RectTransform destCard,
         Vector2 startSize,
         Vector2 endSize,
+        bool isDeclarer,
+        bool isFriend,
+        string declaredSuit,
         Action onComplete)
     {
         if (cardPrefab == null || card == null || destCard == null)
@@ -64,10 +70,25 @@ public class CardPlayAnimator : MonoBehaviour
             destCard = destCard,
             startSize = startSize,
             endSize = endSize,
+            isDeclarer = isDeclarer,
+            isFriend = isFriend,
+            declaredSuit = declaredSuit,
             onComplete = onComplete,
         });
         if (!busy)
             StartCoroutine(CoDrainQueue());
+    }
+
+    // 호환: 역할 아이콘 없이 비행
+    public void AnimateToTable(
+        CardData card,
+        Vector3 startWorld,
+        RectTransform destCard,
+        Vector2 startSize,
+        Vector2 endSize,
+        Action onComplete)
+    {
+        AnimateToTable(card, startWorld, destCard, startSize, endSize, false, false, null, onComplete);
     }
 
     private IEnumerator CoDrainQueue()
@@ -97,8 +118,9 @@ public class CardPlayAnimator : MonoBehaviour
 
             // 목적 카드/닉네임: Graphic만 끄기 (CanvasGroup alpha 잔류 버그 회피)
             SetGraphicsVisible(destCard.gameObject, false);
-            Transform nick = destParent != null ? destParent.Find("Nick") : null;
-            if (nick != null) SetGraphicsVisible(nick.gameObject, false);
+            Transform destParentNick = destParent != null ? destParent.Find("Nick") : null;
+            if (destParentNick != null) SetGraphicsVisible(destParentNick.gameObject, false);
+            HideTopIcons(destParent);
 
             flyView = Instantiate(cardPrefab, destParent);
             flyView.Clicked = null;
@@ -122,7 +144,9 @@ public class CardPlayAnimator : MonoBehaviour
                 graphics[i].raycastTarget = false;
 
             flyView.RefreshDropShadow();
+            List<RectTransform> badgeRts = AttachFlyBadges(rt, req);
             rt.SetAsLastSibling();
+            LayoutFlyBadges(badgeRts, rt.sizeDelta.y);
 
             float t = 0f;
             while (t < duration)
@@ -134,6 +158,7 @@ public class CardPlayAnimator : MonoBehaviour
                 float e = 1f - Mathf.Pow(1f - u, 3f);
                 rt.anchoredPosition = Vector2.LerpUnclamped(startLocal, endLocal, e);
                 rt.sizeDelta = Vector2.LerpUnclamped(req.startSize, req.endSize, e);
+                LayoutFlyBadges(badgeRts, rt.sizeDelta.y);
                 flyView.RefreshDropShadow();
                 yield return null;
             }
@@ -154,6 +179,7 @@ public class CardPlayAnimator : MonoBehaviour
                 SetGraphicsVisible(destCard.gameObject, true);
                 Transform nick = destCard.parent != null ? destCard.parent.Find("Nick") : null;
                 if (nick != null) SetGraphicsVisible(nick.gameObject, true);
+                ShowTopIcons(destCard.parent);
             }
 
             if (onComplete != null) onComplete();
@@ -174,5 +200,71 @@ public class CardPlayAnimator : MonoBehaviour
         // CanvasGroup 잔여 alpha도 정리
         CanvasGroup cg = go.GetComponent<CanvasGroup>();
         if (cg != null) cg.alpha = visible ? 1f : 0f;
+    }
+
+    private static void HideTopIcons(Transform parent)
+    {
+        SetTopIconsVisible(parent, false);
+    }
+
+    private static void ShowTopIcons(Transform parent)
+    {
+        SetTopIconsVisible(parent, true);
+    }
+
+    private static void SetTopIconsVisible(Transform parent, bool visible)
+    {
+        if (parent == null) return;
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform c = parent.GetChild(i);
+            if (c == null || c.name == null) continue;
+            if (c.name.StartsWith("TopIcon"))
+                SetGraphicsVisible(c.gameObject, visible);
+        }
+    }
+
+    private static List<RectTransform> AttachFlyBadges(RectTransform cardRt, FlyRequest req)
+    {
+        var list = new List<RectTransform>();
+        if (cardRt == null) return list;
+        var slices = new List<IconSpriteAtlas.Slice>();
+        if (req.isDeclarer) slices.Add(IconSpriteAtlas.GetDeclarer());
+        if (req.isFriend) slices.Add(IconSpriteAtlas.GetFriend());
+        if (req.card != null && req.card.id == "JOKER" && !string.IsNullOrEmpty(req.declaredSuit))
+            slices.Add(IconSpriteAtlas.GetSuit(req.declaredSuit));
+        Vector2 sz = IconSpriteAtlas.DisplaySquare;
+        float gap = 4f;
+        float total = slices.Count * sz.x + Mathf.Max(0, slices.Count - 1) * gap;
+        float x = slices.Count > 0 ? -total * 0.5f + sz.x * 0.5f : 0f;
+        for (int i = 0; i < slices.Count; i++)
+        {
+            Image img = IconGui.MakeImage(cardRt, "FlyIcon" + i, slices[i], sz);
+            RectTransform irt = img.rectTransform;
+            irt.anchorMin = new Vector2(0.5f, 0.5f);
+            irt.anchorMax = new Vector2(0.5f, 0.5f);
+            irt.pivot = new Vector2(0.5f, 0.5f);
+            irt.anchoredPosition = new Vector2(x, 0f);
+            Graphic[] g = img.GetComponentsInChildren<Graphic>(true);
+            for (int k = 0; k < g.Length; k++)
+                g[k].raycastTarget = false;
+            list.Add(irt);
+            x += sz.x + gap;
+        }
+        return list;
+    }
+
+    private static void LayoutFlyBadges(List<RectTransform> badges, float cardH)
+    {
+        if (badges == null) return;
+        Vector2 sz = IconSpriteAtlas.DisplaySquare;
+        float y = cardH * 0.5f + sz.y * 0.5f + 4f;
+        for (int i = 0; i < badges.Count; i++)
+        {
+            if (badges[i] == null) continue;
+            Vector2 p = badges[i].anchoredPosition;
+            p.y = y;
+            badges[i].anchoredPosition = p;
+        }
     }
 }

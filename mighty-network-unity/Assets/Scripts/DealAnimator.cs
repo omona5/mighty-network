@@ -266,7 +266,7 @@ public class DealAnimator : MonoBehaviour
             hrt.sizeDelta = new Vector2(240f, 28f);
             hintText = hintGo.GetComponent<Text>();
             hintText.font = GetFont();
-            hintText.fontSize = 16;
+            hintText.fontSize = UiFonts.Size(16);
             hintText.alignment = TextAnchor.MiddleCenter;
             hintText.color = new Color(0.95f, 0.95f, 0.88f, 0.95f);
             hintText.raycastTarget = false;
@@ -626,7 +626,7 @@ public class DealAnimator : MonoBehaviour
         tx.font = UiFonts.Primary != null
             ? UiFonts.Primary
             : Resources.GetBuiltinResource<Font>("Arial.ttf");
-        tx.fontSize = 13;
+        tx.fontSize = UiFonts.Size(13);
         tx.alignment = TextAnchor.LowerCenter;
         tx.color = Color.white;
         tx.text = (nick ?? "?") + "\nFLY " + anchor.x.ToString("F2") + "," + anchor.y.ToString("F2");

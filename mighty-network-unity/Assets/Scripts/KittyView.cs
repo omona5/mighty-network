@@ -51,7 +51,7 @@ public class KittyView : MonoBehaviour
             hrt.sizeDelta = new Vector2(200f, 28f);
             hintText = hintGo.GetComponent<Text>();
             hintText.font = GetHintFont();
-            hintText.fontSize = 16;
+            hintText.fontSize = UiFonts.Size(16);
             hintText.alignment = TextAnchor.MiddleCenter;
             hintText.color = new Color(0.9f, 0.9f, 0.85f, 0.9f);
             hintText.text = "바닥패";

@@ -16,6 +16,9 @@ public class HandView : MonoBehaviour
     {
         public CardData card;
         public string playerNickname;
+        public bool isDeclarer;
+        public bool isFriend;
+        public string declaredSuit;
     }
 
     [Header("Inspector에서 연결")]
@@ -25,7 +28,7 @@ public class HandView : MonoBehaviour
     public System.Action<CardData> onCardClicked;
 
     private const float TableLabelHeight = 28f;
-    private const int TableLabelFontSize = 20;
+    private const int TableLabelFontSize = 30;
     private const int TableNickMaxChars = 8;
     // 5마: 트릭당 항상 5장 — 배치/비행 도착점을 이 슬롯 기준으로 고정
     public const int TableTrickSlots = 5;
@@ -140,9 +143,59 @@ public class HandView : MonoBehaviour
             sh.effectDistance = new Vector2(1f, -1f);
             labelGo.transform.SetAsLastSibling();
 
+            Vector2 sq = IconSpriteAtlas.DisplaySquare;
+            float topY = cardH * 0.5f + sq.y * 0.5f + 4f;
+            var above = new List<IconSpriteAtlas.Slice>();
+            if (e.isDeclarer) above.Add(IconSpriteAtlas.GetDeclarer());
+            if (e.isFriend) above.Add(IconSpriteAtlas.GetFriend());
+            if (e.card != null && e.card.id == "JOKER" && !string.IsNullOrEmpty(e.declaredSuit))
+                above.Add(IconSpriteAtlas.GetSuit(e.declaredSuit));
+            PlaceIconsAbove(root.transform, above, topY);
+
             spawned.Add(root);
             spawnedViews.Add(view);
         }
+    }
+
+    private static void PlaceIconsAbove(Transform parent, List<IconSpriteAtlas.Slice> slices, float y)
+    {
+        if (slices == null || slices.Count == 0) return;
+        Vector2 sz = IconSpriteAtlas.DisplaySquare;
+        float gap = 4f;
+        float total = slices.Count * sz.x + (slices.Count - 1) * gap;
+        float x = -total * 0.5f + sz.x * 0.5f;
+        for (int i = 0; i < slices.Count; i++)
+        {
+            Image img = IconGui.MakeImage(parent, "TopIcon" + i, slices[i], sz);
+            RectTransform rt = img.rectTransform;
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(x, y);
+            x += sz.x + gap;
+        }
+    }
+
+    private GameObject selfRoleRoot;
+
+    public void SetSelfRoleBadges(bool isDeclarer, bool isFriend)
+    {
+        if (selfRoleRoot != null)
+        {
+            Destroy(selfRoleRoot);
+            selfRoleRoot = null;
+        }
+        if (!isDeclarer && !isFriend) return;
+
+        selfRoleRoot = new GameObject("SelfRoles", typeof(RectTransform));
+        selfRoleRoot.transform.SetParent(transform, false);
+        RectTransform rt = selfRoleRoot.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 1f);
+        rt.anchorMax = new Vector2(0.5f, 1f);
+        rt.pivot = new Vector2(0.5f, 0f);
+        rt.anchoredPosition = new Vector2(0f, 6f);
+        rt.sizeDelta = new Vector2(120f, IconSpriteAtlas.DisplaySquare.y);
+        IconGui.PlaceRoleIcons(selfRoleRoot.transform, isDeclarer, isFriend, Vector2.zero);
     }
 
     private static string FormatTableNickname(string nickname)
@@ -307,7 +360,7 @@ public class HandView : MonoBehaviour
             for (int i = parent.childCount - 1; i >= 0; i--)
             {
                 Transform child = parent.GetChild(i);
-                if (child != null) Destroy(child.gameObject);
+                if (child != null && child.name != "SelfRoles") Destroy(child.gameObject);
             }
         }
     }
