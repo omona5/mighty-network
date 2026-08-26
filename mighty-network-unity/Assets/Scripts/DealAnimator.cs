@@ -263,7 +263,7 @@ public class DealAnimator : MonoBehaviour
             hrt.anchorMax = new Vector2(0.5f, 0f);
             hrt.pivot = new Vector2(0.5f, 1f);
             hrt.anchoredPosition = new Vector2(0f, -8f);
-            hrt.sizeDelta = new Vector2(240f, 28f);
+            hrt.sizeDelta = new Vector2(UiFonts.Layout(280f), UiFonts.Layout(32f));
             hintText = hintGo.GetComponent<Text>();
             hintText.font = GetFont();
             hintText.fontSize = UiFonts.Size(16);

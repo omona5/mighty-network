@@ -48,7 +48,7 @@ public class KittyView : MonoBehaviour
             hrt.anchorMax = new Vector2(0.5f, 0f);
             hrt.pivot = new Vector2(0.5f, 1f);
             hrt.anchoredPosition = new Vector2(0f, -4f);
-            hrt.sizeDelta = new Vector2(200f, 28f);
+            hrt.sizeDelta = new Vector2(UiFonts.Layout(200f), UiFonts.Layout(32f));
             hintText = hintGo.GetComponent<Text>();
             hintText.font = GetHintFont();
             hintText.fontSize = UiFonts.Size(16);

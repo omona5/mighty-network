@@ -20,6 +20,7 @@ public class CardPlayAnimator : MonoBehaviour
         public Vector2 endSize;
         public bool isDeclarer;
         public bool isFriend;
+        public bool isFriendSecret;
         public string declaredSuit;
         public Action onComplete;
     }
@@ -54,6 +55,7 @@ public class CardPlayAnimator : MonoBehaviour
         Vector2 endSize,
         bool isDeclarer,
         bool isFriend,
+        bool isFriendSecret,
         string declaredSuit,
         Action onComplete)
     {
@@ -72,6 +74,7 @@ public class CardPlayAnimator : MonoBehaviour
             endSize = endSize,
             isDeclarer = isDeclarer,
             isFriend = isFriend,
+            isFriendSecret = isFriendSecret,
             declaredSuit = declaredSuit,
             onComplete = onComplete,
         });
@@ -88,7 +91,22 @@ public class CardPlayAnimator : MonoBehaviour
         Vector2 endSize,
         Action onComplete)
     {
-        AnimateToTable(card, startWorld, destCard, startSize, endSize, false, false, null, onComplete);
+        AnimateToTable(card, startWorld, destCard, startSize, endSize, false, false, false, null, onComplete);
+    }
+
+    // 호환: friendSecret 없음
+    public void AnimateToTable(
+        CardData card,
+        Vector3 startWorld,
+        RectTransform destCard,
+        Vector2 startSize,
+        Vector2 endSize,
+        bool isDeclarer,
+        bool isFriend,
+        string declaredSuit,
+        Action onComplete)
+    {
+        AnimateToTable(card, startWorld, destCard, startSize, endSize, isDeclarer, isFriend, false, declaredSuit, onComplete);
     }
 
     private IEnumerator CoDrainQueue()
@@ -231,6 +249,7 @@ public class CardPlayAnimator : MonoBehaviour
         var slices = new List<IconSpriteAtlas.Slice>();
         if (req.isDeclarer) slices.Add(IconSpriteAtlas.GetDeclarer());
         if (req.isFriend) slices.Add(IconSpriteAtlas.GetFriend());
+        else if (req.isFriendSecret) slices.Add(IconSpriteAtlas.GetFriendSecret());
         if (req.card != null && req.card.id == "JOKER" && !string.IsNullOrEmpty(req.declaredSuit))
             slices.Add(IconSpriteAtlas.GetSuit(req.declaredSuit));
         Vector2 sz = IconSpriteAtlas.DisplaySquare;

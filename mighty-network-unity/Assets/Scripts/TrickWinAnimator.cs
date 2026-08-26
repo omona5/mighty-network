@@ -56,7 +56,7 @@ public class TrickWinAnimator : MonoBehaviour
             toastRoot.anchorMin = new Vector2(0.5f, 0.5f);
             toastRoot.anchorMax = new Vector2(0.5f, 0.5f);
             toastRoot.pivot = new Vector2(0.5f, 0.5f);
-            toastRoot.sizeDelta = new Vector2(840f, 192f);
+            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(720f), UiFonts.Layout(140f));
             toastRoot.anchoredPosition = new Vector2(0f, 90f);
 
             GameObject bgGo = new GameObject("Bg", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -75,8 +75,8 @@ public class TrickWinAnimator : MonoBehaviour
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;
             // 좌우 여백을 넉넉히 (텍스트가 박스 끝에 붙지 않게)
-            trt.offsetMin = new Vector2(48f, 12f);
-            trt.offsetMax = new Vector2(-48f, -12f);
+            trt.offsetMin = new Vector2(UiFonts.Layout(40f), 12f);
+            trt.offsetMax = new Vector2(-UiFonts.Layout(40f), -12f);
             toastText = textGo.GetComponent<Text>();
             toastText.fontSize = UiFonts.Size(40);
             toastText.alignment = TextAnchor.MiddleCenter;
@@ -99,14 +99,14 @@ public class TrickWinAnimator : MonoBehaviour
         if (toastBg != null)
             toastBg.color = Color.black;
         if (toastRoot != null)
-            toastRoot.sizeDelta = new Vector2(840f, 192f);
+            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(720f), UiFonts.Layout(140f));
         if (toastText != null)
         {
             RectTransform trt = toastText.rectTransform;
             if (trt != null)
             {
-                trt.offsetMin = new Vector2(48f, 12f);
-                trt.offsetMax = new Vector2(-48f, -12f);
+                trt.offsetMin = new Vector2(UiFonts.Layout(40f), 12f);
+                trt.offsetMax = new Vector2(-UiFonts.Layout(40f), -12f);
             }
             Font font = UiFonts.Primary;
             if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");

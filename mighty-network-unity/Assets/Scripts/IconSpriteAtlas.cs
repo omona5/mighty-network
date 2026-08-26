@@ -5,7 +5,7 @@ using UnityEngine;
 // IconSpriteAtlas: UI 아이콘 시트 슬라이스
 //   icon_card  128×64  — 13열 × 5행 (♠♦♥♣ + joker)
 //   icon_shape 64×64   — ♠ ♦ ♥ ♣ No
-//   icon_etc   64×64   — 주공(왕관) / 프렌드(F)
+//   icon_etc   64×64  — 주공(왕관) / 프렌드(보라 F) / 비밀프렌드(회색 F)
 // ============================================================================
 public static class IconSpriteAtlas
 {
@@ -42,6 +42,7 @@ public static class IconSpriteAtlas
     private static Slice noTrump;
     private static Slice declarer;
     private static Slice friend;
+    private static Slice friendSecret;
     private static bool loadAttempted;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -49,6 +50,10 @@ public static class IconSpriteAtlas
     {
         cards = null;
         shapes = null;
+        noTrump = default(Slice);
+        declarer = default(Slice);
+        friend = default(Slice);
+        friendSecret = default(Slice);
         loadAttempted = false;
     }
 
@@ -89,6 +94,18 @@ public static class IconSpriteAtlas
     {
         EnsureLoaded();
         return friend;
+    }
+
+    // 본인만 아는 미공개 프렌드 (회색 F)
+    public static Slice GetFriendSecret()
+    {
+        EnsureLoaded();
+        return friendSecret;
+    }
+
+    public static Slice GetFriendIcon(bool secret)
+    {
+        return secret ? GetFriendSecret() : GetFriend();
     }
 
     public static string[] Ranks { get { return RankOrder; } }
@@ -146,8 +163,13 @@ public static class IconSpriteAtlas
         Texture2D etcTex = LoadTex("Icons/icon_etc");
         if (etcTex != null)
         {
-            declarer = MakeSlice(etcTex, 0, 0, 2, 1, RoleW, RoleH, "DECLARER");
-            friend = MakeSlice(etcTex, 1, 0, 2, 1, RoleW, RoleH, "FRIEND");
+            int cols = Mathf.Max(1, etcTex.width / RoleW);
+            declarer = MakeSlice(etcTex, 0, 0, cols, 1, RoleW, RoleH, "DECLARER");
+            friend = MakeSlice(etcTex, 1, 0, cols, 1, RoleW, RoleH, "FRIEND");
+            if (cols >= 3)
+                friendSecret = MakeSlice(etcTex, 2, 0, cols, 1, RoleW, RoleH, "FRIEND_SECRET");
+            else
+                friendSecret = friend;
         }
     }
 

@@ -13,6 +13,11 @@ public static class UiFonts
         return Mathf.Max(1, Mathf.RoundToInt(px * Scale));
     }
 
+    public static float Layout(float px)
+    {
+        return px * Scale;
+    }
+
     private static Font primary;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

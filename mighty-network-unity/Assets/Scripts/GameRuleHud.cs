@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // ============================================================================
-// GameRuleHud: 좌상단 — 기루다 / 마이티 / 조커콜 / 주공 / 프렌드 / 주공팀·공약
+// GameRuleHud: 좌상단 — 기루다 / 마이티 / 조커콜 / 프렌드카드 / 주공팀·공약
 // ============================================================================
 public class GameRuleHud : MonoBehaviour
 {
@@ -16,8 +16,12 @@ public class GameRuleHud : MonoBehaviour
     private Text friendNoneText;
     private Font uiFont;
     private CanvasGroup canvasGroup;
-    private const int LayoutRev = 6;
+    private const int LayoutRev = 8;
     private int builtRev;
+
+    private const float PadL = 12f;
+    private const float PadR = 12f;
+    private const float LabelColW = 118f; // "프렌드카드" 한 줄
 
     public struct Info
     {
@@ -74,6 +78,8 @@ public class GameRuleHud : MonoBehaviour
                 "주공팀  " + NullDash(info.teamScoreLabel) + "\n"
                 + "공약    " + NullDash(info.bidLabel);
         }
+
+        ApplyPanelSize(info.friendCardNone);
     }
 
     public void Clear()
@@ -84,6 +90,24 @@ public class GameRuleHud : MonoBehaviour
     private static string NullDash(string s)
     {
         return string.IsNullOrEmpty(s) ? "-" : s;
+    }
+
+    private void ApplyPanelSize(bool friendNone)
+    {
+        if (root == null) return;
+        Vector2 cardSz = IconSpriteAtlas.DisplayCard;
+        float iconRight = PadL + LabelColW + 8f + cardSz.x;
+        float w = friendNone
+            ? iconRight + 8f + UiFonts.Layout(48f) + PadR // "없음"
+            : iconRight + PadR;
+
+        Vector2 sqSz = IconSpriteAtlas.DisplaySquare;
+        float rowH = Mathf.Max(cardSz.y, sqSz.y, UiFonts.Layout(22f)) + 8f;
+        float titleH = UiFonts.Layout(26f);
+        float bodyH = UiFonts.Layout(44f);
+        float y0 = -(titleH + 6f);
+        float h = -y0 + rowH * 4f + bodyH + 16f;
+        root.sizeDelta = new Vector2(w, h);
     }
 
     private void EnsureUi()
@@ -105,8 +129,7 @@ public class GameRuleHud : MonoBehaviour
         root.anchorMin = new Vector2(0f, 1f);
         root.anchorMax = new Vector2(0f, 1f);
         root.pivot = new Vector2(0f, 1f);
-        root.anchoredPosition = new Vector2(16f, -16f);
-        root.sizeDelta = new Vector2(360f, 340f);
+        root.anchoredPosition = new Vector2(12f, -12f);
         canvasGroup = go.GetComponent<CanvasGroup>();
         canvasGroup.blocksRaycasts = false;
         root.SetAsLastSibling();
@@ -128,11 +151,11 @@ public class GameRuleHud : MonoBehaviour
         titRt.anchorMin = new Vector2(0f, 1f);
         titRt.anchorMax = new Vector2(1f, 1f);
         titRt.pivot = new Vector2(0.5f, 1f);
-        titRt.anchoredPosition = new Vector2(0f, -8f);
-        titRt.sizeDelta = new Vector2(-20f, 36f);
+        titRt.anchoredPosition = new Vector2(0f, -6f);
+        titRt.sizeDelta = new Vector2(-16f, UiFonts.Layout(26f));
         Text title = titleGo.GetComponent<Text>();
         title.font = GetFont();
-        title.fontSize = UiFonts.Size(16);
+        title.fontSize = UiFonts.Size(15);
         title.alignment = TextAnchor.MiddleLeft;
         title.color = new Color(1f, 0.9f, 0.45f, 1f);
         title.text = "판 정보";
@@ -140,11 +163,14 @@ public class GameRuleHud : MonoBehaviour
 
         Vector2 cardSz = IconSpriteAtlas.DisplayCard;
         Vector2 sqSz = IconSpriteAtlas.DisplaySquare;
-        trumpIcon = MakeLabeledIcon(root, "Trump", "기루다", new Vector2(12f, -38f), sqSz);
-        mightyIcon = MakeLabeledIcon(root, "Mighty", "마이티", new Vector2(12f, -98f), cardSz);
-        jokerCallIcon = MakeLabeledIcon(root, "JokerCall", "조커콜", new Vector2(12f, -158f), cardSz);
-        friendCardIcon = MakeLabeledIcon(root, "FriendCard", "프렌드카드", new Vector2(12f, -218f), cardSz);
-        friendNoneText = MakeInlineLabel(friendCardIcon.transform.parent, "None", "없음", new Vector2(80f, 0f));
+        float rowH = Mathf.Max(cardSz.y, sqSz.y, UiFonts.Layout(22f)) + 8f;
+        float y0 = -(UiFonts.Layout(26f) + 6f);
+        trumpIcon = MakeLabeledIcon(root, "Trump", "기루다", new Vector2(PadL, y0), sqSz);
+        mightyIcon = MakeLabeledIcon(root, "Mighty", "마이티", new Vector2(PadL, y0 - rowH), cardSz);
+        jokerCallIcon = MakeLabeledIcon(root, "JokerCall", "조커콜", new Vector2(PadL, y0 - rowH * 2f), cardSz);
+        friendCardIcon = MakeLabeledIcon(root, "FriendCard", "프렌드카드", new Vector2(PadL, y0 - rowH * 3f), cardSz);
+        float noneX = LabelColW + 8f + cardSz.x + 8f;
+        friendNoneText = MakeInlineLabel(friendCardIcon.transform.parent, "None", "없음", new Vector2(noneX, 0f));
         friendNoneText.gameObject.SetActive(false);
 
         GameObject bodyGo = new GameObject("Body", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
@@ -153,21 +179,22 @@ public class GameRuleHud : MonoBehaviour
         bodyRt.anchorMin = new Vector2(0f, 0f);
         bodyRt.anchorMax = new Vector2(1f, 0f);
         bodyRt.pivot = new Vector2(0.5f, 0f);
-        bodyRt.anchoredPosition = new Vector2(0f, 10f);
-        bodyRt.sizeDelta = new Vector2(-24f, 66f);
+        bodyRt.anchoredPosition = new Vector2(0f, 8f);
+        bodyRt.sizeDelta = new Vector2(-20f, UiFonts.Layout(44f));
         bodyText = bodyGo.GetComponent<Text>();
         bodyText.font = GetFont();
-        bodyText.fontSize = UiFonts.Size(15);
+        bodyText.fontSize = UiFonts.Size(14);
         bodyText.alignment = TextAnchor.UpperLeft;
         bodyText.color = Color.white;
-        bodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        bodyText.horizontalOverflow = HorizontalWrapMode.Overflow;
         bodyText.verticalOverflow = VerticalWrapMode.Overflow;
         bodyText.raycastTarget = false;
-        bodyText.lineSpacing = 1.1f;
+        bodyText.lineSpacing = 1.05f;
         Shadow sh = bodyGo.AddComponent<Shadow>();
         sh.effectColor = new Color(0f, 0f, 0f, 0.6f);
         sh.effectDistance = new Vector2(1f, -1f);
 
+        ApplyPanelSize(false);
         root.gameObject.SetActive(false);
         builtRev = LayoutRev;
     }
@@ -181,7 +208,7 @@ public class GameRuleHud : MonoBehaviour
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(0f, 1f);
         rt.anchoredPosition = pos;
-        rt.sizeDelta = new Vector2(-24f, Mathf.Max(iconSize.y, 22f));
+        rt.sizeDelta = new Vector2(-PadL - PadR, Mathf.Max(iconSize.y, UiFonts.Layout(22f)));
 
         GameObject labGo = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
         labGo.transform.SetParent(row.transform, false);
@@ -190,13 +217,14 @@ public class GameRuleHud : MonoBehaviour
         lrt.anchorMax = new Vector2(0f, 1f);
         lrt.pivot = new Vector2(0f, 0.5f);
         lrt.anchoredPosition = Vector2.zero;
-        lrt.sizeDelta = new Vector2(110f, 0f);
+        lrt.sizeDelta = new Vector2(LabelColW, 0f);
         Text t = labGo.GetComponent<Text>();
         t.font = GetFont();
-        t.fontSize = UiFonts.Size(14);
+        t.fontSize = UiFonts.Size(13);
         t.alignment = TextAnchor.MiddleLeft;
         t.color = Color.white;
         t.text = label;
+        t.horizontalOverflow = HorizontalWrapMode.Overflow;
         t.raycastTarget = false;
 
         Image img = IconGui.MakeImage(row.transform, "Icon", default(IconSpriteAtlas.Slice), iconSize);
@@ -204,7 +232,7 @@ public class GameRuleHud : MonoBehaviour
         irt.anchorMin = new Vector2(0f, 0.5f);
         irt.anchorMax = new Vector2(0f, 0.5f);
         irt.pivot = new Vector2(0f, 0.5f);
-        irt.anchoredPosition = new Vector2(80f, 0f);
+        irt.anchoredPosition = new Vector2(LabelColW + 8f, 0f);
         return img;
     }
 
@@ -217,13 +245,14 @@ public class GameRuleHud : MonoBehaviour
         rt.anchorMax = new Vector2(0f, 0.5f);
         rt.pivot = new Vector2(0f, 0.5f);
         rt.anchoredPosition = pos;
-        rt.sizeDelta = new Vector2(110f, 36f);
+        rt.sizeDelta = new Vector2(UiFonts.Layout(48f), UiFonts.Layout(24f));
         Text t = go.GetComponent<Text>();
         t.font = GetFont();
-        t.fontSize = UiFonts.Size(15);
+        t.fontSize = UiFonts.Size(14);
         t.alignment = TextAnchor.MiddleLeft;
         t.color = Color.white;
         t.text = text;
+        t.horizontalOverflow = HorizontalWrapMode.Overflow;
         t.raycastTarget = false;
         return t;
     }

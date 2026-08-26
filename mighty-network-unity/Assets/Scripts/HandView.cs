@@ -18,6 +18,7 @@ public class HandView : MonoBehaviour
         public string playerNickname;
         public bool isDeclarer;
         public bool isFriend;
+        public bool isFriendSecret;
         public string declaredSuit;
     }
 
@@ -27,7 +28,7 @@ public class HandView : MonoBehaviour
 
     public System.Action<CardData> onCardClicked;
 
-    private const float TableLabelHeight = 28f;
+    private const float TableLabelHeight = 42f;
     private const int TableLabelFontSize = 30;
     private const int TableNickMaxChars = 8;
     // 5마: 트릭당 항상 5장 — 배치/비행 도착점을 이 슬롯 기준으로 고정
@@ -148,6 +149,7 @@ public class HandView : MonoBehaviour
             var above = new List<IconSpriteAtlas.Slice>();
             if (e.isDeclarer) above.Add(IconSpriteAtlas.GetDeclarer());
             if (e.isFriend) above.Add(IconSpriteAtlas.GetFriend());
+            else if (e.isFriendSecret) above.Add(IconSpriteAtlas.GetFriendSecret());
             if (e.card != null && e.card.id == "JOKER" && !string.IsNullOrEmpty(e.declaredSuit))
                 above.Add(IconSpriteAtlas.GetSuit(e.declaredSuit));
             PlaceIconsAbove(root.transform, above, topY);
@@ -178,14 +180,14 @@ public class HandView : MonoBehaviour
 
     private GameObject selfRoleRoot;
 
-    public void SetSelfRoleBadges(bool isDeclarer, bool isFriend)
+    public void SetSelfRoleBadges(bool isDeclarer, bool isFriend, bool friendSecret = false)
     {
         if (selfRoleRoot != null)
         {
             Destroy(selfRoleRoot);
             selfRoleRoot = null;
         }
-        if (!isDeclarer && !isFriend) return;
+        if (!isDeclarer && !isFriend && !friendSecret) return;
 
         selfRoleRoot = new GameObject("SelfRoles", typeof(RectTransform));
         selfRoleRoot.transform.SetParent(transform, false);
@@ -194,8 +196,8 @@ public class HandView : MonoBehaviour
         rt.anchorMax = new Vector2(0.5f, 1f);
         rt.pivot = new Vector2(0.5f, 0f);
         rt.anchoredPosition = new Vector2(0f, 6f);
-        rt.sizeDelta = new Vector2(120f, IconSpriteAtlas.DisplaySquare.y);
-        IconGui.PlaceRoleIcons(selfRoleRoot.transform, isDeclarer, isFriend, Vector2.zero);
+        rt.sizeDelta = new Vector2(UiFonts.Layout(120f), IconSpriteAtlas.DisplaySquare.y);
+        IconGui.PlaceRoleIcons(selfRoleRoot.transform, isDeclarer, isFriend, Vector2.zero, friendSecret);
     }
 
     private static string FormatTableNickname(string nickname)

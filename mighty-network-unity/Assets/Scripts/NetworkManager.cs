@@ -39,6 +39,13 @@ public class NetworkManager : MonoBehaviour
     private string status = "대기 중...";
     private string activeServerUrl = ""; // 실제로 접속 중인 URL
     private Font uiFont; // WebGL/에디터 UI용 (Galmuri11)
+    private float pingSentAt = -1f;
+    private float lastPingRttMs = -1f;
+    private float nextAutoPingAt = 0f;
+    // OnGUI 패널 기준 2열 버튼 공통 폭 (행이 달라도 동일)
+    private float guiColW;
+    private float guiColGap = 8f;
+    private float guiBtnH;
 
     // 로비 입력값
     private string nickname = "";
@@ -188,7 +195,7 @@ public class NetworkManager : MonoBehaviour
         public bool jokerCallActivated;
     }
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public double reconnectGraceMs; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public bool trickComplete; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public bool mightyRevealed; public string mightyPlayerNickname; public int minBid; public int nextMinBid; public string currentBidderClientId; public string currentBidderNickname; public string[] passedClientIds; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public int kittyCount; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public double reconnectGraceMs; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public bool trickComplete; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public bool jokerPlayed; public bool mightyRevealed; public string mightyPlayerNickname; public int minBid; public int nextMinBid; public string currentBidderClientId; public string currentBidderNickname; public string[] passedClientIds; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public int kittyCount; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
 
     [System.Serializable] private class BidResultData {
@@ -394,6 +401,18 @@ public class NetworkManager : MonoBehaviour
             Log("[lobby] 결과 확인 시간 종료 → 자동 대기방 복귀");
             ReturnToLobby();
         }
+
+        // 대기실: 1초마다 핑 → 지연 시간 표시
+        if (inRoom
+            && currentState != null
+            && currentState.status == "waiting"
+            && websocket != null
+            && websocket.State == WebSocketState.Open
+            && Time.realtimeSinceStartup >= nextAutoPingAt)
+        {
+            nextAutoPingAt = Time.realtimeSinceStartup + 1f;
+            SendPing();
+        }
     }
 
     private void HandleMessage(string json)
@@ -410,7 +429,11 @@ public class NetworkManager : MonoBehaviour
             }
 
             case "pong_from_server":
-                Log("[pong] " + json);
+                if (pingSentAt > 0f)
+                {
+                    lastPingRttMs = (Time.realtimeSinceStartup - pingSentAt) * 1000f;
+                    pingSentAt = -1f;
+                }
                 break;
 
             case "game_started":
@@ -663,8 +686,8 @@ public class NetworkManager : MonoBehaviour
 
     private void SendPing()
     {
+        pingSentAt = Time.realtimeSinceStartup;
         Send(JsonUtility.ToJson(new PingMsg { data = new PingData { message = "hello from Unity" } }));
-        Log("[ping] 전송");
     }
 
     private void CreateRoom()
@@ -795,6 +818,13 @@ public class NetworkManager : MonoBehaviour
             if (currentState != null && !string.IsNullOrEmpty(currentState.jokerCallCardId)
                 && cardId == currentState.jokerCallCardId)
             {
+                // 조커가 이미 나왔으면 조커콜 선택 없이 일반 제출
+                if (currentState.jokerPlayed)
+                {
+                    Log("[play] 조커 이미 출현 — 조커콜 카드 일반 제출");
+                    PlayCard(cardId, null, false);
+                    return;
+                }
                 pendingPlayCardId = cardId;
                 pendingNeedJokerCall = true;
                 Log("[play] 조커콜 카드 — 조커콜 사용 여부를 선택하세요");
@@ -1863,6 +1893,7 @@ public class NetworkManager : MonoBehaviour
                 tableSize,
                 entries[n - 1].isDeclarer,
                 entries[n - 1].isFriend,
+                entries[n - 1].isFriendSecret,
                 entries[n - 1].declaredSuit,
                 () => { done = true; });
 
@@ -1987,7 +2018,8 @@ public class NetworkManager : MonoBehaviour
                 card = t != null ? t.card : null,
                 playerNickname = t != null ? t.playerNickname : null,
                 isDeclarer = p != null && IsDeclarerPlayer(p, currentState),
-                isFriend = p != null && IsFriendSeat(p, currentState),
+                isFriend = p != null && IsPublicFriendSeat(p, currentState),
+                isFriendSecret = p != null && IsSecretFriendSeat(p, currentState),
                 declaredSuit = t != null ? t.declaredSuit : null,
             };
         }
@@ -2267,24 +2299,35 @@ public class NetworkManager : MonoBehaviour
                 || (state.mightyRevealed
                     && !string.IsNullOrEmpty(state.mightyPlayerNickname)
                     && p.nickname == state.mightyPlayerNickname),
-            isFriend = IsFriendSeat(p, state),
+            isFriend = IsPublicFriendSeat(p, state),
+            isFriendSecret = IsSecretFriendSeat(p, state),
         };
     }
 
-    private bool IsFriendSeat(PlayerInfo p, GameState state)
+    private bool IsPublicFriendSeat(PlayerInfo p, GameState state)
     {
         if (p == null || state == null || !state.friendChosen) return false;
         if (state.friendType == "none") return false;
         if (state.friendType == "player")
             return !string.IsNullOrEmpty(state.friendNickname) && p.nickname == state.friendNickname;
-        // 카드 프렌드: 공개됐거나, 본인 손패에 그 카드가 있으면 표시
-        if (state.friendRevealed
+        // 카드 프렌드: 공개된 뒤에만 보라 F
+        return state.friendRevealed
             && !string.IsNullOrEmpty(state.friendNickname)
-            && p.nickname == state.friendNickname)
-            return true;
-        if (p.clientId == myClientId && !string.IsNullOrEmpty(state.friendCardId))
-            return HandContains(myHandCards, state.friendCardId);
-        return false;
+            && p.nickname == state.friendNickname;
+    }
+
+    // 미공개 카드 프렌드 — 본인 손패에 지정 카드가 있을 때만 회색 F
+    private bool IsSecretFriendSeat(PlayerInfo p, GameState state)
+    {
+        if (p == null || state == null || !state.friendChosen) return false;
+        if (state.friendType != "card" || state.friendRevealed) return false;
+        if (p.clientId != myClientId) return false;
+        return HandContains(myHandCards, state.friendCardId);
+    }
+
+    private bool IsFriendSeat(PlayerInfo p, GameState state)
+    {
+        return IsPublicFriendSeat(p, state) || IsSecretFriendSeat(p, state);
     }
 
     private static bool HandContains(CardData[] hand, string cardId)
@@ -2369,17 +2412,17 @@ public class NetworkManager : MonoBehaviour
     // ---------- 화면 UI (씬 세팅 없이 자동 표시) ----------
     private void DrawIdleCornerHud(bool showKittyDiscard)
     {
-        float mw = showKittyDiscard ? 200f : 168f;
-        float mh = showKittyDiscard ? 108f : 44f;
+        float mw = showKittyDiscard ? UiFonts.Layout(200f) : UiFonts.Layout(168f);
+        float mh = showKittyDiscard ? UiFonts.Layout(108f) : UiFonts.Layout(48f);
         float mx = Screen.width - mw - 14f;
         float my = 12f;
         GUILayout.BeginArea(new Rect(mx, my, mw, mh), GUI.skin.box);
-        if (GUILayout.Button("방 나가기", GUILayout.Height(36))) LeaveRoom();
+        if (GUILayout.Button("방 나가기", GUILayout.Height(UiFonts.Layout(36f)))) LeaveRoom();
         if (showKittyDiscard)
         {
             GUILayout.Label("선택 " + discardSelected.Count + "/3");
             GUI.enabled = discardSelected.Count == 3;
-            if (GUILayout.Button("3장 버리기", GUILayout.Height(32)))
+            if (GUILayout.Button("3장 버리기", GUILayout.Height(UiFonts.Layout(32f))))
                 DiscardKitty();
             GUI.enabled = true;
         }
@@ -2434,33 +2477,61 @@ public class NetworkManager : MonoBehaviour
             return;
         }
 
-        // 화면 크기에 맞춰 HUD 패널 확대 (WebGL 작은 캔버스 대응)
-        float panelW = Mathf.Clamp(Screen.width * 0.55f, 480f, 720f);
-        if (inGame) panelW = Mathf.Clamp(Screen.width * 0.42f, 400f, 560f);
-        if (isFinished) panelW = Mathf.Clamp(Screen.width * 0.5f, 480f, 640f);
-        float panelH = Mathf.Clamp(Screen.height - 40f, 360f, inGame ? 420f : 560f);
-        if (isFinished) panelH = Mathf.Clamp(Screen.height - 40f, 520f, Screen.height - 40f);
-        // 화면 가운데 배치
+        // 화면 크기에 맞춰 HUD 패널 (로비·대기실은 콘텐츠에 가깝게 짧게)
+        float panelW = Mathf.Clamp(Screen.width * 0.7f, 720f, 1000f);
+        if (inGame) panelW = Mathf.Clamp(Screen.width * 0.55f, 560f, 820f);
+        if (isFinished) panelW = Mathf.Clamp(Screen.width * 0.62f, 640f, 920f);
+
+        float panelH;
+        if (!inRoom)
+            panelH = Mathf.Min(Screen.height - 40f, UiFonts.Layout(360f));
+        else if (phase == "waiting")
+        {
+            int pc = (currentState != null && currentState.players != null)
+                ? currentState.players.Length : 5;
+            panelH = Mathf.Min(
+                Screen.height - 40f,
+                UiFonts.Layout(220f) + pc * UiFonts.Layout(28f) + UiFonts.Layout(150f));
+        }
+        else if (isFinished)
+            panelH = Mathf.Clamp(Screen.height - 40f, 560f, Screen.height - 40f);
+        else
+            panelH = Mathf.Clamp(Screen.height - 40f, 360f, 540f);
+
         float panelX = (Screen.width - panelW) * 0.5f;
         float panelY = (Screen.height - panelH) * 0.5f;
+        // 박스 안쪽 여백 24(좌우 12) + 열 간격 → 2열 버튼 폭 고정
+        float boxInset = 24f;
+        guiColGap = 8f;
+        guiColW = (panelW - boxInset - guiColGap) * 0.5f;
+        guiBtnH = UiFonts.Layout(36f);
         GUILayout.BeginArea(new Rect(panelX, panelY, panelW, panelH), GUI.skin.box);
 
-        GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
-        GUILayout.Label("연결 상태: " + status);
-        if (!string.IsNullOrEmpty(activeServerUrl))
-            GUILayout.Label("서버: " + activeServerUrl);
-        GUILayout.Space(6);
+        // 공약 선택 중·대기실에서는 서버 URL 숨김
+        if (!myBidTurn)
+        {
+            GUILayout.Label(inGame ? "Mighty - 게임 중" : "Mighty - 방 테스트");
+            GUILayout.Label("연결 상태: " + status);
+            if (!inRoom && !string.IsNullOrEmpty(activeServerUrl))
+                GUILayout.Label("서버: " + activeServerUrl);
+            GUILayout.Space(6);
+        }
 
         if (!inRoom)
         {
+            float labelW = UiFonts.Layout(70f);
+            float fieldH = UiFonts.Layout(32f);
+            float btnH = UiFonts.Layout(38f);
             // ---- 로비 화면 ----
             GUILayout.BeginHorizontal();
-            GUILayout.Label("서버URL:", GUILayout.Width(70));
-            serverUrl = GUILayout.TextField(serverUrl, GUILayout.Width(320));
+            GUILayout.Label("서버URL:", GUILayout.Width(labelW));
+            serverUrl = GUILayout.TextField(serverUrl, GUILayout.Width(guiColW * 2f + guiColGap - labelW));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("주소 저장·재연결", GUILayout.Height(28))) ApplyServerUrlAndReconnect();
-            if (GUILayout.Button("기본값", GUILayout.Width(70), GUILayout.Height(28)))
+            if (GUILayout.Button("주소 저장·재연결", GUILayout.Width(guiColW), GUILayout.Height(fieldH)))
+                ApplyServerUrlAndReconnect();
+            GUILayout.Space(guiColGap);
+            if (GUILayout.Button("기본값", GUILayout.Width(guiColW), GUILayout.Height(fieldH)))
             {
                 ServerUrlResolver.ClearPrefs();
                 serverUrl = "ws://localhost:3000";
@@ -2471,21 +2542,24 @@ public class NetworkManager : MonoBehaviour
 
             GUILayout.Space(4);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("닉네임:", GUILayout.Width(70));
-            nickname = GUILayout.TextField(nickname, 12, GUILayout.Width(180));
+            GUILayout.Label("닉네임:", GUILayout.Width(labelW));
+            nickname = GUILayout.TextField(nickname, 12, GUILayout.Width(guiColW * 2f + guiColGap - labelW));
             GUILayout.EndHorizontal();
 
+            float roomFieldW = (guiColW * 2f + guiColGap - labelW - UiFonts.Layout(50f) - guiColGap) * 0.5f;
             GUILayout.BeginHorizontal();
-            GUILayout.Label("방 코드:", GUILayout.Width(70));
-            roomIdInput = GUILayout.TextField(roomIdInput, 4, GUILayout.Width(100));
-            GUILayout.Label("비번:", GUILayout.Width(45));
-            passwordInput = GUILayout.TextField(passwordInput, GUILayout.Width(120));
+            GUILayout.Label("방 코드:", GUILayout.Width(labelW));
+            roomIdInput = GUILayout.TextField(roomIdInput, 4, GUILayout.Width(roomFieldW));
+            GUILayout.Space(guiColGap);
+            GUILayout.Label("비번:", GUILayout.Width(UiFonts.Layout(50f)));
+            passwordInput = GUILayout.TextField(passwordInput, GUILayout.Width(roomFieldW));
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("방 만들기", GUILayout.Height(38))) CreateRoom();
-            if (GUILayout.Button("입장", GUILayout.Height(38))) JoinRoom();
+            if (GUILayout.Button("방 만들기", GUILayout.Width(guiColW), GUILayout.Height(btnH))) CreateRoom();
+            GUILayout.Space(guiColGap);
+            if (GUILayout.Button("입장", GUILayout.Width(guiColW), GUILayout.Height(btnH))) JoinRoom();
             GUILayout.EndHorizontal();
         }
         else
@@ -2525,33 +2599,49 @@ public class NetworkManager : MonoBehaviour
         }
 
         GUILayout.Space(6);
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button("준비 / 취소")) ToggleReady();
-
-        // 방장에게만 시작/자리섞기/점수초기화 버튼 표시. (빈자리는 서버가 자동으로 봇으로 채움)
+        float btnH = guiBtnH;
+        float col = guiColW;
+        float gap = guiColGap;
         if (IAmHost())
         {
-            GUI.enabled = currentState != null && currentState.canStart; // 5명 전원 준비 시 활성화
-            if (GUILayout.Button("게임 시작(방장)")) StartGame();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("준비 / 취소", GUILayout.Width(col), GUILayout.Height(btnH)))
+                ToggleReady();
+            GUILayout.Space(gap);
+            GUI.enabled = currentState != null && currentState.canStart;
+            if (GUILayout.Button("게임 시작(방장)", GUILayout.Width(col), GUILayout.Height(btnH)))
+                StartGame();
             GUI.enabled = true;
-            if (GUILayout.Button("자리 섞기(방장)")) ShuffleSeats();
-            if (GUILayout.Button("점수 초기화(방장)")) ResetScores();
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("자리 섞기(방장)", GUILayout.Width(col), GUILayout.Height(btnH)))
+                ShuffleSeats();
+            GUILayout.Space(gap);
+            if (GUILayout.Button("점수 초기화(방장)", GUILayout.Width(col), GUILayout.Height(btnH)))
+                ResetScores();
+            GUILayout.EndHorizontal();
         }
-        GUILayout.EndHorizontal();
+        else
+        {
+            if (GUILayout.Button("준비 / 취소", GUILayout.Width(col * 2f + gap), GUILayout.Height(btnH)))
+                ToggleReady();
+        }
 
-        GUILayout.Label("(목록 위→아래 = 시계방향 순서. 자리 섞기는 게임 시작 전에만)");
-        GUILayout.Label("(새 플레이어는 0점부터, 기존 사람 점수는 유지됩니다)");
-
+        GUILayout.Space(8);
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("Ping")) SendPing();
-        if (GUILayout.Button("방 나가기")) LeaveRoom();
+        string pingLabel = lastPingRttMs >= 0f
+            ? ("지연 " + lastPingRttMs.ToString("0") + " ms")
+            : "지연 측정 중...";
+        GUILayout.Label(pingLabel, GUILayout.Width(col), GUILayout.Height(btnH));
+        GUILayout.Space(gap);
+        if (GUILayout.Button("방 나가기", GUILayout.Width(col), GUILayout.Height(btnH)))
+            LeaveRoom();
         GUILayout.EndHorizontal();
     }
 
     // ---- 입찰 단계 화면 ----
     private void DrawBidding()
     {
-        GUILayout.Label("입찰 단계");
         if (currentState == null) return;
 
         bool dealing = (dealAnimator != null && dealAnimator.IsBusy)
@@ -2563,6 +2653,14 @@ public class NetworkManager : MonoBehaviour
             return;
         }
 
+        bool myBidTurn = currentState.currentBidderClientId == myClientId;
+        int floorMin = currentState.minBid > 0 ? currentState.minBid : 13;
+        int raiseMin = currentState.nextMinBid > 0
+            ? currentState.nextMinBid
+            : (currentState.highestBid != null
+                ? currentState.highestBid.targetScore + 1
+                : floorMin);
+
         if (currentState.highestBid != null)
         {
             HighestBid h = currentState.highestBid;
@@ -2571,28 +2669,19 @@ public class NetworkManager : MonoBehaviour
         }
         else GUILayout.Label("아직 공약 없음");
 
-        int floorMin = currentState.minBid > 0 ? currentState.minBid : 13;
-        int raiseMin = currentState.nextMinBid > 0
-            ? currentState.nextMinBid
-            : (currentState.highestBid != null
-                ? currentState.highestBid.targetScore + 1
-                : floorMin);
-        GUILayout.Label("최소 공약: " + floorMin
-            + (currentState.highestBid != null ? ("  → 올릴 최소: " + raiseMin) : ""));
-
-        bool myBidTurn = currentState.currentBidderClientId == myClientId;
-        GUILayout.Label("입찰 차례: " + currentState.currentBidderNickname
-            + (myBidTurn ? "  << 내 차례! (더 높이거나 패스)" : ""));
+        GUILayout.Label("최소 " + floorMin
+            + (currentState.highestBid != null ? ("  · 올릴 최소 " + raiseMin) : ""));
 
         if (myBidTurn)
         {
             int cur;
             if (!int.TryParse(bidScoreInput, out cur) || cur < raiseMin)
                 bidScoreInput = raiseMin.ToString();
+            GUILayout.Space(4);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("공약:", GUILayout.Width(45));
-            bidScoreInput = GUILayout.TextField(bidScoreInput, 2, GUILayout.Width(50));
-            GUILayout.Label("기루다:", GUILayout.Width(55));
+            GUILayout.Label("공약:", GUILayout.Width(UiFonts.Layout(50f)));
+            bidScoreInput = GUILayout.TextField(bidScoreInput, 2, GUILayout.Width(UiFonts.Layout(60f)));
+            GUILayout.Label("기루다:", GUILayout.Width(UiFonts.Layout(60f)));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             for (int i = 0; i < trumpOptions.Length; i++)
@@ -2641,7 +2730,7 @@ public class NetworkManager : MonoBehaviour
                 + (discardSelected.Count > 0 ? " [" + string.Join(", ", discardSelected) + "]" : ""));
 
             GUI.enabled = discardSelected.Count == 3;
-            if (GUILayout.Button("3장 버리기", GUILayout.Height(36))) DiscardKitty();
+            if (GUILayout.Button("3장 버리기", GUILayout.Height(UiFonts.Layout(36f)))) DiscardKitty();
             GUI.enabled = true;
         }
         else GUILayout.Label("(주공이 바닥패 3장을 고르는 중...)");
@@ -2676,11 +2765,11 @@ public class NetworkManager : MonoBehaviour
             GUILayout.BeginHorizontal();
             if (IconGui.Button(IconSpriteAtlas.GetCard(currentState.mightyCardId), IconSpriteAtlas.DisplayCard.x, IconSpriteAtlas.DisplayCard.y))
                 ChooseFriend(currentState.mightyCardId);
-            GUILayout.Label("마이티", GUILayout.Width(48));
+            GUILayout.Label("마이티", GUILayout.Width(UiFonts.Layout(56f)));
             if (IconGui.Button(IconSpriteAtlas.GetCard("JOKER"), IconSpriteAtlas.DisplayCard.x, IconSpriteAtlas.DisplayCard.y))
                 ChooseFriend("JOKER");
-            GUILayout.Label("조커", GUILayout.Width(40));
-            if (GUILayout.Button("노프렌드", GUILayout.Height(IconSpriteAtlas.DisplayCard.y), GUILayout.Width(80)))
+            GUILayout.Label("조커", GUILayout.Width(UiFonts.Layout(48f)));
+            if (GUILayout.Button("노프렌드", GUILayout.Height(IconSpriteAtlas.DisplayCard.y), GUILayout.Width(UiFonts.Layout(100f))))
                 ChooseFriend("NONE");
             GUILayout.EndHorizontal();
 
@@ -2738,12 +2827,12 @@ public class NetworkManager : MonoBehaviour
             GUILayout.Label("자동 대기방 복귀: " + remain.ToString("0") + "초");
         }
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("대기방으로 돌아가기", GUILayout.Height(40)))
+        if (GUILayout.Button("대기방으로 돌아가기", GUILayout.Height(UiFonts.Layout(40f))))
         {
             finishedAutoLobbyAt = -1f;
             ReturnToLobby();
         }
-        if (GUILayout.Button("방 나가기", GUILayout.Height(40)))
+        if (GUILayout.Button("방 나가기", GUILayout.Height(UiFonts.Layout(40f))))
         {
             finishedAutoLobbyAt = -1f;
             LeaveRoom();
@@ -2848,14 +2937,14 @@ public class NetworkManager : MonoBehaviour
                     if (lead.card.id == "JOKER" && !string.IsNullOrEmpty(lead.declaredSuit))
                     {
                         GUILayout.BeginHorizontal();
-                        GUILayout.Label("조커 리드 무늬:", GUILayout.Width(110));
+                        GUILayout.Label("조커 리드 무늬:", GUILayout.Width(UiFonts.Layout(120f)));
                         IconGui.DrawLayout(IconSpriteAtlas.GetSuit(lead.declaredSuit), IconSpriteAtlas.DisplaySquare.x, IconSpriteAtlas.DisplaySquare.y);
                         GUILayout.EndHorizontal();
                     }
                     if (lead.jokerCallActivated)
                     {
                         GUILayout.BeginHorizontal();
-                        GUILayout.Label("조커콜 활성", GUILayout.Width(80));
+                        GUILayout.Label("조커콜 활성", GUILayout.Width(UiFonts.Layout(90f)));
                         IconGui.DrawLayout(IconSpriteAtlas.GetCard(currentState.jokerCallCardId), IconSpriteAtlas.DisplayCard.x, IconSpriteAtlas.DisplayCard.y);
                         GUILayout.EndHorizontal();
                     }

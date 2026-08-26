@@ -42,7 +42,7 @@ public class PlayChoicePopup : MonoBehaviour
         prt.anchorMin = new Vector2(0.5f, 0.5f);
         prt.anchorMax = new Vector2(0.5f, 0.5f);
         prt.pivot = new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = new Vector2(640f, 260f);
+        prt.sizeDelta = new Vector2(UiFonts.Layout(560f), UiFonts.Layout(200f));
         prt.anchoredPosition = new Vector2(0f, 40f);
         Image bg = panel.GetComponent<Image>();
         bg.color = Color.black;
@@ -53,7 +53,7 @@ public class PlayChoicePopup : MonoBehaviour
         trt.anchorMin = new Vector2(0f, 1f);
         trt.anchorMax = new Vector2(1f, 1f);
         trt.pivot = new Vector2(0.5f, 1f);
-        trt.sizeDelta = new Vector2(-32f, 56f);
+        trt.sizeDelta = new Vector2(-32f, UiFonts.Layout(48f));
         trt.anchoredPosition = new Vector2(0f, -12f);
 
         GameObject rowGo = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -62,7 +62,7 @@ public class PlayChoicePopup : MonoBehaviour
         row.anchorMin = new Vector2(0.5f, 0.5f);
         row.anchorMax = new Vector2(0.5f, 0.5f);
         row.pivot = new Vector2(0.5f, 0.5f);
-        row.sizeDelta = new Vector2(500f, 72f);
+        row.sizeDelta = new Vector2(UiFonts.Layout(500f), UiFonts.Layout(64f));
         row.anchoredPosition = new Vector2(0f, -8f);
         HorizontalLayoutGroup h = rowGo.GetComponent<HorizontalLayoutGroup>();
         h.childAlignment = TextAnchor.MiddleCenter;
@@ -72,7 +72,7 @@ public class PlayChoicePopup : MonoBehaviour
         h.childControlWidth = true;
         h.childControlHeight = true;
 
-        Button cancel = MakeTextButton(panel.transform, "취소", 130f, 56f, Cancel);
+        Button cancel = MakeTextButton(panel.transform, "취소", UiFonts.Layout(100f), UiFonts.Layout(40f), Cancel);
         RectTransform crt = cancel.GetComponent<RectTransform>();
         crt.anchorMin = new Vector2(0.5f, 0f);
         crt.anchorMax = new Vector2(0.5f, 0f);
@@ -121,12 +121,12 @@ public class PlayChoicePopup : MonoBehaviour
         LayoutElement ple = preview.gameObject.AddComponent<LayoutElement>();
         ple.preferredWidth = IconSpriteAtlas.DisplayCard.x;
         ple.preferredHeight = IconSpriteAtlas.DisplayCard.y;
-        MakeTextButton(row, "조커콜 사용", 150f, 52f, () =>
+        MakeTextButton(row, "조커콜 사용", UiFonts.Layout(150f), UiFonts.Layout(52f), () =>
         {
             Hide();
             if (onPick != null) onPick(true);
         });
-        MakeTextButton(row, "일반으로 내기", 150f, 52f, () =>
+        MakeTextButton(row, "일반으로 내기", UiFonts.Layout(150f), UiFonts.Layout(52f), () =>
         {
             Hide();
             if (onPick != null) onPick(false);

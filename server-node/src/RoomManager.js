@@ -630,6 +630,7 @@ class RoomManager {
     room.trickNumber = 1; // 현재 트릭 번호 (1~10)
     room.mightyRevealed = false;
     room.mightyPlayerClientId = null;
+    room.jokerPlayed = false;
     // 룰 설정이 아직 없으면(입찰 없이 시작한 경우) 폴백 기루다로 생성
     if (!room.ruleConfig) {
       room.ruleConfig = RuleEngine.makeRuleConfig(FALLBACK_TRUMP_SUIT, false);
@@ -680,7 +681,8 @@ class RoomManager {
         }
       }
       if (RuleEngine.isJokerCall(card, cfg)) {
-        jokerCallActivated = !!options.activateJokerCall;
+        // 조커가 이미 나왔으면 조커콜 무의미 → 일반 제출만 허용
+        jokerCallActivated = !!options.activateJokerCall && !room.jokerPlayed;
       }
     }
 
@@ -722,6 +724,9 @@ class RoomManager {
     if (!room.mightyRevealed && cfg && card.id === cfg.mightyCardId) {
       room.mightyRevealed = true;
       room.mightyPlayerClientId = player.clientId;
+    }
+    if (cfg && RuleEngine.isJoker(card, cfg)) {
+      room.jokerPlayed = true;
     }
 
     let trickResult = null;
@@ -834,7 +839,7 @@ class RoomManager {
       opts.declaredSuit = suits[Math.floor(Math.random() * suits.length)];
     }
     if (isLead && RuleEngine.isJokerCall(card, room.ruleConfig)) {
-      opts.activateJokerCall = Math.random() < 0.5;
+      opts.activateJokerCall = !room.jokerPlayed && Math.random() < 0.5;
     }
     return opts;
   }
@@ -1055,6 +1060,7 @@ class RoomManager {
       noTrump: !!room.noTrump,
       mightyCardId: room.ruleConfig ? room.ruleConfig.mightyCardId : null,
       jokerCallCardId: room.ruleConfig ? room.ruleConfig.jokerCallCardId : null,
+      jokerPlayed: !!room.jokerPlayed,
       mightyRevealed: !!room.mightyRevealed,
       mightyPlayerNickname: (() => {
         if (!room.mightyRevealed || !room.mightyPlayerClientId) return null;

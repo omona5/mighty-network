@@ -65,10 +65,13 @@ public static class IconGui
     }
 
     // 주공/프렌드 아이콘을 center 기준으로 가로 나란히 배치
-    public static void PlaceRoleIcons(Transform parent, bool isDeclarer, bool isFriend, Vector2 center)
+    // friendSecret: 미공개 본인 프렌드(회색 F). isFriend와 동시에 true면 공개(보라) 우선.
+    public static void PlaceRoleIcons(
+        Transform parent, bool isDeclarer, bool isFriend, Vector2 center, bool friendSecret = false)
     {
         Vector2 sz = IconSpriteAtlas.DisplaySquare;
-        int n = (isDeclarer ? 1 : 0) + (isFriend ? 1 : 0);
+        bool showFriend = isFriend || friendSecret;
+        int n = (isDeclarer ? 1 : 0) + (showFriend ? 1 : 0);
         if (n == 0) return;
         float gap = 4f;
         float total = n * sz.x + (n - 1) * gap;
@@ -79,9 +82,9 @@ public static class IconGui
             SetCenter(img.rectTransform, new Vector2(x, center.y));
             x += sz.x + gap;
         }
-        if (isFriend)
+        if (showFriend)
         {
-            Image img = MakeImage(parent, "Friend", IconSpriteAtlas.GetFriend(), sz);
+            Image img = MakeImage(parent, "Friend", IconSpriteAtlas.GetFriendIcon(!isFriend && friendSecret), sz);
             SetCenter(img.rectTransform, new Vector2(x, center.y));
         }
     }

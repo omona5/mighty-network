@@ -24,6 +24,7 @@ public class OpponentHandsView : MonoBehaviour
         public bool isDeclarer;
         public bool isMightyPlayer;
         public bool isFriend;
+        public bool isFriendSecret; // 본인만 아는 미공개 프렌드(회색 F)
     }
 
     // 상대 손패: 내 손패(160×224)의 1/2 → 원본 대비 1/4
@@ -144,8 +145,8 @@ public class OpponentHandsView : MonoBehaviour
             panels.RemoveAt(i);
         }
 
-        // 손패(하단 y≈140, 높이≈224 → 하단≈28px) 아래
-        GameObject panel = BuildPanel(self, new Vector2(0.5f, 0.06f), true);
+        // 내 손패 앵커 기준 — BuildPanel에서 카드 하단 바로 아래로 배치
+        GameObject panel = BuildPanel(self, SelfHandAnchor, true);
         panels.Add(panel);
 
         // OpponentHandsRoot는 손패보다 뒤에 있음 → Self만 Canvas 맨 앞으로
@@ -223,34 +224,81 @@ public class OpponentHandsView : MonoBehaviour
         RectTransform prt = panel.GetComponent<RectTransform>();
         prt.anchorMin = anchor;
         prt.anchorMax = anchor;
-        prt.pivot = isSelf ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = isSelf ? new Vector2(520f, 64f) : new Vector2(340f, 210f);
-        prt.anchoredPosition = Vector2.zero;
-        if (!string.IsNullOrEmpty(seat.nickname))
-            seatByNickname[seat.nickname] = prt;
-
-        // 아이콘 + 이름/점수(아이콘 기준 왼쪽 정렬) 묶음
-        GameObject nameRow = new GameObject("NameRow", typeof(RectTransform));
-        nameRow.transform.SetParent(panel.transform, false);
-        RectTransform nrrt = nameRow.GetComponent<RectTransform>();
+        bool isLeftSeat = !isSelf && anchor.x < 0.25f;
+        // 패널 중심 = 핸드(또는 내 손패) 중심. 이름 UI는 카드 하단 바로 아래.
+        prt.pivot = new Vector2(0.5f, 0.5f);
+        float nameH = UiFonts.Layout(64f);
+        float nameGap = isSelf ? 12f : 6f; // 내 이름은 손패와 살짝 더 띄움
+        float panelW = isSelf ? UiFonts.Layout(420f) : UiFonts.Layout(360f);
         if (isSelf)
         {
-            nrrt.anchorMin = Vector2.zero;
-            nrrt.anchorMax = Vector2.one;
+            // 내 이름만: 손패 중심 앵커에서 카드 하단 + 여유만큼 아래로
+            prt.sizeDelta = new Vector2(panelW, nameH);
+            prt.anchoredPosition = new Vector2(
+                0f,
+                -(CardSpriteAtlas.DisplayHeight * 0.5f + nameGap + nameH * 0.5f));
         }
         else
         {
-            nrrt.anchorMin = new Vector2(0f, 0f);
-            nrrt.anchorMax = new Vector2(1f, 0.32f);
+            // 상대: 카드가 좌석 앵커에 오도록 패널은 카드 크기, 이름은 아래로 넘침
+            prt.sizeDelta = new Vector2(panelW, CardSize.y);
+            prt.anchoredPosition = Vector2.zero;
         }
-        nrrt.offsetMin = Vector2.zero;
-        nrrt.offsetMax = Vector2.zero;
+        if (!string.IsNullOrEmpty(seat.nickname))
+            seatByNickname[seat.nickname] = prt;
+
+        // 상대 카드 줄 — 좌석 앵커(패널 중앙)
+        if (!isSelf)
+        {
+            GameObject row = new GameObject("Cards", typeof(RectTransform));
+            row.transform.SetParent(panel.transform, false);
+            RectTransform rrt = row.GetComponent<RectTransform>();
+            rrt.anchorMin = new Vector2(0.5f, 0.5f);
+            rrt.anchorMax = new Vector2(0.5f, 0.5f);
+            rrt.pivot = new Vector2(0.5f, 0.5f);
+            float rowWidth = Mathf.Max(CardSize.x, (Mathf.Max(seat.handCount, 1) - 1) * CardOverlap + CardSize.x);
+            rrt.sizeDelta = new Vector2(rowWidth, CardSize.y);
+            rrt.anchoredPosition = Vector2.zero;
+
+            int count = Mathf.Clamp(seat.handCount, 0, 13);
+            float startX = -((count - 1) * CardOverlap) * 0.5f;
+            for (int c = 0; c < count; c++)
+            {
+                CardView view = Instantiate(cardPrefab, row.transform);
+                view.SetFaceDown();
+                view.Clicked = null;
+                RectTransform crt = view.GetComponent<RectTransform>();
+                if (crt != null)
+                {
+                    crt.anchorMin = new Vector2(0.5f, 0.5f);
+                    crt.anchorMax = new Vector2(0.5f, 0.5f);
+                    crt.pivot = new Vector2(0.5f, 0.5f);
+                    crt.sizeDelta = CardSize;
+                    crt.anchoredPosition = new Vector2(startX + c * CardOverlap, 0f);
+                    crt.localScale = Vector3.one;
+                }
+                view.RefreshDropShadow();
+            }
+        }
+
+        // 아이콘 + 이름/점수 — 핸드 카드 바로 아래
+        GameObject nameRow = new GameObject("NameRow", typeof(RectTransform));
+        nameRow.transform.SetParent(panel.transform, false);
+        RectTransform nrrt = nameRow.GetComponent<RectTransform>();
+        nrrt.anchorMin = new Vector2(0.5f, 0.5f);
+        nrrt.anchorMax = new Vector2(0.5f, 0.5f);
+        nrrt.pivot = new Vector2(0.5f, 0.5f);
+        nrrt.sizeDelta = new Vector2(panelW, nameH);
+        nrrt.anchoredPosition = isSelf
+            ? Vector2.zero
+            : new Vector2(0f, -(CardSize.y * 0.5f + nameGap + nameH * 0.5f));
 
         Vector2 sq = IconSpriteAtlas.DisplaySquare;
-        int roleN = (seat.isDeclarer ? 1 : 0) + (seat.isFriend ? 1 : 0);
+        int roleN = (seat.isDeclarer ? 1 : 0)
+            + ((seat.isFriend || seat.isFriendSecret) ? 1 : 0);
         float roleGap = 4f;
         float iconW = roleN > 0 ? roleN * sq.x + (roleN - 1) * roleGap : 0f;
-        float textW = isSelf ? 220f : 160f;
+        float textW = isSelf ? UiFonts.Layout(240f) : UiFonts.Layout(200f);
         float clusterW = iconW + (roleN > 0 ? 8f : 0f) + textW;
 
         GameObject cluster = new GameObject("Cluster", typeof(RectTransform));
@@ -259,8 +307,10 @@ public class OpponentHandsView : MonoBehaviour
         clusterRt.anchorMin = new Vector2(0.5f, 0.5f);
         clusterRt.anchorMax = new Vector2(0.5f, 0.5f);
         clusterRt.pivot = new Vector2(0.5f, 0.5f);
-        clusterRt.sizeDelta = new Vector2(clusterW, 84f);
-        clusterRt.anchoredPosition = Vector2.zero;
+        clusterRt.sizeDelta = new Vector2(clusterW, nameH);
+        // 왼쪽 좌석만 이름·점수·역할 아이콘을 안쪽으로 (핸드 카드는 패널 중앙 유지)
+        float nameShiftX = isLeftSeat ? Mathf.Max(UiFonts.Layout(48f), iconW * 0.5f + 28f) : 0f;
+        clusterRt.anchoredPosition = new Vector2(nameShiftX, 0f);
 
         if (roleN > 0)
         {
@@ -272,7 +322,8 @@ public class OpponentHandsView : MonoBehaviour
             roleRt.pivot = new Vector2(0f, 0.5f);
             roleRt.anchoredPosition = Vector2.zero;
             roleRt.sizeDelta = new Vector2(iconW, sq.y);
-            IconGui.PlaceRoleIcons(roles.transform, seat.isDeclarer, seat.isFriend, Vector2.zero);
+            IconGui.PlaceRoleIcons(
+                roles.transform, seat.isDeclarer, seat.isFriend, Vector2.zero, seat.isFriendSecret);
         }
 
         float textX = iconW + (roleN > 0 ? 8f : 0f);
@@ -316,39 +367,6 @@ public class OpponentHandsView : MonoBehaviour
         Shadow ssh = scoreGo.AddComponent<Shadow>();
         ssh.effectColor = new Color(0f, 0f, 0f, 0.75f);
         ssh.effectDistance = new Vector2(1f, -1f);
-
-        if (isSelf) return panel;
-
-        // 카드 줄 (닉/점수 위)
-        GameObject row = new GameObject("Cards", typeof(RectTransform));
-        row.transform.SetParent(panel.transform, false);
-        RectTransform rrt = row.GetComponent<RectTransform>();
-        rrt.anchorMin = new Vector2(0.5f, 0.34f);
-        rrt.anchorMax = new Vector2(0.5f, 1f);
-        rrt.pivot = new Vector2(0.5f, 0.5f);
-        float rowWidth = Mathf.Max(CardSize.x, (Mathf.Max(seat.handCount, 1) - 1) * CardOverlap + CardSize.x);
-        rrt.sizeDelta = new Vector2(rowWidth, CardSize.y + 4f);
-        rrt.anchoredPosition = Vector2.zero;
-
-        int count = Mathf.Clamp(seat.handCount, 0, 13);
-        float startX = -((count - 1) * CardOverlap) * 0.5f;
-        for (int c = 0; c < count; c++)
-        {
-            CardView view = Instantiate(cardPrefab, row.transform);
-            view.SetFaceDown();
-            view.Clicked = null;
-            RectTransform crt = view.GetComponent<RectTransform>();
-            if (crt != null)
-            {
-                crt.anchorMin = new Vector2(0.5f, 0.5f);
-                crt.anchorMax = new Vector2(0.5f, 0.5f);
-                crt.pivot = new Vector2(0.5f, 0.5f);
-                crt.sizeDelta = CardSize;
-                crt.anchoredPosition = new Vector2(startX + c * CardOverlap, 0f);
-                crt.localScale = Vector3.one;
-            }
-            view.RefreshDropShadow();
-        }
 
         return panel;
     }
