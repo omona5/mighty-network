@@ -94,7 +94,7 @@ public class DealAnimator : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         RectTransform space = GetFlightSpace();
 
-        Vector2 endSize = DeckCardSize() * 0.85f;
+        Vector2 endSize = DeckCardSize();
         Vector2 startSize = DeckCardSize();
 
         Coroutine shakeCo = StartCoroutine(CoShakeDeckLoop());
@@ -254,7 +254,9 @@ public class DealAnimator : MonoBehaviour
             deckRoot.anchorMax = new Vector2(0.5f, 0.5f);
             deckRoot.pivot = new Vector2(0.5f, 0.5f);
             deckRoot.anchoredPosition = new Vector2(0f, 40f);
-            deckRoot.sizeDelta = new Vector2(480f, 280f);
+            deckRoot.sizeDelta = new Vector2(
+                CardSpriteAtlas.DisplayWidth * 3.2f,
+                CardSpriteAtlas.DisplayHeight + 40f);
 
             GameObject hintGo = new GameObject("Hint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
             hintGo.transform.SetParent(deckRoot, false);
@@ -273,6 +275,12 @@ public class DealAnimator : MonoBehaviour
             Shadow sh = hintGo.AddComponent<Shadow>();
             sh.effectColor = new Color(0f, 0f, 0f, 0.7f);
             sh.effectDistance = new Vector2(1f, -1f);
+        }
+        else
+        {
+            deckRoot.sizeDelta = new Vector2(
+                CardSpriteAtlas.DisplayWidth * 3.2f,
+                CardSpriteAtlas.DisplayHeight + 40f);
         }
 
         if (flyLayer == null)
@@ -384,7 +392,7 @@ public class DealAnimator : MonoBehaviour
             ends[s] = ResolveSeatToFlightLocal(seats[s], space);
             endSizes[s] = seats[s].endSize.sqrMagnitude > 1f
                 ? seats[s].endSize
-                : startSize * 0.55f;
+                : startSize;
         }
 
         // 딜 내내 중앙 더미 흔들림
@@ -523,11 +531,11 @@ public class DealAnimator : MonoBehaviour
             if (v != null) Destroy(v.gameObject);
         }
 
-        float spacing = CardSpriteAtlas.DisplayWidth * 0.75f + 10f;
+        float spacing = CardSpriteAtlas.DisplayWidth + 10f;
         float startX = -((count - 1) * spacing) * 0.5f;
         Vector2 kittySize = new Vector2(
-            CardSpriteAtlas.DisplayWidth * 0.75f,
-            CardSpriteAtlas.DisplayHeight * 0.75f);
+            CardSpriteAtlas.DisplayWidth,
+            CardSpriteAtlas.DisplayHeight);
 
         var fromPos = new Vector2[count];
         var fromRot = new float[count];
@@ -579,7 +587,7 @@ public class DealAnimator : MonoBehaviour
             spaceLocal = OpponentHandsView.WorldToAnchored(space, t.selfWorldPos);
         else
             spaceLocal = OpponentHandsView.NormalizedToAnchored(
-                space, t.isSelf ? OpponentHandsView.SelfHandAnchor : t.normalizedAnchor);
+                space, t.isSelf ? OpponentHandsView.GetSelfHandAnchor(space) : t.normalizedAnchor);
 
         if (space == flyLayer || flyLayer == null)
             return spaceLocal;
@@ -770,8 +778,8 @@ public class DealAnimator : MonoBehaviour
     private static Vector2 DeckCardSize()
     {
         return new Vector2(
-            CardSpriteAtlas.DisplayWidth * 0.7f,
-            CardSpriteAtlas.DisplayHeight * 0.7f);
+            CardSpriteAtlas.DisplayWidth,
+            CardSpriteAtlas.DisplayHeight);
     }
 
     private void SetHint(string msg)

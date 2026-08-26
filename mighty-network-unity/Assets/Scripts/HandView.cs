@@ -38,6 +38,103 @@ public class HandView : MonoBehaviour
     private readonly List<CardView> spawnedViews = new List<CardView>();
     private Font tableLabelFont;
 
+    private void Awake()
+    {
+        ApplySelfHandDock();
+    }
+
+    private void OnEnable()
+    {
+        ApplySelfHandDock();
+    }
+
+    private void LateUpdate()
+    {
+        // 테이블용 HandView는 스킵 — 손패 컨테이너만 매 프레임 하단 도킹
+        if (IsSelfHandContainer())
+            ApplySelfHandDock();
+    }
+
+    private bool IsSelfHandContainer()
+    {
+        return cardContainer != null && cardContainer.name == "HandContainer";
+    }
+
+    // 상대 핸드처럼 화면 하단에 절반 걸치게 한 뒤, 카드 높이×0.3 만큼 위로
+    public void ApplySelfHandDock()
+    {
+        if (!IsSelfHandContainer()) return;
+        RectTransform rt = cardContainer as RectTransform;
+        if (rt == null) return;
+
+        Canvas canvas = rt.GetComponentInParent<Canvas>();
+        RectTransform canvasRt = canvas != null ? canvas.transform as RectTransform : null;
+        if (canvasRt != null)
+            Canvas.ForceUpdateCanvases();
+
+        float canvasH = (canvasRt != null && canvasRt.rect.height > 1f)
+            ? canvasRt.rect.height
+            : Mathf.Max(1f, Screen.height);
+
+        float cardH = CardSpriteAtlas.DisplayHeight;
+        // 1) 중심을 화면 하단(y=0)에 두면 상대처럼 절반만 보임
+        // 2) 그다음 카드 높이의 SelfHandLiftFromEdge 만큼 위로
+        float centerY = 0f + cardH * OpponentHandsView.SelfHandLiftFromEdge;
+
+        OpponentHandsView.RefreshSelfHandMetrics(canvasH, cardH);
+        OpponentHandsView.SetSelfHandCenterFromBottom(centerY);
+
+        rt.anchorMin = new Vector2(0.5f, 0f);
+        rt.anchorMax = new Vector2(0.5f, 0f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = new Vector2(0f, centerY);
+        rt.sizeDelta = new Vector2(rt.sizeDelta.x, cardH);
+
+        // HLG는 Y를 매 프레임 다시 쓰기 때문에 손패는 수동 배치로 통일
+        HorizontalLayoutGroup hlg = rt.GetComponent<HorizontalLayoutGroup>();
+        if (hlg != null) hlg.enabled = false;
+
+        RelayoutHandCards();
+    }
+
+    // HandContainer 중심(Y=0)에 카드 중심을 맞추고 X만 펼침 (구 HLG spacing -40과 동일)
+    private void RelayoutHandCards()
+    {
+        if (!IsSelfHandContainer() || cardContainer == null) return;
+        RectTransform parent = cardContainer as RectTransform;
+        if (parent == null) return;
+
+        HorizontalLayoutGroup hlg = parent.GetComponent<HorizontalLayoutGroup>();
+        if (hlg != null) hlg.enabled = false;
+
+        float cardW = CardSpriteAtlas.DisplayWidth;
+        float cardH = CardSpriteAtlas.DisplayHeight;
+        float step = cardW - 40f; // 기존 m_Spacing: -40
+        int n = 0;
+        for (int i = 0; i < spawnedViews.Count; i++)
+        {
+            if (spawnedViews[i] != null) n++;
+        }
+        if (n <= 0) return;
+
+        float startX = -((n - 1) * step) * 0.5f;
+        int slot = 0;
+        for (int i = 0; i < spawnedViews.Count; i++)
+        {
+            CardView view = spawnedViews[i];
+            if (view == null) continue;
+            RectTransform crt = view.GetComponent<RectTransform>();
+            if (crt == null) continue;
+            crt.anchorMin = new Vector2(0.5f, 0.5f);
+            crt.anchorMax = new Vector2(0.5f, 0.5f);
+            crt.pivot = new Vector2(0.5f, 0.5f);
+            crt.sizeDelta = new Vector2(cardW, cardH);
+            crt.anchoredPosition = new Vector2(startX + slot * step, 0f);
+            view.SetRestAnchoredY(0f);
+            slot++;
+        }
+    }
+
     public void ShowHand(CardData[] cards)
     {
         ShowInternal(cards, sort: true);
@@ -230,6 +327,7 @@ public class HandView : MonoBehaviour
             spawned.Add(view.gameObject);
             spawnedViews.Add(view);
         }
+        RelayoutHandCards();
     }
 
     public void ShowFaceDown(int count)
@@ -246,6 +344,7 @@ public class HandView : MonoBehaviour
             spawned.Add(view.gameObject);
             spawnedViews.Add(view);
         }
+        RelayoutHandCards();
     }
 
     public void SetAllPlayable(bool playable)
@@ -439,7 +538,12 @@ public class HandView : MonoBehaviour
     public Vector3 GetLayoutCenterWorldPosition()
     {
         Transform parent = cardContainer != null ? cardContainer : transform;
-        return parent.position;
+        RectTransform rt = parent as RectTransform;
+        if (rt == null) return parent.position;
+        // pivot이 하단이어도 카드 영역 중심을 반환
+        Vector3[] corners = new Vector3[4];
+        rt.GetWorldCorners(corners);
+        return (corners[0] + corners[2]) * 0.5f;
     }
 
     // 슬롯 루트: 닉네임 컬럼이면 그 컬럼, 카드가 컨테이너 직속이면 카드 자신

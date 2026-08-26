@@ -38,7 +38,9 @@ public class KittyView : MonoBehaviour
             pileRoot.anchorMax = new Vector2(0.5f, 0.5f);
             pileRoot.pivot = new Vector2(0.5f, 0.5f);
             pileRoot.anchoredPosition = new Vector2(0f, 40f);
-            pileRoot.sizeDelta = new Vector2(480f, CardSpriteAtlas.DisplayHeight * 0.75f + 8f);
+            pileRoot.sizeDelta = new Vector2(
+                CardSpriteAtlas.DisplayWidth * 3.2f,
+                CardSpriteAtlas.DisplayHeight + 8f);
             // HLG 사용 안 함 — 딜 펼침과 동일 절대좌표 (전환 시 점프 방지)
 
             GameObject hintGo = new GameObject("Hint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
@@ -92,10 +94,12 @@ public class KittyView : MonoBehaviour
         if (hlg != null) Destroy(hlg);
 
         pileRoot.anchoredPosition = new Vector2(0f, 40f);
-        pileRoot.sizeDelta = new Vector2(480f, CardSpriteAtlas.DisplayHeight * 0.75f + 8f);
+        pileRoot.sizeDelta = new Vector2(
+            CardSpriteAtlas.DisplayWidth * 3.2f,
+            CardSpriteAtlas.DisplayHeight + 8f);
 
-        float w = CardSpriteAtlas.DisplayWidth * 0.75f;
-        float h = CardSpriteAtlas.DisplayHeight * 0.75f;
+        float w = CardSpriteAtlas.DisplayWidth;
+        float h = CardSpriteAtlas.DisplayHeight;
         float spacing = w + 10f;
         float startX = -((count - 1) * spacing) * 0.5f;
 
@@ -135,7 +139,9 @@ public class KittyView : MonoBehaviour
         if (hlg != null) Destroy(hlg);
 
         pileRoot.anchoredPosition = new Vector2(0f, 40f);
-        pileRoot.sizeDelta = new Vector2(480f, CardSpriteAtlas.DisplayHeight * 0.75f + 8f);
+        pileRoot.sizeDelta = new Vector2(
+            CardSpriteAtlas.DisplayWidth * 3.2f,
+            CardSpriteAtlas.DisplayHeight + 8f);
         pileRoot.gameObject.SetActive(true);
 
         for (int i = 0; i < cards.Count; i++)
@@ -214,9 +220,9 @@ public class KittyView : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         Vector2 endLocal = OpponentHandsView.WorldToAnchored(flyLayer, targetWorld);
         Vector2 size = new Vector2(
-            CardSpriteAtlas.DisplayWidth * 0.75f,
-            CardSpriteAtlas.DisplayHeight * 0.75f);
-        Vector2 endSize = size * 0.55f;
+            CardSpriteAtlas.DisplayWidth,
+            CardSpriteAtlas.DisplayHeight);
+        Vector2 endSize = size;
 
         for (int i = 0; i < n; i++)
         {

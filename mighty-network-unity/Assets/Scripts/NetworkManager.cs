@@ -222,14 +222,18 @@ public class NetworkManager : MonoBehaviour
             Log("[font] UI 폰트 로드됨: " + uiFont.name);
 
         // 손패 카드를 클릭하면 그 카드를 서버에 낸다.
-        if (handView != null) handView.onCardClicked = OnHandCardClicked;
+        if (handView != null)
+        {
+            handView.onCardClicked = OnHandCardClicked;
+            handView.ApplySelfHandDock();
+        }
 
         EnsureOpponentHandsView();
         EnsurePlayAnimator();
         EnsureTrickWinAnimator();
         EnsureKittyView();
         EnsureDealAnimator();
-        debugSeatMarkers = false; // 좌석 도착 디버그 마커 비활성
+        debugSeatMarkers = true; // 도킹/좌석 앵커 표식
         EnsureSeatDebugOverlay();
 
 #if UNITY_EDITOR
@@ -1260,7 +1264,7 @@ public class NetworkManager : MonoBehaviour
         Vector2 selfSize = handView != null
             ? handView.HandCardSize
             : new Vector2(CardSpriteAtlas.DisplayWidth, CardSpriteAtlas.DisplayHeight);
-        Vector2 oppSize = new Vector2(selfSize.x * 0.5f, selfSize.y * 0.5f);
+        Vector2 oppSize = selfSize;
 
         EnsureOpponentHandsView();
         Canvas.ForceUpdateCanvases();
@@ -1287,7 +1291,7 @@ public class NetworkManager : MonoBehaviour
                 nickname = p.nickname,
                 normalizedAnchor = anchor,
                 selfWorldPos = selfWorld,
-                endSize = isSelf ? selfSize * 0.85f : oppSize,
+                endSize = selfSize,
                 isSelf = isSelf,
             });
         }
@@ -1329,7 +1333,7 @@ public class NetworkManager : MonoBehaviour
         out Vector3 selfWorldPos,
         out int relativeFromSelf)
     {
-        normalizedAnchor = OpponentHandsView.SelfHandAnchor;
+        normalizedAnchor = OpponentHandsView.GetSelfHandAnchor(GetSeatSpaceRect());
         selfWorldPos = Vector3.zero;
         relativeFromSelf = -1;
         if (currentState == null || currentState.players == null) return false;
@@ -1358,7 +1362,7 @@ public class NetworkManager : MonoBehaviour
 
         if (relativeFromSelf == 0)
         {
-            normalizedAnchor = OpponentHandsView.SelfHandAnchor;
+            normalizedAnchor = OpponentHandsView.GetSelfHandAnchor(GetSeatSpaceRect());
             selfWorldPos = handView != null
                 ? handView.GetLayoutCenterWorldPosition()
                 : Vector3.zero;
@@ -1939,7 +1943,7 @@ public class NetworkManager : MonoBehaviour
         if (!TryResolveSeatAnchor(
                 state.lastTrickWinnerNickname, null, out seatAnchor, out selfWorld, out rel))
         {
-            seatAnchor = OpponentHandsView.SelfHandAnchor;
+            seatAnchor = OpponentHandsView.GetSelfHandAnchor(GetSeatSpaceRect());
             rel = 0;
             if (handView != null)
                 selfWorld = handView.GetLayoutCenterWorldPosition();

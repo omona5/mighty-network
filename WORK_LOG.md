@@ -1338,3 +1338,67 @@
 - **요청**: 서버 재기동.
 - **명령**: `server-node`에서 `node server.js`.
 - **결과**: WebSocket 서버 `ws://localhost:3000` 기동 확인.
+
+## 2026-08-26 14:32 (UTC+9)
+
+- **요청**: master에 최신 커밋 없으면 최근 수정사항 커밋·푸시.
+- **결과**: `2b3be9c` 커밋 후 `origin/main` 푸시 완료.
+
+## 2026-08-26 15:12 (UTC+9)
+
+- **요청**: 주공/프렌드·아이디·점수용 박스, 양옆 핸드 90° 회전으로 공간 확보.
+- **수정**: `OpponentHandsView` — InfoBox(반투명 배경), 좌/우 카드 행 ±90° 회전·박스는 안쪽 배치, 상단은 카드 아래.
+- **파일**: `mighty-network-unity/Assets/Scripts/OpponentHandsView.cs`
+
+## 2026-08-26 15:21 (UTC+9)
+
+- **요청**: 상대 핸드 절반만 보이게 가장자리로, 내 핸드는 상단 ~80% 보이게.
+- **수정**: SeatAnchors를 화면 끝(0/1)으로. SelfHandVisibleFraction=0.8로 HandContainer Y 도킹. 내 InfoBox는 카드 위로.
+- **파일**: OpponentHandsView.cs, HandView.cs, SampleScene.unity
+
+## 2026-08-26 15:28 (UTC+9)
+
+- **요청**: 내 핸드를 화면/캔버스 기준 정확히, 상대 카드 크기를 내 핸드와 동일하게.
+- **수정**: `HandView`가 Canvas.rect 높이로 SelfHand 도킹(리사이즈 재적용). 상대 `CardSize`=풀사이즈, 딜 `oppSize`=selfSize.
+- **파일**: HandView.cs, OpponentHandsView.cs, NetworkManager.cs
+
+## 2026-08-26 15:32 (UTC+9)
+
+- **요청**: 내 핸드가 여전히 떠 있음 — 전체 재점검.
+- **원인**: TableView도 HandView라 도킹이 섞일 수 있음; pivot 중앙+컨테이너 240으로 체감 오차.
+- **수정**: HandContainer만 도킹. pivot 하단, y=-cardH*(1-0.8), HLG LowerCenter, 매 프레임 재적용.
+- **파일**: HandView.cs, OpponentHandsView.cs, SampleScene.unity
+
+## 2026-08-26 15:35 (UTC+9)
+
+- **요청**: 도킹 포인트 표식 표시, 바닥패 카드 크기=핸드와 동일.
+- **수정**: SeatDebugOverlay에 핸드 하단/중심/상단 표식 + debugSeatMarkers=true. KittyView/DealAnimator 바닥패를 DisplayWidth/Height.
+- **파일**: SeatDebugOverlay.cs, NetworkManager.cs, KittyView.cs, DealAnimator.cs
+
+## 2026-08-26 15:42 (UTC+9)
+
+- **요청**: 분홍(상단) 표식이 카드 중심에 있음.
+- **원인**: HandContainer 하단 pivot + CardView가 y=0 강제 → 카드 중심이 컨테이너 하단으로 밀림. 표식은 컨테이너 모서리 기준이라 어긋남.
+- **수정**: 도킹을 중앙 pivot+MiddleCenter로 복구. 표식은 실제 CardView GetWorldCorners 사용.
+
+## 2026-08-26 15:56 (UTC+9)
+
+- **요청**: 상대처럼 절반 걸친 뒤 카드높이×0.3 위로 올리는 단순 도킹.
+- **수정**: `centerY = 0 + cardH * SelfHandLiftFromEdge(0.3)`. visibleFraction 수식 제거.
+
+## 2026-08-26 16:01 (UTC+9)
+
+- **요청**: 노란 마커가 카드 가야 할 위치인데 카드 하단처럼 보임.
+- **원인**: SelfHandAnchor가 고정 1080 높이로 정규화되어 실제 Canvas 높이와 어긋남.
+- **수정**: GetSelfHandAnchor(space)로 실제 rect 높이 사용. 노랑 "나"는 HandContainer.position(목표 중심)에 표시.
+
+## 2026-08-26 20:48 (UTC+9)
+
+- **요청**: 노랑·초록 불일치 — 카드 위치 스크립트 전체 스캔.
+- **원인**: HandContainer HLG와 CardView.ApplyRaiseAfterLayout(y=0 강제)가 Y를 서로 덮어씀.
+- **수정**: 손패 HLG 비활성 + RelayoutHandCards 수동 배치(중심 Y=0). CardView는 restY+raise만 적용. 노랑도 GetWorldCorners 중심 사용.
+
+## 2026-08-26 20:52 (UTC+9)
+
+- **요청**: 섞기/모으기 애니·중앙 카드 등 전부 핸드 크기로 통일.
+- **수정**: DealAnimator.DeckCardSize 풀사이즈, 딜/회수 endSize 축소 제거. Kitty/TrickWin 비행도 풀사이즈 유지. NetworkManager 딜 endSize=selfSize.

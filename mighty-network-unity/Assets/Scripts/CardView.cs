@@ -32,12 +32,13 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private bool playable = true;
 
     // 바닥패 버리기 선택: LayoutGroup이 LateUpdate 이후 위치를 덮어쓰므로
-    // willRenderCanvases에서 Y 오프셋을 다시 적용한다.
-    // ※ 비행 중인 카드에는 적용하면 안 됨 — Y가 매 프레임 0으로 고정되어 수평 이동만 남음.
+    // willRenderCanvases에서 Y를 다시 맞춘다.
+    // restAnchoredY = 손패 슬롯 기본 Y (HandView가 0으로 고정), raised 시 +SelectRaiseY.
     private const float SelectRaiseY = 36f;
     private bool raised;
     private bool subscribedToCanvas;
     private bool applyHandRaiseLayout = true;
+    private float restAnchoredY;
 
     private void OnEnable()
     {
@@ -57,6 +58,13 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         if (flying) raised = false;
     }
 
+    // HandView 수동 배치 시 슬롯 기본 Y (보통 0)
+    public void SetRestAnchoredY(float y)
+    {
+        restAnchoredY = y;
+        ApplyRaiseAfterLayout();
+    }
+
     private void SubscribeCanvas()
     {
         if (subscribedToCanvas) return;
@@ -71,14 +79,14 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         subscribedToCanvas = false;
     }
 
-    // Layout 적용 직후, 렌더 직전에 선택 카드만 위로 올린다.
+    // Layout/수동배치 직후, 렌더 직전에 restY(+raise)로 Y를 고정한다.
     private void ApplyRaiseAfterLayout()
     {
         if (!applyHandRaiseLayout) return;
         RectTransform rt = transform as RectTransform;
         if (rt == null) return;
         Vector2 p = rt.anchoredPosition;
-        float targetY = raised ? SelectRaiseY : 0f;
+        float targetY = restAnchoredY + (raised ? SelectRaiseY : 0f);
         if (Mathf.Abs(p.y - targetY) < 0.01f) return;
         p.y = targetY;
         rt.anchoredPosition = p;

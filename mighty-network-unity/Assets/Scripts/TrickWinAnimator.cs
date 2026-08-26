@@ -403,7 +403,7 @@ public class TrickWinAnimator : MonoBehaviour
         Vector2 winnerLocal = OpponentHandsView.WorldToAnchored(flyLayer, winnerWorld);
 
         Vector2 startSize = new Vector2(CardSpriteAtlas.DisplayWidth, CardSpriteAtlas.DisplayHeight);
-        Vector2 endSize = startSize * 0.55f;
+        Vector2 endSize = startSize;
         int n = 0;
         for (int i = 0; i < pointCards.Count; i++)
         {
