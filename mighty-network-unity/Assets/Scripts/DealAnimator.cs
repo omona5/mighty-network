@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -33,8 +34,7 @@ public class DealAnimator : MonoBehaviour
     private RectTransform root;
     private RectTransform flyLayer;
     private RectTransform deckRoot;
-    private Text hintText;
-    private Font hintFont;
+    private TextMeshProUGUI hintText;
     private readonly List<CardView> deckViews = new List<CardView>();
     private bool busy;
     private Coroutine idleShakeCo;
@@ -258,23 +258,15 @@ public class DealAnimator : MonoBehaviour
                 CardSpriteAtlas.DisplayWidth * 3.2f,
                 CardSpriteAtlas.DisplayHeight + 40f);
 
-            GameObject hintGo = new GameObject("Hint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            hintGo.transform.SetParent(deckRoot, false);
-            RectTransform hrt = hintGo.GetComponent<RectTransform>();
+            hintText = UiTmp.Create(
+                deckRoot, "Hint", UiFonts.Size(16), TextAnchor.MiddleCenter,
+                new Color(0.95f, 0.95f, 0.88f, 0.95f));
+            RectTransform hrt = hintText.rectTransform;
             hrt.anchorMin = new Vector2(0.5f, 0f);
             hrt.anchorMax = new Vector2(0.5f, 0f);
             hrt.pivot = new Vector2(0.5f, 1f);
             hrt.anchoredPosition = new Vector2(0f, -8f);
             hrt.sizeDelta = new Vector2(UiFonts.Layout(280f), UiFonts.Layout(32f));
-            hintText = hintGo.GetComponent<Text>();
-            hintText.font = GetFont();
-            hintText.fontSize = UiFonts.Size(16);
-            hintText.alignment = TextAnchor.MiddleCenter;
-            hintText.color = new Color(0.95f, 0.95f, 0.88f, 0.95f);
-            hintText.raycastTarget = false;
-            Shadow sh = hintGo.AddComponent<Shadow>();
-            sh.effectColor = new Color(0f, 0f, 0f, 0.7f);
-            sh.effectDistance = new Vector2(1f, -1f);
         }
         else
         {
@@ -622,23 +614,15 @@ public class DealAnimator : MonoBehaviour
         img.color = new Color(1f, 0.2f, 0.85f, 0.95f); // 실제 비행 끝점 (마젠타)
         img.raycastTarget = false;
 
-        GameObject labelGo = new GameObject("L", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        labelGo.transform.SetParent(go.transform, false);
-        RectTransform lrt = labelGo.GetComponent<RectTransform>();
+        TextMeshProUGUI tx = UiTmp.Create(
+            go.transform, "L", UiFonts.Size(13), TextAnchor.LowerCenter, Color.white);
+        RectTransform lrt = tx.rectTransform;
         lrt.anchorMin = new Vector2(0.5f, 0.5f);
         lrt.anchorMax = new Vector2(0.5f, 0.5f);
         lrt.pivot = new Vector2(0.5f, 0f);
         lrt.anchoredPosition = new Vector2(0f, 20f);
         lrt.sizeDelta = new Vector2(140f, 40f);
-        Text tx = labelGo.GetComponent<Text>();
-        tx.font = UiFonts.Primary != null
-            ? UiFonts.Primary
-            : Resources.GetBuiltinResource<Font>("Arial.ttf");
-        tx.fontSize = UiFonts.Size(13);
-        tx.alignment = TextAnchor.LowerCenter;
-        tx.color = Color.white;
         tx.text = (nick ?? "?") + "\nFLY " + anchor.x.ToString("F2") + "," + anchor.y.ToString("F2");
-        tx.raycastTarget = false;
         flightEndMarkers.Add(go);
     }
 
@@ -794,12 +778,5 @@ public class DealAnimator : MonoBehaviour
         if (root != null && flyLayer != null && deckRoot != null) return;
         Canvas canvas = FindFirstObjectByType<Canvas>();
         Configure(cardPrefab, canvas);
-    }
-
-    private Font GetFont()
-    {
-        if (hintFont == null) hintFont = UiFonts.Primary;
-        if (hintFont == null) hintFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        return hintFont;
     }
 }

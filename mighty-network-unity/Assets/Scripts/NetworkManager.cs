@@ -233,7 +233,7 @@ public class NetworkManager : MonoBehaviour
         EnsureTrickWinAnimator();
         EnsureKittyView();
         EnsureDealAnimator();
-        debugSeatMarkers = true; // 도킹/좌석 앵커 표식
+        debugSeatMarkers = false; // 도킹/좌석 앵커 표식 (디버그용)
         EnsureSeatDebugOverlay();
 
 #if UNITY_EDITOR
@@ -2510,6 +2510,9 @@ public class NetworkManager : MonoBehaviour
         guiColW = (panelW - boxInset - guiColGap) * 0.5f;
         guiBtnH = UiFonts.Layout(36f);
         GUILayout.BeginArea(new Rect(panelX, panelY, panelW, panelH), GUI.skin.box);
+        // 박스 안 컨텐츠를 세로 가운데 정렬
+        GUILayout.BeginVertical();
+        GUILayout.FlexibleSpace();
 
         // 공약 선택 중·대기실에서는 서버 URL 숨김
         if (!myBidTurn)
@@ -2579,6 +2582,8 @@ public class NetworkManager : MonoBehaviour
             }
         }
 
+        GUILayout.FlexibleSpace();
+        GUILayout.EndVertical();
         GUILayout.EndArea();
     }
 
@@ -2851,7 +2856,9 @@ public class NetworkManager : MonoBehaviour
             return;
         }
 
-        finishedScroll = GUILayout.BeginScrollView(finishedScroll, GUILayout.ExpandHeight(true));
+        // ExpandHeight 쓰지 않음 — 바깥 FlexibleSpace가 세로 가운데를 잡도록
+        finishedScroll = GUILayout.BeginScrollView(
+            finishedScroll, GUILayout.MaxHeight(Mathf.Min(Screen.height * 0.42f, UiFonts.Layout(320f))));
         GUILayout.Label("승자: " + r.winnerLabel);
         GUILayout.Label("주공팀 목표였던 점수: " + r.targetScore + "점");
         GUILayout.Label("주공: " + r.declarerNickname

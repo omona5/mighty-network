@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,17 +12,15 @@ public class SeatDebugOverlay : MonoBehaviour
     private RectTransform root;
     private readonly RectTransform[] seatMarks = new RectTransform[5];
     private readonly RectTransform[] beyondMarks = new RectTransform[5];
-    private readonly Text[] seatLabels = new Text[5];
+    private readonly TextMeshProUGUI[] seatLabels = new TextMeshProUGUI[5];
 
     // 내 핸드 도킹: 하단 / 중심 / 상단
     private RectTransform dockBottom;
     private RectTransform dockCenter;
     private RectTransform dockTop;
-    private Text dockBottomLabel;
-    private Text dockCenterLabel;
-    private Text dockTopLabel;
-
-    private Font font;
+    private TextMeshProUGUI dockBottomLabel;
+    private TextMeshProUGUI dockCenterLabel;
+    private TextMeshProUGUI dockTopLabel;
 
     private static readonly string[] SeatNames = { "나", "왼", "상좌", "상우", "오" };
     private static readonly Color SeatColor = new Color(1f, 0.85f, 0.15f, 0.95f);
@@ -227,26 +226,17 @@ public class SeatDebugOverlay : MonoBehaviour
         img.raycastTarget = false;
     }
 
-    private Text CreateLabel(RectTransform parent, string text)
+    private TextMeshProUGUI CreateLabel(RectTransform parent, string text)
     {
-        GameObject go = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        go.transform.SetParent(parent, false);
-        RectTransform rt = go.GetComponent<RectTransform>();
+        TextMeshProUGUI t = UiTmp.Create(
+            parent, "Label", UiFonts.Size(13), TextAnchor.LowerCenter, Color.white);
+        RectTransform rt = t.rectTransform;
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0f);
         rt.anchoredPosition = new Vector2(0f, 18f);
         rt.sizeDelta = new Vector2(160f, 56f);
-        Text t = go.GetComponent<Text>();
-        t.font = GetFont();
-        t.fontSize = UiFonts.Size(13);
-        t.alignment = TextAnchor.LowerCenter;
-        t.color = Color.white;
         t.text = text;
-        t.raycastTarget = false;
-        Shadow sh = go.AddComponent<Shadow>();
-        sh.effectColor = new Color(0f, 0f, 0f, 0.85f);
-        sh.effectDistance = new Vector2(1f, -1f);
         return t;
     }
 
@@ -271,12 +261,5 @@ public class SeatDebugOverlay : MonoBehaviour
         float nx = anchored.x / w + 0.5f;
         float ny = anchored.y / h + 0.5f;
         return new Vector2(Mathf.Clamp01(nx), Mathf.Clamp01(ny));
-    }
-
-    private Font GetFont()
-    {
-        if (font == null) font = UiFonts.Primary;
-        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        return font;
     }
 }

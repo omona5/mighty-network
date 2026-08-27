@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,15 +9,14 @@ public class GameRuleHud : MonoBehaviour
 {
     public RectTransform root;
 
-    private Text bodyText;
+    private TextMeshProUGUI bodyText;
     private Image trumpIcon;
     private Image mightyIcon;
     private Image jokerCallIcon;
     private Image friendCardIcon;
-    private Text friendNoneText;
-    private Font uiFont;
+    private TextMeshProUGUI friendNoneText;
     private CanvasGroup canvasGroup;
-    private const int LayoutRev = 8;
+    private const int LayoutRev = 9;
     private int builtRev;
 
     private const float PadL = 12f;
@@ -145,21 +145,16 @@ public class GameRuleHud : MonoBehaviour
         bg.color = new Color(0f, 0f, 0f, 0.72f);
         bg.raycastTarget = false;
 
-        GameObject titleGo = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        titleGo.transform.SetParent(root, false);
-        RectTransform titRt = titleGo.GetComponent<RectTransform>();
+        TextMeshProUGUI title = UiTmp.Create(
+            root, "Title", UiFonts.Size(15), TextAnchor.MiddleLeft,
+            new Color(1f, 0.9f, 0.45f, 1f));
+        RectTransform titRt = title.rectTransform;
         titRt.anchorMin = new Vector2(0f, 1f);
         titRt.anchorMax = new Vector2(1f, 1f);
         titRt.pivot = new Vector2(0.5f, 1f);
         titRt.anchoredPosition = new Vector2(0f, -6f);
         titRt.sizeDelta = new Vector2(-16f, UiFonts.Layout(26f));
-        Text title = titleGo.GetComponent<Text>();
-        title.font = GetFont();
-        title.fontSize = UiFonts.Size(15);
-        title.alignment = TextAnchor.MiddleLeft;
-        title.color = new Color(1f, 0.9f, 0.45f, 1f);
         title.text = "판 정보";
-        title.raycastTarget = false;
 
         Vector2 cardSz = IconSpriteAtlas.DisplayCard;
         Vector2 sqSz = IconSpriteAtlas.DisplaySquare;
@@ -173,26 +168,15 @@ public class GameRuleHud : MonoBehaviour
         friendNoneText = MakeInlineLabel(friendCardIcon.transform.parent, "None", "없음", new Vector2(noneX, 0f));
         friendNoneText.gameObject.SetActive(false);
 
-        GameObject bodyGo = new GameObject("Body", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        bodyGo.transform.SetParent(root, false);
-        RectTransform bodyRt = bodyGo.GetComponent<RectTransform>();
+        bodyText = UiTmp.Create(
+            root, "Body", UiFonts.Size(14), TextAnchor.UpperLeft, Color.white);
+        RectTransform bodyRt = bodyText.rectTransform;
         bodyRt.anchorMin = new Vector2(0f, 0f);
         bodyRt.anchorMax = new Vector2(1f, 0f);
         bodyRt.pivot = new Vector2(0.5f, 0f);
         bodyRt.anchoredPosition = new Vector2(0f, 8f);
         bodyRt.sizeDelta = new Vector2(-20f, UiFonts.Layout(44f));
-        bodyText = bodyGo.GetComponent<Text>();
-        bodyText.font = GetFont();
-        bodyText.fontSize = UiFonts.Size(14);
-        bodyText.alignment = TextAnchor.UpperLeft;
-        bodyText.color = Color.white;
-        bodyText.horizontalOverflow = HorizontalWrapMode.Overflow;
-        bodyText.verticalOverflow = VerticalWrapMode.Overflow;
-        bodyText.raycastTarget = false;
         bodyText.lineSpacing = 1.05f;
-        Shadow sh = bodyGo.AddComponent<Shadow>();
-        sh.effectColor = new Color(0f, 0f, 0f, 0.6f);
-        sh.effectDistance = new Vector2(1f, -1f);
 
         ApplyPanelSize(false);
         root.gameObject.SetActive(false);
@@ -210,22 +194,15 @@ public class GameRuleHud : MonoBehaviour
         rt.anchoredPosition = pos;
         rt.sizeDelta = new Vector2(-PadL - PadR, Mathf.Max(iconSize.y, UiFonts.Layout(22f)));
 
-        GameObject labGo = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        labGo.transform.SetParent(row.transform, false);
-        RectTransform lrt = labGo.GetComponent<RectTransform>();
+        TextMeshProUGUI t = UiTmp.Create(
+            row.transform, "Label", UiFonts.Size(13), TextAnchor.MiddleLeft, Color.white);
+        RectTransform lrt = t.rectTransform;
         lrt.anchorMin = new Vector2(0f, 0f);
         lrt.anchorMax = new Vector2(0f, 1f);
         lrt.pivot = new Vector2(0f, 0.5f);
         lrt.anchoredPosition = Vector2.zero;
         lrt.sizeDelta = new Vector2(LabelColW, 0f);
-        Text t = labGo.GetComponent<Text>();
-        t.font = GetFont();
-        t.fontSize = UiFonts.Size(13);
-        t.alignment = TextAnchor.MiddleLeft;
-        t.color = Color.white;
         t.text = label;
-        t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        t.raycastTarget = false;
 
         Image img = IconGui.MakeImage(row.transform, "Icon", default(IconSpriteAtlas.Slice), iconSize);
         RectTransform irt = img.rectTransform;
@@ -236,31 +213,17 @@ public class GameRuleHud : MonoBehaviour
         return img;
     }
 
-    private Text MakeInlineLabel(Transform parent, string name, string text, Vector2 pos)
+    private TextMeshProUGUI MakeInlineLabel(Transform parent, string name, string text, Vector2 pos)
     {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        go.transform.SetParent(parent, false);
-        RectTransform rt = go.GetComponent<RectTransform>();
+        TextMeshProUGUI t = UiTmp.Create(
+            parent, name, UiFonts.Size(14), TextAnchor.MiddleLeft, Color.white);
+        RectTransform rt = t.rectTransform;
         rt.anchorMin = new Vector2(0f, 0.5f);
         rt.anchorMax = new Vector2(0f, 0.5f);
         rt.pivot = new Vector2(0f, 0.5f);
         rt.anchoredPosition = pos;
         rt.sizeDelta = new Vector2(UiFonts.Layout(48f), UiFonts.Layout(24f));
-        Text t = go.GetComponent<Text>();
-        t.font = GetFont();
-        t.fontSize = UiFonts.Size(14);
-        t.alignment = TextAnchor.MiddleLeft;
-        t.color = Color.white;
         t.text = text;
-        t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        t.raycastTarget = false;
         return t;
-    }
-
-    private Font GetFont()
-    {
-        if (uiFont == null) uiFont = UiFonts.Primary;
-        if (uiFont == null) uiFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        return uiFont;
     }
 }

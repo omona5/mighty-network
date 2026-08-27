@@ -1,15 +1,16 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 // ============================================================================
-// PlayChoicePopup: 조커 리드 무늬 / 조커콜 여부 중앙 팝업 (uGUI)
+// PlayChoicePopup: 조커 리드 무늬 / 조커콜 여부 중앙 팝업 (TMP)
 // ============================================================================
 public class PlayChoicePopup : MonoBehaviour
 {
     private RectTransform root;
     private CanvasGroup group;
-    private Text title;
+    private TextMeshProUGUI title;
     private RectTransform row;
     private Action onCancel;
     private bool built;
@@ -48,7 +49,7 @@ public class PlayChoicePopup : MonoBehaviour
         bg.color = Color.black;
         bg.raycastTarget = true;
 
-        title = MakeText(panel.transform, "Title", UiFonts.Size(32), TextAnchor.MiddleCenter);
+        title = UiTmp.Create(panel.transform, "Title", UiFonts.Size(32), TextAnchor.MiddleCenter, Color.white);
         RectTransform trt = title.rectTransform;
         trt.anchorMin = new Vector2(0f, 1f);
         trt.anchorMax = new Vector2(1f, 1f);
@@ -163,23 +164,6 @@ public class PlayChoicePopup : MonoBehaviour
             Destroy(row.GetChild(i).gameObject);
     }
 
-    private static Text MakeText(Transform parent, string name, int fontSize, TextAnchor align)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        go.transform.SetParent(parent, false);
-        Text t = go.GetComponent<Text>();
-        Font font = UiFonts.Primary;
-        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        t.font = font;
-        t.fontSize = fontSize;
-        t.alignment = align;
-        t.color = Color.white;
-        t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        t.verticalOverflow = VerticalWrapMode.Overflow;
-        t.raycastTarget = false;
-        return t;
-    }
-
     private static Button MakeTextButton(Transform parent, string label, float w, float h, Action click)
     {
         GameObject go = new GameObject(label, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -194,7 +178,8 @@ public class PlayChoicePopup : MonoBehaviour
         le.preferredHeight = h;
         le.minWidth = w;
         le.minHeight = h;
-        Text t = MakeText(go.transform, "Label", UiFonts.Size(22), TextAnchor.MiddleCenter);
+        TextMeshProUGUI t = UiTmp.Create(
+            go.transform, "Label", UiFonts.Size(22), TextAnchor.MiddleCenter, Color.white);
         RectTransform trt = t.rectTransform;
         trt.anchorMin = Vector2.zero;
         trt.anchorMax = Vector2.one;

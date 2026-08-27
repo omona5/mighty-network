@@ -67,9 +67,11 @@ public static class IconGui
     // 주공/프렌드 아이콘을 center 기준으로 가로 나란히 배치
     // friendSecret: 미공개 본인 프렌드(회색 F). isFriend와 동시에 true면 공개(보라) 우선.
     public static void PlaceRoleIcons(
-        Transform parent, bool isDeclarer, bool isFriend, Vector2 center, bool friendSecret = false)
+        Transform parent, bool isDeclarer, bool isFriend, Vector2 center,
+        bool friendSecret = false, float iconSide = -1f)
     {
-        Vector2 sz = IconSpriteAtlas.DisplaySquare;
+        float side = iconSide > 0f ? iconSide : IconSpriteAtlas.DisplaySquare.x;
+        Vector2 sz = new Vector2(side, side);
         bool showFriend = isFriend || friendSecret;
         int n = (isDeclarer ? 1 : 0) + (showFriend ? 1 : 0);
         if (n == 0) return;

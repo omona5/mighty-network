@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -170,7 +171,6 @@ public class OpponentHandsView : MonoBehaviour
     private readonly List<GameObject> panels = new List<GameObject>();
     private readonly Dictionary<string, RectTransform> seatByNickname =
         new Dictionary<string, RectTransform>();
-    private Font uiFont;
 
     public void Clear()
     {
@@ -243,8 +243,53 @@ public class OpponentHandsView : MonoBehaviour
         return true;
     }
 
-    // 좌상단 GameRuleHud body(15)와 동일
-    private const int StatusFontSize = 22;
+    // 좌상단 GameRuleHud body와 동일
+    private static int StatusFontSize { get { return UiFonts.Size(14); } }
+
+    // 스페이스 2칸 정도 (모든 좌석 박스 공통)
+    private static float InfoEdgeInset
+    {
+        get { return StatusFontSize * 0.55f * 2f; }
+    }
+
+    private static float InfoRoleGap { get { return 4f; } }
+
+    private static float InfoLineHeight
+    {
+        get { return StatusFontSize * 1.05f; }
+    }
+
+    private static float InfoLineGap { get { return 2f; } }
+
+    // 텍스트 2줄 높이에 맞춘 역할 아이콘
+    private static float InfoIconSide
+    {
+        get { return InfoLineHeight * 2f + InfoLineGap; }
+    }
+
+    private static float InfoMaxIconWidth
+    {
+        get { return 2f * InfoIconSide + InfoRoleGap; }
+    }
+
+    // 5좌석 InfoBox 동일 크기 (가로는 이전 대비 ~60%)
+    private static Vector2 InfoBoxSize
+    {
+        get
+        {
+            float inset = InfoEdgeInset;
+            float textW = UiFonts.Layout(180f);
+            float midGap = inset;
+            float fullW = inset + textW + midGap + InfoMaxIconWidth + inset;
+            // 아이콘도 줄인 뒤 가로 60%
+            float baseIconW = 2f * IconSpriteAtlas.DisplaySquare.x + InfoRoleGap;
+            float legacyFullW = inset + textW + midGap + baseIconW + inset;
+            float w = legacyFullW * 0.6f;
+            float textBlockH = InfoLineHeight * 2f + InfoLineGap;
+            float h = inset * 2f + Mathf.Max(textBlockH, InfoIconSide);
+            return new Vector2(w, h);
+        }
+    }
 
     public static string FormatStatusLine(SeatInfo seat, bool isSelf)
     {
@@ -301,19 +346,10 @@ public class OpponentHandsView : MonoBehaviour
         bool isSide = !isSelf && IsSideSeat(anchor);
         bool isLeftSeat = !isSelf && anchor.x < 0.5f;
 
-        float namePad = 10f;
         float nameGap = isSelf ? 12f : 8f;
-        float boxInnerH = UiFonts.Layout(64f);
-        float boxH = boxInnerH + namePad * 2f;
-
-        Vector2 sq = IconSpriteAtlas.DisplaySquare;
-        int roleN = (seat.isDeclarer ? 1 : 0)
-            + ((seat.isFriend || seat.isFriendSecret) ? 1 : 0);
-        float roleGap = 4f;
-        float iconW = roleN > 0 ? roleN * sq.x + (roleN - 1) * roleGap : 0f;
-        float textW = isSelf ? UiFonts.Layout(240f) : UiFonts.Layout(180f);
-        float clusterW = iconW + (roleN > 0 ? 8f : 0f) + textW;
-        float boxW = clusterW + namePad * 2f;
+        Vector2 boxSize = InfoBoxSize;
+        float boxW = boxSize.x;
+        float boxH = boxSize.y;
 
         int count = isSelf ? 0 : Mathf.Clamp(seat.handCount, 0, 13);
         float rowLen = Mathf.Max(CardSize.x, (Mathf.Max(count, 1) - 1) * CardOverlap + CardSize.x);
@@ -374,7 +410,7 @@ public class OpponentHandsView : MonoBehaviour
             }
         }
 
-        // 정보 박스 (역할 아이콘 + 닉네임 + 점수)
+        // 정보 박스 (이름·점수 왼쪽 / 역할 아이콘 오른쪽)
         Vector2 boxPos;
         if (isSelf)
         {
@@ -392,7 +428,7 @@ public class OpponentHandsView : MonoBehaviour
             boxPos = new Vector2(0f, -(cardsVisualH * 0.5f + nameGap + boxH * 0.5f));
         }
 
-        BuildInfoBox(panel.transform, seat, isSelf, boxW, boxH, namePad, iconW, roleN, sq, boxPos);
+        BuildInfoBox(panel.transform, seat, isSelf, boxW, boxH, boxPos);
         return panel;
     }
 
@@ -402,12 +438,16 @@ public class OpponentHandsView : MonoBehaviour
         bool isSelf,
         float boxW,
         float boxH,
-        float pad,
-        float iconW,
-        int roleN,
-        Vector2 sq,
         Vector2 anchoredPos)
     {
+        float inset = InfoEdgeInset;
+        float iconSide = InfoIconSide;
+        int roleN = (seat.isDeclarer ? 1 : 0)
+            + ((seat.isFriend || seat.isFriendSecret) ? 1 : 0);
+        float iconW = roleN > 0
+            ? roleN * iconSide + (roleN - 1) * InfoRoleGap
+            : 0f;
+
         GameObject box = new GameObject("InfoBox", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         box.transform.SetParent(parent, false);
         RectTransform brt = box.GetComponent<RectTransform>();
@@ -426,82 +466,52 @@ public class OpponentHandsView : MonoBehaviour
         else
             bg.color = new Color(0f, 0f, 0f, 0.72f);
 
-        float clusterW = boxW - pad * 2f;
-        float clusterH = boxH - pad * 2f;
-
-        GameObject cluster = new GameObject("Cluster", typeof(RectTransform));
-        cluster.transform.SetParent(box.transform, false);
-        RectTransform clusterRt = cluster.GetComponent<RectTransform>();
-        clusterRt.anchorMin = new Vector2(0.5f, 0.5f);
-        clusterRt.anchorMax = new Vector2(0.5f, 0.5f);
-        clusterRt.pivot = new Vector2(0.5f, 0.5f);
-        clusterRt.sizeDelta = new Vector2(clusterW, clusterH);
-        clusterRt.anchoredPosition = Vector2.zero;
-
-        if (roleN > 0)
-        {
-            GameObject roles = new GameObject("Roles", typeof(RectTransform));
-            roles.transform.SetParent(cluster.transform, false);
-            RectTransform roleRt = roles.GetComponent<RectTransform>();
-            roleRt.anchorMin = new Vector2(0f, 0.5f);
-            roleRt.anchorMax = new Vector2(0f, 0.5f);
-            roleRt.pivot = new Vector2(0f, 0.5f);
-            roleRt.anchoredPosition = Vector2.zero;
-            roleRt.sizeDelta = new Vector2(iconW, sq.y);
-            IconGui.PlaceRoleIcons(
-                roles.transform, seat.isDeclarer, seat.isFriend, Vector2.zero, seat.isFriendSecret);
-        }
-
-        float textX = iconW + (roleN > 0 ? 8f : 0f);
         Color textColor = seat.isTurn
             ? new Color(1f, 0.88f, 0.35f)
             : (seat.disconnected ? new Color(0.7f, 0.7f, 0.7f) : Color.white);
 
-        GameObject nameGo = new GameObject("Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        nameGo.transform.SetParent(cluster.transform, false);
-        RectTransform nrt = nameGo.GetComponent<RectTransform>();
+        // 텍스트: 왼쪽 정렬, 줄간격 타이트하게 세로 중앙
+        float textRightReserve = inset + InfoMaxIconWidth + inset;
+        float textW = Mathf.Max(8f, boxW - inset - textRightReserve);
+        float lineH = InfoLineHeight;
+        float lineGap = InfoLineGap;
+        float nameY = (lineH + lineGap) * 0.5f;
+        float scoreY = -nameY;
+
+        TextMeshProUGUI nameText = UiTmp.Create(
+            box.transform, "Name", StatusFontSize, TextAnchor.MiddleLeft, textColor);
+        RectTransform nrt = nameText.rectTransform;
         nrt.anchorMin = new Vector2(0f, 0.5f);
-        nrt.anchorMax = new Vector2(1f, 1f);
-        nrt.offsetMin = new Vector2(textX, 0f);
-        nrt.offsetMax = Vector2.zero;
-        Text nameText = nameGo.GetComponent<Text>();
-        nameText.font = GetUiFont();
-        nameText.fontSize = StatusFontSize;
-        nameText.alignment = TextAnchor.MiddleLeft;
-        nameText.horizontalOverflow = HorizontalWrapMode.Overflow;
-        nameText.verticalOverflow = VerticalWrapMode.Overflow;
-        nameText.color = textColor;
+        nrt.anchorMax = new Vector2(0f, 0.5f);
+        nrt.pivot = new Vector2(0f, 0.5f);
+        nrt.sizeDelta = new Vector2(textW, lineH);
+        nrt.anchoredPosition = new Vector2(inset, nameY);
         nameText.text = FormatStatusLine(seat, isSelf);
-        nameText.raycastTarget = false;
-        Shadow nsh = nameGo.AddComponent<Shadow>();
-        nsh.effectColor = new Color(0f, 0f, 0f, 0.75f);
-        nsh.effectDistance = new Vector2(1f, -1f);
 
-        GameObject scoreGo = new GameObject("Score", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        scoreGo.transform.SetParent(cluster.transform, false);
-        RectTransform srt = scoreGo.GetComponent<RectTransform>();
-        srt.anchorMin = new Vector2(0f, 0f);
-        srt.anchorMax = new Vector2(1f, 0.5f);
-        srt.offsetMin = new Vector2(textX, 0f);
-        srt.offsetMax = Vector2.zero;
-        Text scoreText = scoreGo.GetComponent<Text>();
-        scoreText.font = GetUiFont();
-        scoreText.fontSize = StatusFontSize;
-        scoreText.alignment = TextAnchor.MiddleLeft;
-        scoreText.color = textColor;
+        TextMeshProUGUI scoreText = UiTmp.Create(
+            box.transform, "Score", StatusFontSize, TextAnchor.MiddleLeft, textColor);
+        RectTransform srt = scoreText.rectTransform;
+        srt.anchorMin = new Vector2(0f, 0.5f);
+        srt.anchorMax = new Vector2(0f, 0.5f);
+        srt.pivot = new Vector2(0f, 0.5f);
+        srt.sizeDelta = new Vector2(textW, lineH);
+        srt.anchoredPosition = new Vector2(inset, scoreY);
         scoreText.text = FormatScoreLine(seat);
-        scoreText.raycastTarget = false;
-        Shadow ssh = scoreGo.AddComponent<Shadow>();
-        ssh.effectColor = new Color(0f, 0f, 0f, 0.75f);
-        ssh.effectDistance = new Vector2(1f, -1f);
-    }
 
-    private Font GetUiFont()
-    {
-        if (uiFont == null)
-            uiFont = UiFonts.Primary;
-        if (uiFont == null)
-            uiFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        return uiFont;
+        // 주공·프렌드 아이콘: 오른쪽, 동일 여백 (있을 때만)
+        if (roleN > 0)
+        {
+            GameObject roles = new GameObject("Roles", typeof(RectTransform));
+            roles.transform.SetParent(box.transform, false);
+            RectTransform roleRt = roles.GetComponent<RectTransform>();
+            roleRt.anchorMin = new Vector2(1f, 0.5f);
+            roleRt.anchorMax = new Vector2(1f, 0.5f);
+            roleRt.pivot = new Vector2(1f, 0.5f);
+            roleRt.sizeDelta = new Vector2(iconW, iconSide);
+            roleRt.anchoredPosition = new Vector2(-inset, 0f);
+            IconGui.PlaceRoleIcons(
+                roles.transform, seat.isDeclarer, seat.isFriend, Vector2.zero,
+                seat.isFriendSecret, iconSide);
+        }
     }
 }

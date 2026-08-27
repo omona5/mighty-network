@@ -1402,3 +1402,84 @@
 
 - **요청**: 섞기/모으기 애니·중앙 카드 등 전부 핸드 크기로 통일.
 - **수정**: DealAnimator.DeckCardSize 풀사이즈, 딜/회수 endSize 축소 제거. Kitty/TrickWin 비행도 풀사이즈 유지. NetworkManager 딜 endSize=selfSize.
+
+## 2026-08-27 21:15 (UTC+9)
+
+- **요청**: 서버 기동.
+- **명령**: `server-node`에서 `node server.js`.
+- **결과**: `ws://localhost:3000` 기동 확인.
+
+## 2026-08-27 21:19 (UTC+9)
+
+- **요청**: 검정박스·테이블 제출자 텍스트를 좌상단 HUD 폰트와 통일.
+- **수정**: InfoBox/StatusFontSize·TableLabelFontSize → `UiFonts.Size(14)` (GameRuleHud body와 동일). TableLabelHeight 28.
+
+## 2026-08-27 21:21 (UTC+9)
+
+- **요청**: 서버 재기동.
+- **결과**: `ws://localhost:3000` 기동 확인.
+
+## 2026-08-27 21:23 (UTC+9)
+
+- **요청**: 당선/공약/승리 토스트도 HUD body 폰트와 통일.
+- **수정**: TrickWinAnimator toast·bid 텍스트 `UiFonts.Size(14)`, 박스 높이 Layout(48).
+
+## 2026-08-27 21:38 (UTC+0900)
+
+- **작업 요청**: TextMeshPro로 UI 텍스트 전환(벡터처럼 또렷) + 서버 기동
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **생성/수정 파일**:
+  - `mighty-network-unity/Assets/Scripts/UiTmp.cs` (신규)
+  - `mighty-network-unity/Assets/Scripts/UiFonts.cs` (`TmpPrimary` 런타임 SDF)
+  - `GameRuleHud.cs`, `OpponentHandsView.cs`, `HandView.cs`, `TrickWinAnimator.cs`, `PlayChoicePopup.cs`, `KittyView.cs`, `DealAnimator.cs`, `SeatDebugOverlay.cs` (Text→TextMeshProUGUI)
+- **실행 명령**: `node server.js` (server-node)
+- **결과 요약**: uGUI Legacy Text를 TMP로 교체. Galmuri11을 `TMP_FontAsset.CreateFontAsset`로 동적 SDF 생성. 서버 `ws://localhost:3000` 기동 확인.
+- **미해결**: Unity 에디터에서 첫 실행 시 TMP 셰이더/리소스 경고 가능 — 필요 시 Window > TextMeshPro > Import TMP Essential Resources.
+- **다음 단계**: Play 모드에서 HUD/InfoBox/토스트 선명도 확인.
+
+## 2026-08-27 21:42 (UTC+9)
+
+- **작업 요청**: 대기실·로비·입찰·결과 화면 박스 안 컨텐츠를 세로 가운데 정렬
+- **수정**: `NetworkManager.OnGUI` — 패널 `BeginVertical` + 상·하 `FlexibleSpace`. `DrawFinished` 스크롤은 `MaxHeight`로 바꿔 가운데 정렬과 공존
+- **다음 단계**: Play로 로비/대기실/입찰/결과 박스 확인
+
+
+## 2026-08-27 21:48 (UTC+9)
+
+- **작업 요청**: 게임중 InfoBox 5개 동일 크기, 이름/점수 왼쪽·역할 아이콘 오른쪽(스페이스 2칸 여백)
+- **수정**: `OpponentHandsView.cs` — 고정 `InfoBoxSize`, 텍스트 좌정렬+inset, 주공/프렌드 아이콘 우측 배치(있을 때만)
+- **다음 단계**: Play로 5좌석 박스 크기·정렬 확인
+
+## 2026-08-27 21:55 (UTC+9)
+
+- **작업 요청**: InfoBox 가로 ~60%, 이름/점수 줄간격·세로 축소
+- **수정**: `OpponentHandsView` InfoBoxSize·타이트 2줄 배치, 역할 아이콘 텍스트 높이에 맞춤. `IconGui.PlaceRoleIcons` iconSide 인자 추가
+
+## 2026-08-27 21:59 (UTC+9)
+
+- **작업 요청**: 카드 위치 마커 숨김
+- **수정**: `NetworkManager` `debugSeatMarkers = false`
+
+## 2026-08-27 22:05 (UTC+9)
+
+- **작업 요청**: 타이틀 씬 추가, 게임 시작 시 게임 씬 전환
+- **생성**: `TitleScene.unity`, `TitleScreen.cs`, `GameScenes.cs`
+- **수정**: `EditorBuildSettings` — TitleScene(0) → SampleScene(1)
+- **사용**: Play 시 타이틀 →「게임 시작」→ 로비(SampleScene)
+
+## 2026-08-27 22:12 (UTC+9)
+
+- **작업 요청**: 타이틀 씬 배경에 카드가 날아다니게
+- **생성**: `TitleCardBackground.cs` — CardSpriteAtlas 스프라이트로 드리프트/회전, 화면 밖이면 재등장
+- **수정**: `TitleScreen.cs` — Bg와 UI 사이에 드리프트 레이어 연결
+
+## 2026-08-27 22:53 (UTC+9)
+
+- **작업 요청**: 타이틀 카드 날아다니는 애니메이션 제거
+- **수정**: `TitleScreen.cs`에서 드리프트 제거, `TitleCardBackground.cs` 삭제
+
+## 2026-08-27 22:56 (UTC+9)
+
+- **작업 요청**: 현재까지 내용 커밋·푸시
+- **포함**: TMP UI 전환, InfoBox 레이아웃, OnGUI 세로 중앙, TitleScene, 디버그 마커 OFF
+- **제외**: TextMesh Pro/Examples & Extras (데모 에셋)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -28,15 +29,14 @@ public class HandView : MonoBehaviour
 
     public System.Action<CardData> onCardClicked;
 
-    private const float TableLabelHeight = 42f;
-    private const int TableLabelFontSize = 30;
+    private const float TableLabelHeight = 28f;
+    private static int TableLabelFontSize { get { return UiFonts.Size(14); } }
     private const int TableNickMaxChars = 8;
     // 5마: 트릭당 항상 5장 — 배치/비행 도착점을 이 슬롯 기준으로 고정
     public const int TableTrickSlots = 5;
 
     private readonly List<GameObject> spawned = new List<GameObject>();
     private readonly List<CardView> spawnedViews = new List<CardView>();
-    private Font tableLabelFont;
 
     private void Awake()
     {
@@ -216,30 +216,18 @@ public class HandView : MonoBehaviour
                 view.background.color = bc;
             }
 
-            GameObject labelGo = new GameObject("Nick", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            labelGo.transform.SetParent(root.transform, false);
-            RectTransform lrt = labelGo.GetComponent<RectTransform>();
+            TextMeshProUGUI label = UiTmp.Create(
+                root.transform, "Nick", TableLabelFontSize, TextAnchor.MiddleCenter,
+                new Color(0.95f, 0.95f, 0.92f, 1f), overflow: false);
+            RectTransform lrt = label.rectTransform;
             lrt.anchorMin = new Vector2(0.5f, 0.5f);
             lrt.anchorMax = new Vector2(0.5f, 0.5f);
             lrt.pivot = new Vector2(0.5f, 0.5f);
             lrt.sizeDelta = new Vector2(cardW, TableLabelHeight);
             // 카드 하단 바로 아래 (카드 피벗은 0,0 유지 → 비행 착지와 동일)
             lrt.anchoredPosition = new Vector2(0f, -(cardH * 0.5f + TableLabelHeight * 0.5f));
-
-            Text label = labelGo.GetComponent<Text>();
-            label.font = GetTableLabelFont();
-            label.fontSize = TableLabelFontSize;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.horizontalOverflow = HorizontalWrapMode.Overflow;
-            label.verticalOverflow = VerticalWrapMode.Truncate;
-            label.color = new Color(0.95f, 0.95f, 0.92f, 1f);
-            label.raycastTarget = false;
             label.text = FormatTableNickname(e.playerNickname);
-
-            Shadow sh = labelGo.AddComponent<Shadow>();
-            sh.effectColor = new Color(0f, 0f, 0f, 0.75f);
-            sh.effectDistance = new Vector2(1f, -1f);
-            labelGo.transform.SetAsLastSibling();
+            label.transform.SetAsLastSibling();
 
             Vector2 sq = IconSpriteAtlas.DisplaySquare;
             float topY = cardH * 0.5f + sq.y * 0.5f + 4f;
@@ -303,12 +291,6 @@ public class HandView : MonoBehaviour
         string s = nickname.Trim();
         if (s.Length <= TableNickMaxChars) return s;
         return s.Substring(0, TableNickMaxChars - 1) + "…";
-    }
-
-    private Font GetTableLabelFont()
-    {
-        if (tableLabelFont == null) tableLabelFont = UiFonts.Primary;
-        return tableLabelFont != null ? tableLabelFont : Resources.GetBuiltinResource<Font>("Arial.ttf");
     }
 
     private void ShowInternal(CardData[] cards, bool sort)

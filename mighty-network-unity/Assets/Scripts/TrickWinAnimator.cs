@@ -1,11 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 // ============================================================================
-// TrickWinAnimator: 토스트(검정 박스·흰 글씨·Galmuri11) → 비전수 fade / 점수카드 중앙→승자
+// TrickWinAnimator: 토스트(검정 박스·흰 글씨·Galmuri11 TMP) → 비전수 fade / 점수카드 중앙→승자
 // ============================================================================
 public class TrickWinAnimator : MonoBehaviour
 {
@@ -19,11 +20,11 @@ public class TrickWinAnimator : MonoBehaviour
     private RectTransform flyLayer;
     private RectTransform toastRoot;
     private Image toastBg;
-    private Text toastText;
+    private TextMeshProUGUI toastText;
     private RectTransform bidRow;
-    private Text bidLeft;
+    private TextMeshProUGUI bidLeft;
     private Image bidSuit;
-    private Text bidRight;
+    private TextMeshProUGUI bidRight;
     private CanvasGroup toastGroup;
     private bool busy;
     private bool stickyToast;
@@ -56,7 +57,7 @@ public class TrickWinAnimator : MonoBehaviour
             toastRoot.anchorMin = new Vector2(0.5f, 0.5f);
             toastRoot.anchorMax = new Vector2(0.5f, 0.5f);
             toastRoot.pivot = new Vector2(0.5f, 0.5f);
-            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(720f), UiFonts.Layout(140f));
+            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(560f), UiFonts.Layout(48f));
             toastRoot.anchoredPosition = new Vector2(0f, 90f);
 
             GameObject bgGo = new GameObject("Bg", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -69,20 +70,14 @@ public class TrickWinAnimator : MonoBehaviour
             toastBg = bgGo.GetComponent<Image>();
             toastBg.raycastTarget = false;
 
-            GameObject textGo = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            textGo.transform.SetParent(toastRoot, false);
-            RectTransform trt = textGo.GetComponent<RectTransform>();
+            toastText = UiTmp.Create(
+                toastRoot, "Text", UiFonts.Size(14), TextAnchor.MiddleCenter, Color.white);
+            RectTransform trt = toastText.rectTransform;
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;
             // 좌우 여백을 넉넉히 (텍스트가 박스 끝에 붙지 않게)
-            trt.offsetMin = new Vector2(UiFonts.Layout(40f), 12f);
-            trt.offsetMax = new Vector2(-UiFonts.Layout(40f), -12f);
-            toastText = textGo.GetComponent<Text>();
-            toastText.fontSize = UiFonts.Size(40);
-            toastText.alignment = TextAnchor.MiddleCenter;
-            toastText.horizontalOverflow = HorizontalWrapMode.Overflow;
-            toastText.verticalOverflow = VerticalWrapMode.Overflow;
-            toastText.raycastTarget = false;
+            trt.offsetMin = new Vector2(UiFonts.Layout(16f), 6f);
+            trt.offsetMax = new Vector2(-UiFonts.Layout(16f), -6f);
 
             toastGroup = root.GetComponent<CanvasGroup>();
             toastGroup.alpha = 0f;
@@ -99,21 +94,20 @@ public class TrickWinAnimator : MonoBehaviour
         if (toastBg != null)
             toastBg.color = Color.black;
         if (toastRoot != null)
-            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(720f), UiFonts.Layout(140f));
+            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(560f), UiFonts.Layout(48f));
         if (toastText != null)
         {
             RectTransform trt = toastText.rectTransform;
             if (trt != null)
             {
-                trt.offsetMin = new Vector2(UiFonts.Layout(40f), 12f);
-                trt.offsetMax = new Vector2(-UiFonts.Layout(40f), -12f);
+                trt.offsetMin = new Vector2(UiFonts.Layout(16f), 6f);
+                trt.offsetMax = new Vector2(-UiFonts.Layout(16f), -6f);
             }
-            Font font = UiFonts.Primary;
-            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            toastText.font = font;
-            toastText.fontSize = UiFonts.Size(40);
-            toastText.color = Color.white;
+            UiTmp.Apply(toastText, UiFonts.Size(14), TextAnchor.MiddleCenter, Color.white);
         }
+        int hudSize = UiFonts.Size(14);
+        if (bidLeft != null) bidLeft.fontSize = hudSize;
+        if (bidRight != null) bidRight.fontSize = hudSize;
     }
 
     public void Play(
@@ -284,7 +278,7 @@ public class TrickWinAnimator : MonoBehaviour
         h.childControlWidth = true;
         h.childControlHeight = true;
 
-        bidLeft = MakeBidText(row.transform, "Left", UiFonts.Size(40));
+        bidLeft = MakeBidText(row.transform, "Left", UiFonts.Size(14));
         bidSuit = IconGui.MakeImage(row.transform, "Suit", default(IconSpriteAtlas.Slice),
             IconSpriteAtlas.DisplaySquare);
         LayoutElement le = bidSuit.gameObject.AddComponent<LayoutElement>();
@@ -292,25 +286,15 @@ public class TrickWinAnimator : MonoBehaviour
         le.preferredHeight = IconSpriteAtlas.DisplaySquare.y;
         le.minWidth = IconSpriteAtlas.DisplaySquare.x;
         le.minHeight = IconSpriteAtlas.DisplaySquare.y;
-        bidRight = MakeBidText(row.transform, "Right", UiFonts.Size(36));
+        bidRight = MakeBidText(row.transform, "Right", UiFonts.Size(14));
         bidRow.gameObject.SetActive(false);
     }
 
-    private Text MakeBidText(Transform parent, string name, int fontSize)
+    private TextMeshProUGUI MakeBidText(Transform parent, string name, int fontSize)
     {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text), typeof(LayoutElement));
-        go.transform.SetParent(parent, false);
-        Text t = go.GetComponent<Text>();
-        Font font = UiFonts.Primary;
-        if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        t.font = font;
-        t.fontSize = fontSize;
-        t.alignment = TextAnchor.MiddleCenter;
-        t.color = Color.white;
-        t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        t.verticalOverflow = VerticalWrapMode.Overflow;
-        t.raycastTarget = false;
-        LayoutElement le = go.GetComponent<LayoutElement>();
+        TextMeshProUGUI t = UiTmp.Create(
+            parent, name, fontSize, TextAnchor.MiddleCenter, Color.white);
+        LayoutElement le = t.gameObject.AddComponent<LayoutElement>();
         le.flexibleWidth = 0f;
         le.minWidth = 20f;
         return t;

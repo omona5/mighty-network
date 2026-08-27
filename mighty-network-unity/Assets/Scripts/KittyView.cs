@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,8 +19,7 @@ public class KittyView : MonoBehaviour
     private readonly List<CardView> pileViews = new List<CardView>();
     private RectTransform flyLayer;
     private bool busy;
-    private Font hintFont;
-    private Text hintText;
+    private TextMeshProUGUI hintText;
 
     public bool IsBusy { get { return busy; } }
     public int VisibleCount { get { return pileViews.Count; } }
@@ -43,22 +43,17 @@ public class KittyView : MonoBehaviour
                 CardSpriteAtlas.DisplayHeight + 8f);
             // HLG 사용 안 함 — 딜 펼침과 동일 절대좌표 (전환 시 점프 방지)
 
-            GameObject hintGo = new GameObject("Hint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            hintGo.transform.SetParent(pileRoot, false);
-            RectTransform hrt = hintGo.GetComponent<RectTransform>();
+            hintText = UiTmp.Create(
+                pileRoot, "Hint", UiFonts.Size(16), TextAnchor.MiddleCenter,
+                new Color(0.9f, 0.9f, 0.85f, 0.9f));
+            RectTransform hrt = hintText.rectTransform;
             hrt.anchorMin = new Vector2(0.5f, 0f);
             hrt.anchorMax = new Vector2(0.5f, 0f);
             hrt.pivot = new Vector2(0.5f, 1f);
             hrt.anchoredPosition = new Vector2(0f, -4f);
             hrt.sizeDelta = new Vector2(UiFonts.Layout(200f), UiFonts.Layout(32f));
-            hintText = hintGo.GetComponent<Text>();
-            hintText.font = GetHintFont();
-            hintText.fontSize = UiFonts.Size(16);
-            hintText.alignment = TextAnchor.MiddleCenter;
-            hintText.color = new Color(0.9f, 0.9f, 0.85f, 0.9f);
             hintText.text = "바닥패";
-            hintText.raycastTarget = false;
-            hintGo.SetActive(false);
+            hintText.gameObject.SetActive(false);
         }
         else
         {
@@ -284,12 +279,5 @@ public class KittyView : MonoBehaviour
         if (pileRoot != null && flyLayer != null) return;
         Canvas canvas = FindFirstObjectByType<Canvas>();
         Configure(cardPrefab, canvas);
-    }
-
-    private Font GetHintFont()
-    {
-        if (hintFont == null) hintFont = UiFonts.Primary;
-        if (hintFont == null) hintFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        return hintFont;
     }
 }
