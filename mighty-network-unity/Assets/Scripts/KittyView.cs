@@ -204,6 +204,7 @@ public class KittyView : MonoBehaviour
     {
         busy = true;
         EnsureConfigured();
+        Sfx.KittyTake();
         var starts = new List<Vector3>();
         CollectPileWorldPositions(starts);
         int n = Mathf.Max(starts.Count, 3);

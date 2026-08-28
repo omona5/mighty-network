@@ -165,6 +165,7 @@ public class CardPlayAnimator : MonoBehaviour
             List<RectTransform> badgeRts = AttachFlyBadges(rt, req);
             rt.SetAsLastSibling();
             LayoutFlyBadges(badgeRts, rt.sizeDelta.y);
+            Sfx.CardPlay();
 
             float t = 0f;
             while (t < duration)
@@ -186,6 +187,7 @@ public class CardPlayAnimator : MonoBehaviour
                 rt.anchoredPosition = endLocal;
                 rt.sizeDelta = req.endSize;
             }
+            Sfx.CardLand();
         }
         finally
         {

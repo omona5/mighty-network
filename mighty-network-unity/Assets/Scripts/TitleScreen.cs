@@ -17,6 +17,7 @@ public class TitleScreen : MonoBehaviour
     private void Awake()
     {
         EnsureBasics();
+        Sfx.Ensure();
         BuildUi();
     }
 
@@ -24,6 +25,7 @@ public class TitleScreen : MonoBehaviour
     {
         if (loading) return;
         loading = true;
+        Sfx.Title();
         string scene = string.IsNullOrEmpty(gameSceneName) ? GameScenes.Game : gameSceneName;
         SceneManager.LoadScene(scene);
     }

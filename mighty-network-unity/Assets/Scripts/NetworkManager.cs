@@ -111,6 +111,7 @@ public class NetworkManager : MonoBehaviour
     private bool kittyPickupStarted = false;
     private string lastElectionAnnounceKey = "";
     private bool choosingToastVisible = false;
+    private int lastPassedCount = -1;
 
     // 시작/재배분: 셔플+딜 애니 동안 손패 표시 보류
     private CardData[] pendingDealHand = null;
@@ -220,6 +221,8 @@ public class NetworkManager : MonoBehaviour
             Log("[font] Galmuri11 로드 실패 (Resources/Fonts/Galmuri11 확인)");
         else
             Log("[font] UI 폰트 로드됨: " + uiFont.name);
+
+        Sfx.Ensure();
 
         // 손패 카드를 클릭하면 그 카드를 서버에 낸다.
         if (handView != null)
@@ -593,6 +596,7 @@ public class NetworkManager : MonoBehaviour
                     UpdateTable(m.data);
                 UpdateGameRuleHud(m.data);
                 MaybeAnnounceBid(prevStatus, m.data);
+                MaybeAnnouncePass(prevStatus, m.data);
                 if (!dealing)
                     RefreshHandPlayability();
                 if (m.data != null) lastPhaseStatus = m.data.status ?? "";
@@ -619,6 +623,7 @@ public class NetworkManager : MonoBehaviour
                     lastPhaseStatus = "waiting";
                     lastElectionAnnounceKey = "";
                     lastBidAnnounceKey = "";
+                    lastPassedCount = -1;
                     if (trickWinAnimator != null) trickWinAnimator.ClearStickyToast();
                     if (handView != null) handView.Clear();
                     if (tableView != null) tableView.Clear();
@@ -635,6 +640,7 @@ public class NetworkManager : MonoBehaviour
                 GameFinishedMsg m = JsonUtility.FromJson<GameFinishedMsg>(json);
                 lastResult = m.data;
                 finishedAutoLobbyAt = Time.realtimeSinceStartup + FinishedAutoLobbySec;
+                PlayFinishedSfx(m.data);
                 // 결과 화면: 중앙 테이블 패·손패 연출 정리
                 if (tableView != null) tableView.Clear();
                 lastTableCardCount = 0;
@@ -732,6 +738,7 @@ public class NetworkManager : MonoBehaviour
         if (dealAnimator != null) dealAnimator.Cancel();
         lastPhaseStatus = "";
         lastElectionAnnounceKey = "";
+        lastPassedCount = -1;
         choosingToastVisible = false;
         if (trickWinAnimator != null) trickWinAnimator.ClearStickyToast();
         Log("[leave_room] 전송");
@@ -778,6 +785,7 @@ public class NetworkManager : MonoBehaviour
         {
             if (discardSelected.Contains(card.id)) discardSelected.Remove(card.id);
             else if (discardSelected.Count < 3) discardSelected.Add(card.id);
+            Sfx.UiClick();
             RefreshDiscardRaise();
             Log("[kitty] 선택 " + discardSelected.Count + "/3: " + string.Join(",", discardSelected));
             return;
@@ -1243,6 +1251,7 @@ public class NetworkManager : MonoBehaviour
         if (trickWinAnimator == null) return;
         dealMissToastVisible = true;
         trickWinAnimator.ShowStickyToast(nickname + " 딜미스!\n카드 재분배 중...");
+        Sfx.DealMiss();
     }
 
     private void ClearDealMissToast()
@@ -1575,9 +1584,56 @@ public class NetworkManager : MonoBehaviour
         if (key == lastBidAnnounceKey) return;
         lastBidAnnounceKey = key;
 
+        Sfx.Bid();
         EnsureTrickWinAnimator();
         if (trickWinAnimator == null) return;
         trickWinAnimator.AnnounceBid(h.nickname, h.noTrump, h.trumpSuit, h.targetScore);
+    }
+
+    private void MaybeAnnouncePass(string prevStatus, GameState state)
+    {
+        if (state == null || state.status != "bidding")
+        {
+            lastPassedCount = -1;
+            return;
+        }
+        int n = (state.passedClientIds != null) ? state.passedClientIds.Length : 0;
+        if (prevStatus != "bidding")
+        {
+            lastPassedCount = n;
+            return;
+        }
+        if (lastPassedCount >= 0 && n > lastPassedCount)
+            Sfx.Pass();
+        lastPassedCount = n;
+    }
+
+    private void PlayFinishedSfx(GameFinishedData r)
+    {
+        if (IWonFinished(r)) Sfx.GameWin();
+        else Sfx.GameLose();
+    }
+
+    private bool IWonFinished(GameFinishedData r)
+    {
+        if (r == null) return false;
+        bool onDeclarer = false;
+        if (r.declarerTeam != null)
+        {
+            for (int i = 0; i < r.declarerTeam.Length; i++)
+            {
+                TeamPlayerScore p = r.declarerTeam[i];
+                if (p != null && p.clientId == myClientId)
+                {
+                    onDeclarer = true;
+                    break;
+                }
+            }
+        }
+        if (!onDeclarer && currentState != null && currentState.declarerClientId == myClientId)
+            onDeclarer = true;
+        bool declarerWon = r.winner == "declarer";
+        return onDeclarer == declarerWon;
     }
 
     private void MaybeAnnounceElection(string prevStatus, GameState state)
@@ -1596,6 +1652,7 @@ public class NetworkManager : MonoBehaviour
         if (key == lastElectionAnnounceKey) return;
         lastElectionAnnounceKey = key;
 
+        Sfx.Elected();
         EnsureTrickWinAnimator();
         if (trickWinAnimator == null) return;
 
@@ -1844,6 +1901,12 @@ public class NetworkManager : MonoBehaviour
             bool isMe = !string.IsNullOrEmpty(who)
                 && !string.IsNullOrEmpty(nickname)
                 && who == nickname;
+
+            Sfx.PlayedCard(
+                lastCard,
+                lastInfo != null && lastInfo.jokerCallActivated,
+                state.mightyCardId,
+                state.friendRevealed ? state.friendCardId : null);
 
             tableView.ShowTableCards(entries, slotCount);
             Canvas.ForceUpdateCanvases();
@@ -2754,6 +2817,7 @@ public class NetworkManager : MonoBehaviour
         Send(JsonUtility.ToJson(new DiscardKittyMsg {
             data = new DiscardKittyData { cardIds = discardSelected.ToArray() }
         }));
+        Sfx.Discard();
         Log("[discard_kitty] 전송: " + string.Join(",", discardSelected));
     }
 

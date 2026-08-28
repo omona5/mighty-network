@@ -324,6 +324,7 @@ public class TrickWinAnimator : MonoBehaviour
             ShowPlainToast(string.IsNullOrEmpty(winnerNickname)
                 ? "승리!"
                 : (winnerNickname + " 승리!"));
+            Sfx.TrickWin();
             toastGroup.alpha = 1f;
             toastRoot.SetAsLastSibling();
             if (flyLayer != null) flyLayer.SetAsLastSibling();

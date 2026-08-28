@@ -141,6 +141,7 @@ public class PlayChoicePopup : MonoBehaviour
         root.gameObject.SetActive(true);
         root.SetAsLastSibling();
         if (group != null) group.alpha = 1f;
+        Sfx.UiClick();
     }
 
     private void Cancel()

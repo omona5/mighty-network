@@ -351,6 +351,7 @@ public class DealAnimator : MonoBehaviour
             ResetDeckStackLayout();
         }
         SetHint("카드 섞는 중...");
+        Sfx.Shuffle();
         yield return CoShuffle();
 
         yield return null;
@@ -540,6 +541,7 @@ public class DealAnimator : MonoBehaviour
             fromSize[i] = rt.sizeDelta;
         }
 
+        Sfx.KittyFan();
         float t = 0f;
         while (t < kittySpreadDuration)
         {
@@ -695,6 +697,7 @@ public class DealAnimator : MonoBehaviour
         Graphic[] graphics = view.GetComponentsInChildren<Graphic>(true);
         for (int i = 0; i < graphics.Length; i++)
             graphics[i].raycastTarget = false;
+        Sfx.DealTick();
 
         float t = 0f;
         while (t < flyDuration)

@@ -1483,3 +1483,63 @@
 - **작업 요청**: 현재까지 내용 커밋·푸시
 - **포함**: TMP UI 전환, InfoBox 레이아웃, OnGUI 세로 중앙, TitleScene, 디버그 마커 OFF
 - **제외**: TextMesh Pro/Examples & Extras (데모 에셋)
+
+## 2026-08-27 22:57 (UTC+9)
+
+- **결과**: 커밋 `e43efc7` 푸시 완료 (`main` → origin)
+- **메시지**: Polish UI with TMP, title scene, and tighter seat info boxes.
+- **미포함(로컬 잔여)**: TMP Examples & Extras, Assets/Editor.meta
+
+## 2026-08-28 23:05 (UTC+9)
+
+- **작업 요청**: 사운드 이펙트 넣을 위치 추천
+- **작업 디렉토리**: `/Users/omona/Documents/gameDEV/mighty-network/mighty-network`
+- **확인/열람한 파일**:
+  - `Assets/Scripts/` 애니·이벤트 스크립트 (`DealAnimator`, `CardPlayAnimator`, `TrickWinAnimator`, `KittyView`, `CardView`, `NetworkManager`, `TitleScreen`, `PlayChoicePopup`)
+  - 서버 메시지 타입 (`server.js` play_card / bid / discard_kitty / choose_friend / game_finished 등)
+- **실행 명령**: 없음 (분석만)
+- **결과 요약**:
+  - 현재 오디오는 카메라 `AudioListener`만 있고 SFX/BGM은 없음.
+  - 우선순위: ①카드 제출·착지·트릭 승 ②셔플/딜/키티 ③마이티·조커·프렌드·당선·승패 ④UI 클릭은 최소.
+- **다음 단계**: 사용자가 원하면 `SfxPlayer` + 훅 연결 구현.
+
+## 2026-08-28 23:06 (UTC+9)
+
+- **작업 요청**: 사운드 이펙트 파일 넣을 위치 추천
+- **확인**: `Assets/Resources/` (Cards, Fonts, Icons — `Resources.Load`), `Assets/Sprites/` (원본 시트)
+- **결과 요약**: 런타임 로드 패턴에 맞춰 `Assets/Resources/Sfx/` + `.ogg` 권장. StreamingAssets/TMP 폴더는 비추천.
+- **다음 단계**: 폴더 생성 및 `SfxPlayer` 연결은 요청 시.
+
+## 2026-08-28 23:07 (UTC+9)
+
+- **작업 요청**: `Sfx` 디렉토리 생성
+- **작업 디렉토리**: `mighty-network-unity/Assets/Resources/`
+- **생성 파일**:
+  - `Assets/Resources/Sfx/` (빈 폴더)
+  - `Assets/Resources/Sfx.meta` (Unity 폴더 에셋, guid `3b9e7c1a4d2f48e6a0c5b8d1e4f7a9c2`)
+- **결과**: 효과음은 `Assets/Resources/Sfx/*.ogg` 로 넣으면 `Resources.Load("Sfx/...")` 로 로드 가능.
+- **다음 단계**: `.ogg` 파일 추가 또는 `SfxPlayer` 구현.
+
+## 2026-08-28 23:12 (UTC+9)
+
+- **작업 요청**: 넣은 Kenney SFX를 게임 이벤트에 배치
+- **작업 디렉토리**: `mighty-network-unity`
+- **파일 정리**:
+  - 사용 클립만 `Assets/Resources/Sfx/` 로 이름 부여 복사 (card_play_1~4, card_land_*, deal_*, shuffle, kitty_*, bid/pass, mighty/joker/friend, elected, trick_win, game_win/lose 등)
+  - 원본 팩·zip은 `Assets/Audio/` 로 이동 (WebGL Resources 번들 비대화 방지)
+- **생성**: `Assets/Scripts/Sfx.cs` (`Resources.Load` + PlayOneShot, DontDestroyOnLoad)
+- **훅 연결**:
+  - 타이틀 시작, 카드 제출/착지, 셔플·딜 틱, 키티 수령/펼침, 트릭 승
+  - 입찰/패스/당선, 마이티·조커·조커콜·프렌드, 딜미스, 승패, 버리기/UI
+- **다음 단계**: Unity Play로 볼륨·겹침 확인. 브라우저 첫 클릭 이후에만 오디오가 허용됨.
+
+## 2026-08-28 23:29 (UTC+9)
+
+- **작업 요청**: 내려간 게임 서버 기동
+- **작업 디렉토리**: `server-node`
+- **실행 명령**: `npm install && npm start`
+- **결과**: `ws://localhost:3000` 기동. HTTP 테스트 페이지 `http://localhost:3000`
+- **미해결**: 없음
+
+
+
