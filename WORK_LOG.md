@@ -1541,5 +1541,14 @@
 - **결과**: `ws://localhost:3000` 기동. HTTP 테스트 페이지 `http://localhost:3000`
 - **미해결**: 없음
 
+## 2026-08-28 23:31 (UTC+9)
+
+- **작업 요청**: 현재까지 커밋·푸시
+- **커밋**: `c08fa84` — Add Kenney SFX assets and wire sound effects into game events.
+- **포함**: `Sfx.cs`, `Resources/Sfx/` 런타임 클립, `Assets/Audio/` Kenney 원본, 게임 이벤트 SFX 훅, `WORK_LOG.md`
+- **제외**: TMP Examples & Extras, `Assets/Editor.meta`
+- **결과**: `main` → origin 푸시 완료
+
+
 
 
