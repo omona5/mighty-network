@@ -28,9 +28,40 @@ public class CardPlayAnimator : MonoBehaviour
     private CardView cardPrefab;
     private RectTransform flyLayer;
     private bool busy;
+    private CardView activeFlyView;
+    private RectTransform activeDestination;
     private readonly Queue<FlyRequest> queue = new Queue<FlyRequest>();
 
     public bool IsBusy { get { return busy || queue.Count > 0; } }
+
+    public void Cancel()
+    {
+        queue.Clear();
+        StopAllCoroutines();
+        CleanupActiveFlight();
+        busy = false;
+    }
+
+    private void OnDisable() { Cancel(); }
+
+    private void CleanupActiveFlight()
+    {
+        if (activeFlyView != null)
+        {
+            activeFlyView.gameObject.SetActive(false);
+            Destroy(activeFlyView.gameObject);
+        }
+        activeFlyView = null;
+        if (activeDestination != null)
+        {
+            SetGraphicsVisible(activeDestination.gameObject, true);
+            Transform parent = activeDestination.parent;
+            Transform nick = parent != null ? parent.Find("Nick") : null;
+            if (nick != null) SetGraphicsVisible(nick.gameObject, true);
+            ShowTopIcons(parent);
+        }
+        activeDestination = null;
+    }
 
     public void Configure(CardView prefab, Canvas canvas)
     {
@@ -38,7 +69,7 @@ public class CardPlayAnimator : MonoBehaviour
         if (flyLayer != null || canvas == null) return;
 
         GameObject go = new GameObject("CardFlyLayer", typeof(RectTransform));
-        go.transform.SetParent(canvas.transform, false);
+        go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
         flyLayer = go.GetComponent<RectTransform>();
         flyLayer.anchorMin = Vector2.zero;
         flyLayer.anchorMax = Vector2.one;
@@ -133,6 +164,7 @@ public class CardPlayAnimator : MonoBehaviour
                 yield break;
 
             Transform destParent = destCard.parent != null ? destCard.parent : destCard;
+            activeDestination = destCard;
 
             // 목적 카드/닉네임: Graphic만 끄기 (CanvasGroup alpha 잔류 버그 회피)
             SetGraphicsVisible(destCard.gameObject, false);
@@ -141,6 +173,7 @@ public class CardPlayAnimator : MonoBehaviour
             HideTopIcons(destParent);
 
             flyView = Instantiate(cardPrefab, destParent);
+            activeFlyView = flyView;
             flyView.Clicked = null;
             flyView.SetFlightMode(true);
             flyView.SetCard(req.card);
@@ -192,6 +225,8 @@ public class CardPlayAnimator : MonoBehaviour
         finally
         {
             if (flyView != null) Destroy(flyView.gameObject);
+            activeFlyView = null;
+            activeDestination = null;
 
             // dest가 살아 있으면 반드시 다시 보이게
             if (destCard != null)

@@ -4,7 +4,10 @@
   "description": "Mighty card game server (Node.js + ws / WebSocket)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test/ruleEngine.test.js && node test/scoring.test.js && node test/reconnect.test.js",
+    "check": "npm test"
   },
   "keywords": [],
   "author": "",

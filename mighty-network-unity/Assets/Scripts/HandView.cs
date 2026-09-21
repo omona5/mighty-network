@@ -21,6 +21,7 @@ public class HandView : MonoBehaviour
         public bool isFriend;
         public bool isFriendSecret;
         public string declaredSuit;
+        public bool jokerCallActivated;
     }
 
     [Header("Inspector에서 연결")]
@@ -29,8 +30,8 @@ public class HandView : MonoBehaviour
 
     public System.Action<CardData> onCardClicked;
 
-    private const float TableLabelHeight = 28f;
-    private static int TableLabelFontSize { get { return UiFonts.Size(14); } }
+    private const float TableLabelHeight = 42f;
+    private static int TableLabelFontSize => 30;
     private const int TableNickMaxChars = 8;
     // 5마: 트릭당 항상 5장 — 배치/비행 도착점을 이 슬롯 기준으로 고정
     public const int TableTrickSlots = 5;
@@ -53,6 +54,16 @@ public class HandView : MonoBehaviour
         // 테이블용 HandView는 스킵 — 손패 컨테이너만 매 프레임 하단 도킹
         if (IsSelfHandContainer())
             ApplySelfHandDock();
+        else if (cardContainer != null && cardContainer.name == "TableContainer")
+        {
+            RectTransform table = cardContainer as RectTransform;
+            table.anchorMin = table.anchorMax = new Vector2(0.5f, 0.51f);
+            table.anchoredPosition = Vector2.zero;
+            table.sizeDelta = new Vector2(ResponsiveCanvas.IsPortrait ? 540f : 960f, 560f);
+            for (int i = 0; i < spawned.Count; i++)
+                if (spawned[i] != null)
+                    ((RectTransform)spawned[i].transform).anchoredPosition = GetTableSlotLocalPosition(i, TableTrickSlots);
+        }
     }
 
     private bool IsSelfHandContainer()
@@ -68,18 +79,19 @@ public class HandView : MonoBehaviour
         if (rt == null) return;
 
         Canvas canvas = rt.GetComponentInParent<Canvas>();
-        RectTransform canvasRt = canvas != null ? canvas.transform as RectTransform : null;
+        RectTransform canvasRt = canvas != null ? ResponsiveCanvas.Content(canvas) as RectTransform : null;
         if (canvasRt != null)
             Canvas.ForceUpdateCanvases();
 
         float canvasH = (canvasRt != null && canvasRt.rect.height > 1f)
             ? canvasRt.rect.height
-            : Mathf.Max(1f, Screen.height);
+            : Mathf.Max(1f, ResponsiveCanvas.ViewHeight);
 
         float cardH = CardSpriteAtlas.DisplayHeight;
         // 1) 중심을 화면 하단(y=0)에 두면 상대처럼 절반만 보임
         // 2) 그다음 카드 높이의 SelfHandLiftFromEdge 만큼 위로
-        float centerY = 0f + cardH * OpponentHandsView.SelfHandLiftFromEdge;
+        float scale = canvas != null ? Mathf.Max(0.001f, canvas.scaleFactor) : 1f;
+        float centerY = ResponsiveCanvas.SafeArea.yMin / scale + cardH * 0.5f + 20f;
 
         OpponentHandsView.RefreshSelfHandMetrics(canvasH, cardH);
         OpponentHandsView.SetSelfHandCenterFromBottom(centerY);
@@ -87,8 +99,8 @@ public class HandView : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0f);
         rt.anchorMax = new Vector2(0.5f, 0f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = new Vector2(0f, centerY);
-        rt.sizeDelta = new Vector2(rt.sizeDelta.x, cardH);
+        rt.anchoredPosition = new Vector2((ResponsiveCanvas.SafeArea.center.x - ResponsiveCanvas.ViewWidth * 0.5f) / scale, centerY);
+        rt.sizeDelta = new Vector2(Mathf.Min(1700f, ResponsiveCanvas.SafeArea.width / scale - 40f), cardH);
 
         // HLG는 Y를 매 프레임 다시 쓰기 때문에 손패는 수동 배치로 통일
         HorizontalLayoutGroup hlg = rt.GetComponent<HorizontalLayoutGroup>();
@@ -116,6 +128,12 @@ public class HandView : MonoBehaviour
             if (spawnedViews[i] != null) n++;
         }
         if (n <= 0) return;
+
+        float availableW = parent.rect.width > 1f
+            ? Mathf.Max(cardW, parent.rect.width - 32f)
+            : Mathf.Max(cardW, ResponsiveCanvas.ViewWidth - 32f);
+        if (n > 1)
+            step = Mathf.Min(step, Mathf.Max(cardW * 0.24f, (availableW - cardW) / (n - 1)));
 
         float startX = -((n - 1) * step) * 0.5f;
         int slot = 0;
@@ -191,7 +209,7 @@ public class HandView : MonoBehaviour
             rootRt.anchorMax = new Vector2(0.5f, 0.5f);
             rootRt.pivot = new Vector2(0.5f, 0.5f);
             rootRt.sizeDelta = Vector2.zero;
-            rootRt.anchoredPosition = new Vector2(slotX, 0f);
+            rootRt.anchoredPosition = GetTableSlotLocalPosition(i, slots);
 
             CardView view = Instantiate(cardPrefab, root.transform);
             ApplyHandCardSize(view);
@@ -205,6 +223,7 @@ public class HandView : MonoBehaviour
                 vrt.sizeDelta = new Vector2(cardW, cardH);
             }
             view.SetCard(e.card);
+            if (e.jokerCallActivated) AddJokerCallOverlay(view.transform);
             view.Clicked = null;
             // 이전 애니 CanvasGroup/alpha 잔여 방지
             CanvasGroup leftover = view.GetComponent<CanvasGroup>();
@@ -261,6 +280,29 @@ public class HandView : MonoBehaviour
             rt.anchoredPosition = new Vector2(x, y);
             x += sz.x + gap;
         }
+    }
+
+    private static void AddJokerCallOverlay(Transform parent)
+    {
+        var box = new GameObject("JokerCallOverlay", typeof(RectTransform), typeof(Image));
+        box.transform.SetParent(parent, false);
+        var rect = box.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 0.5f);
+        rect.anchorMax = new Vector2(1f, 0.5f);
+        rect.sizeDelta = new Vector2(-12f, 42f);
+        rect.anchoredPosition = Vector2.zero;
+        var background = box.GetComponent<Image>();
+        background.color = Color.black;
+        background.raycastTarget = false;
+        var text = UiTmp.Create(box.transform, "Label", 22, TextAnchor.MiddleCenter, Color.white);
+        text.rectTransform.anchorMin = Vector2.zero;
+        text.rectTransform.anchorMax = Vector2.one;
+        text.rectTransform.offsetMin = new Vector2(6f, 4f);
+        text.rectTransform.offsetMax = new Vector2(-6f, -4f);
+        text.enableAutoSizing = true;
+        text.fontSizeMin = 12;
+        text.fontSizeMax = 22;
+        LocalizedLabel.Bind(text, () => GameSettings.Language == "en" ? "Joker Call" : "조커콜");
     }
 
     private GameObject selfRoleRoot;
@@ -329,11 +371,11 @@ public class HandView : MonoBehaviour
         RelayoutHandCards();
     }
 
-    public void SetAllPlayable(bool playable)
+    public void SetAllPlayable(bool playable, bool dimDisabled = true)
     {
         foreach (CardView v in spawnedViews)
         {
-            if (v != null && v.Card != null) v.SetPlayable(playable);
+            if (v != null && v.Card != null) v.SetPlayable(playable, dimDisabled);
         }
     }
 
@@ -603,10 +645,17 @@ public class HandView : MonoBehaviour
         Transform parent = cardContainer != null ? cardContainer : transform;
         int n = Mathf.Max(totalCount, 1);
         int i = Mathf.Clamp(index, 0, n - 1);
-        float x = GetTableSlotLocalX(i, n);
-        // 닉네임 OFF일 때 카드 중심 = y0 / ON이면 컬럼을 내려 카드 중심이 역시 y0
-        float y = 0f;
-        return parent.TransformPoint(new Vector3(x, y, 0f));
+        return parent.TransformPoint(GetTableSlotLocalPosition(i, n));
+    }
+
+    private Vector2 GetTableSlotLocalPosition(int index, int totalCount)
+    {
+        if (!ResponsiveCanvas.IsPortrait)
+            return new Vector2(GetTableSlotLocalX(index, totalCount), 0f);
+        // Fixed 3 + 2 slots keep submitted cards and flight destinations identical.
+        int i = Mathf.Clamp(index, 0, 4);
+        return i < 3 ? new Vector2((i - 1) * 174f, 146f)
+            : new Vector2((i - 3.5f) * 174f, -146f);
     }
 
     private float GetTableSlotLocalX(int index, int totalCount)
@@ -618,8 +667,15 @@ public class HandView : MonoBehaviour
         if (hlg != null) spacing = hlg.spacing;
         int n = Mathf.Max(totalCount, 1);
         int i = Mathf.Clamp(index, 0, n - 1);
-        float totalW = n * cardW + Mathf.Max(0, n - 1) * spacing;
-        return -totalW * 0.5f + cardW * 0.5f + i * (cardW + spacing);
+        float step = cardW + spacing;
+        RectTransform parentRt = parent as RectTransform;
+        float availableW = parentRt != null && parentRt.rect.width > 1f
+            ? parentRt.rect.width - 32f
+            : ResponsiveCanvas.ViewWidth - 32f;
+        if (n > 1 && n * cardW + (n - 1) * spacing > availableW)
+            step = Mathf.Max(cardW * 0.5f, (availableW - cardW) / (n - 1));
+        float totalW = cardW + Mathf.Max(0, n - 1) * step;
+        return -totalW * 0.5f + cardW * 0.5f + i * step;
     }
 
     public Vector2 HandCardSize

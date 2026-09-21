@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{{ PRODUCT_NAME }}}</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #231f20; }
+    #unity-canvas { display: block; width: 100%; height: 100%; }
+    #status { position: fixed; inset: 45% 10% auto; text-align: center; color: white; font: 16px sans-serif; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="status">Loading…</div>
+  <script>
+    const canvas = document.getElementById('unity-canvas');
+    const status = document.getElementById('status');
+    const config = {
+      dataUrl: 'Build/{{{ DATA_FILENAME }}}',
+      frameworkUrl: 'Build/{{{ FRAMEWORK_FILENAME }}}',
+      codeUrl: 'Build/{{{ CODE_FILENAME }}}',
+      streamingAssetsUrl: 'StreamingAssets',
+      companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+      productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+      productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+      matchWebGLToCanvasSize: true
+    };
+    const script = document.createElement('script');
+    script.src = 'Build/{{{ LOADER_FILENAME }}}';
+    script.onerror = () => { status.textContent = '게임 파일을 불러오지 못했습니다. 새로고침해 주세요.'; };
+    script.onload = () => createUnityInstance(canvas, config, progress => {
+      status.textContent = 'Loading ' + Math.round(progress * 100) + '%';
+    }).then(() => {
+      status.remove();
+      canvas.focus();
+    }).catch(error => { status.textContent = String(error); });
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>

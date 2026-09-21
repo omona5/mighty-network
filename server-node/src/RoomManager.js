@@ -439,7 +439,7 @@ class RoomManager {
       if (p !== human) p.hand = sortHand(p.hand || []);
     });
     if (room.kitty) room.kitty = sortHand(room.kitty);
-    console.log("[debug] 조커/조커콜을", human.nickname, "손에 고정. 기루다", DEBUG_FIXED_TRUMP);
+    console.log("[debug] 테스트 카드", needed.join(","), "→", human.nickname);
   }
 
   // 입찰 마감 후 주공/기루다/목표점 확정.

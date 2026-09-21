@@ -1,0 +1,4 @@
+
+[mcp_servers.unity]
+command = "C:\\Users\\dgoh3\\AppData\\Local\\Unity\\bin\\unity.exe"
+args = ["mcp"]

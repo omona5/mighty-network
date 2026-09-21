@@ -18,6 +18,26 @@ public class GameRuleHud : MonoBehaviour
     private CanvasGroup canvasGroup;
     private const int LayoutRev = 9;
     private int builtRev;
+    private Info currentInfo;
+    private Vector2 layoutScreen;
+    private Rect layoutSafeArea;
+    private float topClearancePixels;
+
+    // IMGUI corner controls use screen pixels; convert their occupied height
+    // into canvas units so portrait layouts keep the same gap at any resolution.
+    public void SetTopClearance(float screenPixels)
+    {
+        if (Mathf.Approximately(topClearancePixels, screenPixels)) return;
+        topClearancePixels = screenPixels;
+        if (root != null && root.gameObject.activeSelf) ApplyResponsiveLayout();
+    }
+
+    private void LateUpdate()
+    {
+        if (root != null && root.gameObject.activeSelf
+            && (layoutScreen != new Vector2(ResponsiveCanvas.ViewWidth, ResponsiveCanvas.ViewHeight) || layoutSafeArea != ResponsiveCanvas.SafeArea))
+            ApplyResponsiveLayout();
+    }
 
     private const float PadL = 12f;
     private const float PadR = 12f;
@@ -40,6 +60,7 @@ public class GameRuleHud : MonoBehaviour
 
     public void Set(Info info)
     {
+        currentInfo = info;
         EnsureUi();
         if (root == null) return;
 
@@ -62,7 +83,7 @@ public class GameRuleHud : MonoBehaviour
             if (friendNoneText != null)
             {
                 friendNoneText.gameObject.SetActive(true);
-                friendNoneText.text = "없음";
+                LocalizedLabel.Bind(friendNoneText, "없음");
             }
         }
         else
@@ -75,11 +96,66 @@ public class GameRuleHud : MonoBehaviour
         if (bodyText != null)
         {
             bodyText.text =
-                "주공팀  " + NullDash(info.teamScoreLabel) + "\n"
-                + "공약    " + NullDash(info.bidLabel);
+                L10n.Text("주공팀  ") + NullDash(info.teamScoreLabel) + "\n"
+                + L10n.Text("공약    ") + NullDash(info.bidLabel);
         }
 
         ApplyPanelSize(info.friendCardNone);
+        ApplyResponsiveLayout();
+    }
+
+    private void ApplyResponsiveLayout()
+    {
+        layoutScreen = new Vector2(ResponsiveCanvas.ViewWidth, ResponsiveCanvas.ViewHeight);
+        layoutSafeArea = ResponsiveCanvas.SafeArea;
+        bool portrait = ResponsiveCanvas.IsPortrait;
+        Canvas canvas = root.GetComponentInParent<Canvas>();
+        float scale = Mathf.Max(0.001f, canvas.scaleFactor);
+        Rect safe = ResponsiveCanvas.SafeArea;
+        float width = portrait ? Mathf.Min(840f, safe.width / scale - 240f) : 280f;
+        root.anchorMin = root.anchorMax = root.pivot = new Vector2(portrait ? 0.5f : 0f, 1f);
+        root.localScale = Vector3.one;
+        root.anchoredPosition = new Vector2(portrait
+            ? (safe.center.x - ResponsiveCanvas.ViewWidth * 0.5f) / scale : safe.xMin / scale + 20f,
+            -(ResponsiveCanvas.ViewHeight - safe.yMax) / scale
+                - (portrait ? Mathf.Max(156f, topClearancePixels / scale) : 20f));
+        root.sizeDelta = new Vector2(width, portrait ? 256f : 280f);
+        TextMeshProUGUI heading = root.Find("Title").GetComponent<TextMeshProUGUI>();
+        heading.fontSize = portrait ? 34 : 26;
+        heading.alignment = TextAlignmentOptions.Center;
+        heading.rectTransform.sizeDelta = new Vector2(-24f, 44f);
+        bodyText.text = L10n.Text("주공팀 ") + NullDash(currentInfo.teamScoreLabel)
+            + (portrait ? L10n.Text("    ·    공약 ") : L10n.Text("\n공약 ")) + NullDash(currentInfo.bidLabel);
+        bodyText.fontSize = portrait ? 36 : 24;
+        bodyText.alignment = TextAlignmentOptions.Center;
+        bodyText.rectTransform.sizeDelta = new Vector2(-24f, portrait ? 54f : 64f);
+        Image[] icons = { trumpIcon, mightyIcon, jokerCallIcon, friendCardIcon };
+        for (int i = 0; i < icons.Length; i++)
+        {
+            RectTransform row = (RectTransform)icons[i].transform.parent;
+            row.anchorMin = row.anchorMax = new Vector2(0f, 1f);
+            row.anchoredPosition = portrait ? new Vector2(i * width / 4f, -54f) : new Vector2(12f + (i % 2) * 128f, -50f - (i / 2) * 72f);
+            row.sizeDelta = new Vector2(portrait ? width / 4f : 128f, portrait ? 134f : 72f);
+            TextMeshProUGUI label = row.Find("Label").GetComponent<TextMeshProUGUI>();
+            label.fontSize = portrait ? 30 : 22;
+            label.enableAutoSizing = true;
+            label.fontSizeMax = portrait ? 30 : 22;
+            label.fontSizeMin = portrait ? 20 : 16;
+            label.alignment = TextAlignmentOptions.Center;
+            RectTransform lr = label.rectTransform;
+            lr.anchorMin = lr.anchorMax = lr.pivot = new Vector2(0.5f, 1f);
+            lr.anchoredPosition = Vector2.zero;
+            lr.sizeDelta = new Vector2(portrait ? width / 4f : 128f, portrait ? 40f : 28f);
+            RectTransform ir = icons[i].rectTransform;
+            ir.anchorMin = ir.anchorMax = ir.pivot = new Vector2(0.5f, 0.5f);
+            ir.anchoredPosition = new Vector2(0f, portrait ? -26f : -14f);
+            ir.sizeDelta = (i == 0 ? new Vector2(56f, 56f) : new Vector2(100f, 50f)) * (portrait ? 1f : 0.72f);
+        }
+        friendNoneText.fontSize = portrait ? 32 : 26;
+        friendNoneText.rectTransform.anchorMin = friendNoneText.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        friendNoneText.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        friendNoneText.rectTransform.anchoredPosition = new Vector2(0f, portrait ? -26f : -14f);
+        friendNoneText.rectTransform.sizeDelta = new Vector2(80f, 50f);
     }
 
     public void Clear()
@@ -124,12 +200,14 @@ public class GameRuleHud : MonoBehaviour
         if (root != null) Destroy(root.gameObject);
 
         GameObject go = new GameObject("GameRuleHud", typeof(RectTransform), typeof(CanvasGroup));
-        go.transform.SetParent(canvas.transform, false);
+        go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
         root = go.GetComponent<RectTransform>();
         root.anchorMin = new Vector2(0f, 1f);
         root.anchorMax = new Vector2(0f, 1f);
         root.pivot = new Vector2(0f, 1f);
-        root.anchoredPosition = new Vector2(12f, -12f);
+        bool portrait = ResponsiveCanvas.IsPortrait;
+        root.anchoredPosition = new Vector2(UiFonts.Layout(portrait ? 8f : 12f), -UiFonts.Layout(portrait ? 8f : 12f));
+        root.localScale = Vector3.one * (portrait ? 0.82f : 1f);
         canvasGroup = go.GetComponent<CanvasGroup>();
         canvasGroup.blocksRaycasts = false;
         root.SetAsLastSibling();
@@ -142,19 +220,19 @@ public class GameRuleHud : MonoBehaviour
         bgrt.offsetMin = Vector2.zero;
         bgrt.offsetMax = Vector2.zero;
         Image bg = bgGo.GetComponent<Image>();
-        bg.color = new Color(0f, 0f, 0f, 0.72f);
+        bg.color = MightyTheme.Panel;
         bg.raycastTarget = false;
 
         TextMeshProUGUI title = UiTmp.Create(
             root, "Title", UiFonts.Size(15), TextAnchor.MiddleLeft,
-            new Color(1f, 0.9f, 0.45f, 1f));
+            MightyTheme.Accent);
         RectTransform titRt = title.rectTransform;
         titRt.anchorMin = new Vector2(0f, 1f);
         titRt.anchorMax = new Vector2(1f, 1f);
         titRt.pivot = new Vector2(0.5f, 1f);
         titRt.anchoredPosition = new Vector2(0f, -6f);
         titRt.sizeDelta = new Vector2(-16f, UiFonts.Layout(26f));
-        title.text = "판 정보";
+        LocalizedLabel.Bind(title, "판 정보");
 
         Vector2 cardSz = IconSpriteAtlas.DisplayCard;
         Vector2 sqSz = IconSpriteAtlas.DisplaySquare;
@@ -165,11 +243,11 @@ public class GameRuleHud : MonoBehaviour
         jokerCallIcon = MakeLabeledIcon(root, "JokerCall", "조커콜", new Vector2(PadL, y0 - rowH * 2f), cardSz);
         friendCardIcon = MakeLabeledIcon(root, "FriendCard", "프렌드카드", new Vector2(PadL, y0 - rowH * 3f), cardSz);
         float noneX = LabelColW + 8f + cardSz.x + 8f;
-        friendNoneText = MakeInlineLabel(friendCardIcon.transform.parent, "None", "없음", new Vector2(noneX, 0f));
+        friendNoneText = MakeInlineLabel(friendCardIcon.transform.parent, "None", L10n.Text("없음"), new Vector2(noneX, 0f));
         friendNoneText.gameObject.SetActive(false);
 
         bodyText = UiTmp.Create(
-            root, "Body", UiFonts.Size(14), TextAnchor.UpperLeft, Color.white);
+            root, "Body", UiFonts.Size(14), TextAnchor.UpperLeft, MightyTheme.Ink);
         RectTransform bodyRt = bodyText.rectTransform;
         bodyRt.anchorMin = new Vector2(0f, 0f);
         bodyRt.anchorMax = new Vector2(1f, 0f);
@@ -195,14 +273,14 @@ public class GameRuleHud : MonoBehaviour
         rt.sizeDelta = new Vector2(-PadL - PadR, Mathf.Max(iconSize.y, UiFonts.Layout(22f)));
 
         TextMeshProUGUI t = UiTmp.Create(
-            row.transform, "Label", UiFonts.Size(13), TextAnchor.MiddleLeft, Color.white);
+            row.transform, "Label", UiFonts.Size(13), TextAnchor.MiddleLeft, MightyTheme.Muted);
         RectTransform lrt = t.rectTransform;
         lrt.anchorMin = new Vector2(0f, 0f);
         lrt.anchorMax = new Vector2(0f, 1f);
         lrt.pivot = new Vector2(0f, 0.5f);
         lrt.anchoredPosition = Vector2.zero;
         lrt.sizeDelta = new Vector2(LabelColW, 0f);
-        t.text = label;
+        LocalizedLabel.Bind(t, label);
 
         Image img = IconGui.MakeImage(row.transform, "Icon", default(IconSpriteAtlas.Slice), iconSize);
         RectTransform irt = img.rectTransform;
@@ -216,7 +294,7 @@ public class GameRuleHud : MonoBehaviour
     private TextMeshProUGUI MakeInlineLabel(Transform parent, string name, string text, Vector2 pos)
     {
         TextMeshProUGUI t = UiTmp.Create(
-            parent, name, UiFonts.Size(14), TextAnchor.MiddleLeft, Color.white);
+            parent, name, UiFonts.Size(14), TextAnchor.MiddleLeft, MightyTheme.Ink);
         RectTransform rt = t.rectTransform;
         rt.anchorMin = new Vector2(0f, 0.5f);
         rt.anchorMax = new Vector2(0f, 0.5f);

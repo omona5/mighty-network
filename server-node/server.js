@@ -22,7 +22,11 @@ const { WebSocketServer } = require("ws");
 const RoomManager = require("./src/RoomManager");
 const { sortHand } = require("./src/game/Card");
 
-const PORT = 3000;
+const DEFAULT_PORT = 3000;
+const configuredPort = Number.parseInt(process.env.PORT || "", 10);
+const PORT = Number.isInteger(configuredPort) && configuredPort > 0
+  ? configuredPort
+  : DEFAULT_PORT;
 
 let nextClientId = 1;
 const rooms = new RoomManager();
@@ -44,6 +48,12 @@ const MIME = {
 };
 
 const httpServer = http.createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/health/") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ status: "ok", port: PORT, rooms: Object.keys(rooms.rooms).length }));
+    return;
+  }
+
   // 쿼리/해시 제거
   let urlPath = (req.url || "/").split("?")[0].split("#")[0];
   if (urlPath === "/") urlPath = "/test.html";
@@ -241,6 +251,8 @@ wss.on("connection", (ws) => {
           break;
         }
         const { room, player } = result;
+        // Reconnected clients restore a snapshot instead of replaying the deal.
+        if (room.dealWaiters) room.dealWaiters.delete(player.clientId);
         console.log("[reconnect] room", room.roomId, "player", player.nickname, player.clientId);
         send(ws, "reconnected", {
           roomId: room.roomId,
@@ -265,6 +277,7 @@ wss.on("connection", (ws) => {
         if (room.status === "finished" && room.lastResult) {
           send(ws, "game_finished", room.lastResult);
         }
+        maybeBotBid(room);
         break;
       }
 
@@ -303,7 +316,8 @@ wss.on("connection", (ws) => {
         // 09단계: 입찰 세팅
         rooms.startBidding(room);
         console.log("[start] room", room.roomId, "게임 시작 + 카드 배분 + 입찰 시작");
-        broadcast(room, "game_started", { roomId: room.roomId });
+        beginDealAnimationWait(room);
+        broadcast(room, "game_started", { roomId: room.roomId, dealId: room.dealId });
         // 각 사람에게 "본인 손패"만 개별 전송 (입찰 판단에 필요)
         sendHandsToHumans(room);
         broadcast(room, "game_state", rooms.publicState(room));
@@ -331,6 +345,15 @@ wss.on("connection", (ws) => {
       }
 
       // ---- 09단계: 입찰 패스 ----
+      case "deal_animation_complete": {
+        const room = rooms.getRoom(ws.roomId);
+        if (room && room.dealId === data.dealId && room.dealWaiters) {
+          room.dealWaiters.delete(ws.clientId);
+          maybeBotBid(room);
+        }
+        break;
+      }
+
       case "pass_bid": {
         const room = rooms.getRoom(ws.roomId);
         if (!room || room.status !== "bidding") break;
@@ -513,8 +536,9 @@ function sendHandsToHumans(room) {
 function redealAndRestartBidding(room) {
   rooms.dealCards(room);
   rooms.startBidding(room);
+  beginDealAnimationWait(room);
   // 클라이언트 셔플/딜 애니 트리거 (pass_bid의 your_hand 재전송과 구분)
-  broadcast(room, "redeal", { reason: "redeal" });
+  broadcast(room, "redeal", { reason: "redeal", dealId: room.dealId });
   sendHandsToHumans(room);
   broadcast(room, "game_state", rooms.publicState(room));
   maybeBotBid(room);
@@ -599,14 +623,39 @@ function maybeBotDiscardKitty(room) {
 }
 
 // 09단계: 입찰 차례가 봇(또는 끊긴 사람)이면 잠시 후 자동
+const pendingBotBids = new WeakSet();
+function beginDealAnimationWait(room) {
+  room.dealId = (room.dealId || 0) + 1;
+  const dealId = room.dealId;
+  room.dealWaiters = new Set(room.players.filter(p => !p.isBot && p.connected).map(p => p.clientId));
+  // Older clients / suspended tabs must not leave the room blocked forever.
+  room.dealWaitUntil = Date.now() + 30000;
+  setTimeout(() => {
+    if (rooms.getRoom(room.roomId) !== room || room.dealId !== dealId) return;
+    room.dealWaiters.clear();
+    maybeBotBid(room);
+  }, 30000).unref();
+}
+
+function waitingForDealAnimation(room) {
+  if (!room.dealWaiters || Date.now() >= room.dealWaitUntil) return false;
+  return room.players.some(p => !p.isBot && p.connected && room.dealWaiters.has(p.clientId));
+}
+
 function maybeBotBid(room) {
   if (!room || room.status !== "bidding") return;
+  if (waitingForDealAnimation(room)) return;
   const bidder = rooms.currentBidder(room);
-  if (!rooms.isBotControlled(bidder)) return;
+  const dealId = room.dealId;
+  if (!rooms.isBotControlled(bidder) || pendingBotBids.has(room)) return;
+  pendingBotBids.add(room);
   setTimeout(() => {
+    pendingBotBids.delete(room);
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "bidding") return;
+    if (r.dealId !== dealId || waitingForDealAnimation(r)) { maybeBotBid(r); return; }
     const b = rooms.currentBidder(r);
+    if (b !== bidder) { maybeBotBid(r); return; }
     if (!rooms.isBotControlled(b)) return;
     // 손패 평가로 공약할지 패스할지 결정
     const decision = rooms.botDecideBid(r, b);
@@ -625,7 +674,7 @@ function maybeBotBid(room) {
     }
     if (result.error) return;
     handleBidStep(r, result.complete);
-  }, BOT_BID_DELAY);
+  }, 1000 + Math.floor(Math.random() * 1001));
 }
 
 // 09단계: 주공이 봇(또는 끊긴 사람)이면 자동 프렌드 지정
@@ -790,3 +839,16 @@ httpServer.listen(PORT, () => {
   console.log(`WebSocket server running on ws://localhost:${PORT}`);
   console.log(`테스트 페이지: 브라우저에서 http://localhost:${PORT} 접속`);
 });
+
+function shutdown(signal) {
+  console.log(`[shutdown] ${signal} received`);
+  clearInterval(heartbeat);
+  clearInterval(reclaimTimer);
+  wss.close(() => {
+    httpServer.close(() => process.exit(0));
+  });
+  setTimeout(() => process.exit(1), 5000).unref();
+}
+
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));

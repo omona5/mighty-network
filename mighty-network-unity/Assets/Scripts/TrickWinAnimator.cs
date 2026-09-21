@@ -29,8 +29,30 @@ public class TrickWinAnimator : MonoBehaviour
     private bool busy;
     private bool stickyToast;
     private Coroutine announceRoutine;
+    private Vector2 lastToastScreen;
+
+    private float ToastUnit
+    {
+        get
+        {
+            Canvas canvas = toastRoot != null ? toastRoot.GetComponentInParent<Canvas>() : null;
+            return UiFonts.MenuScale / (canvas != null ? Mathf.Max(0.01f, canvas.scaleFactor) : 1f);
+        }
+    }
+    private int ToastFontSize => Mathf.RoundToInt((ResponsiveCanvas.IsPortrait ? 17f : 20f) * ToastUnit);
 
     public bool IsBusy { get { return busy; } }
+
+    private string lastToastLanguage;
+
+    private void LateUpdate()
+    {
+        Vector2 screen = new Vector2(ResponsiveCanvas.ViewWidth, ResponsiveCanvas.ViewHeight);
+        if (screen == lastToastScreen && lastToastLanguage == GameSettings.Language) return;
+        lastToastLanguage = GameSettings.Language;
+        lastToastScreen = screen;
+        ApplyToastStyle();
+    }
 
     public void Configure(CardView prefab, Canvas canvas)
     {
@@ -40,7 +62,7 @@ public class TrickWinAnimator : MonoBehaviour
         if (flyLayer == null)
         {
             GameObject go = new GameObject("TrickFlyLayer", typeof(RectTransform));
-            go.transform.SetParent(canvas.transform, false);
+            go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
             flyLayer = go.GetComponent<RectTransform>();
             flyLayer.anchorMin = Vector2.zero;
             flyLayer.anchorMax = Vector2.one;
@@ -52,13 +74,14 @@ public class TrickWinAnimator : MonoBehaviour
         if (toastRoot == null)
         {
             GameObject root = new GameObject("TrickToast", typeof(RectTransform), typeof(CanvasGroup));
-            root.transform.SetParent(canvas.transform, false);
+            root.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
             toastRoot = root.GetComponent<RectTransform>();
             toastRoot.anchorMin = new Vector2(0.5f, 0.5f);
             toastRoot.anchorMax = new Vector2(0.5f, 0.5f);
             toastRoot.pivot = new Vector2(0.5f, 0.5f);
-            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(560f), UiFonts.Layout(48f));
-            toastRoot.anchoredPosition = new Vector2(0f, 90f);
+            toastRoot.sizeDelta = new Vector2(ResponsiveCanvas.IsPortrait ? 780f : 680f,
+                ResponsiveCanvas.IsPortrait ? 104f : 76f);
+            toastRoot.anchoredPosition = new Vector2(0f, ResponsiveCanvas.IsPortrait ? 150f : 100f);
 
             GameObject bgGo = new GameObject("Bg", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             bgGo.transform.SetParent(toastRoot, false);
@@ -71,7 +94,7 @@ public class TrickWinAnimator : MonoBehaviour
             toastBg.raycastTarget = false;
 
             toastText = UiTmp.Create(
-                toastRoot, "Text", UiFonts.Size(14), TextAnchor.MiddleCenter, Color.white);
+                toastRoot, "Text", ToastFontSize, TextAnchor.MiddleCenter, Color.white);
             RectTransform trt = toastText.rectTransform;
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;
@@ -91,23 +114,60 @@ public class TrickWinAnimator : MonoBehaviour
 
     private void ApplyToastStyle()
     {
+        if (toastRoot == null || toastText == null) return;
+        float unit = ToastUnit;
+        // TMP's preferred width can land on a fractional pixel.  Reserve a small
+        // extra gutter so a glyph never touches or exceeds the black background.
+        float paddingX = 24f * unit;
+        float paddingY = 14f * unit;
+        RectTransform parent = toastRoot.parent as RectTransform;
+        float maxWidth = Mathf.Min((ResponsiveCanvas.IsPortrait ? 342f : 620f) * unit,
+            parent != null ? parent.rect.width - 32f * unit : 620f * unit);
+        maxWidth = Mathf.Max(80f * unit, maxWidth);
         if (toastBg != null)
             toastBg.color = Color.black;
-        if (toastRoot != null)
-            toastRoot.sizeDelta = new Vector2(UiFonts.Layout(560f), UiFonts.Layout(48f));
-        if (toastText != null)
+        UiTmp.Apply(toastText, ToastFontSize, TextAnchor.MiddleCenter, Color.white, false, false);
+        toastText.rectTransform.offsetMin = new Vector2(paddingX, paddingY);
+        toastText.rectTransform.offsetMax = new Vector2(-paddingX, -paddingY);
+        float width;
+        float height;
+        if (bidRow != null && bidRow.gameObject.activeSelf)
         {
-            RectTransform trt = toastText.rectTransform;
-            if (trt != null)
-            {
-                trt.offsetMin = new Vector2(UiFonts.Layout(16f), 6f);
-                trt.offsetMax = new Vector2(-UiFonts.Layout(16f), -6f);
-            }
-            UiTmp.Apply(toastText, UiFonts.Size(14), TextAnchor.MiddleCenter, Color.white);
+            UiTmp.Apply(bidLeft, ToastFontSize, TextAnchor.MiddleCenter, Color.white, false, false);
+            UiTmp.Apply(bidRight, ToastFontSize, TextAnchor.MiddleCenter, Color.white, false, false);
+            float icon = 24f * unit;
+            float gap = 8f * unit;
+            HorizontalLayoutGroup layout = bidRow.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = gap;
+            LayoutElement iconLayout = bidSuit.GetComponent<LayoutElement>();
+            iconLayout.minWidth = iconLayout.preferredWidth = icon;
+            iconLayout.minHeight = iconLayout.preferredHeight = icon;
+            float leftNatural = Mathf.Ceil(bidLeft.GetPreferredValues(bidLeft.text).x);
+            float rightNatural = Mathf.Ceil(bidRight.GetPreferredValues(bidRight.text).x);
+            float desiredWidth = leftNatural + rightNatural + icon + gap * 2f + paddingX * 2f;
+            width = Mathf.Min(maxWidth, desiredWidth);
+            float textWidth = Mathf.Max(1f, width - paddingX * 2f - icon - gap * 2f);
+            // Fit the background to its actual contents. If it hits the screen
+            // limit, preserve the short score and wrap only the name/announcement.
+            float rightWidth = Mathf.Min(rightNatural, textWidth);
+            float leftWidth = Mathf.Max(1f, textWidth - rightWidth);
+            bidLeft.GetComponent<LayoutElement>().preferredWidth = leftWidth;
+            bidRight.GetComponent<LayoutElement>().preferredWidth = rightWidth;
+            height = Mathf.Max(icon, Mathf.Max(
+                bidLeft.GetPreferredValues(bidLeft.text, leftWidth, Mathf.Infinity).y,
+                bidRight.GetPreferredValues(bidRight.text, rightWidth, Mathf.Infinity).y)) + paddingY * 2f;
+            bidRow.offsetMin = new Vector2(paddingX, paddingY);
+            bidRow.offsetMax = new Vector2(-paddingX, -paddingY);
         }
-        int hudSize = UiFonts.Size(14);
-        if (bidLeft != null) bidLeft.fontSize = hudSize;
-        if (bidRight != null) bidRight.fontSize = hudSize;
+        else
+        {
+            width = Mathf.Clamp(toastText.GetPreferredValues(toastText.text).x + paddingX * 2f,
+                180f * unit, maxWidth);
+            height = toastText.GetPreferredValues(toastText.text, width - paddingX * 2f, Mathf.Infinity).y
+                + paddingY * 2f;
+        }
+        toastRoot.sizeDelta = new Vector2(width, Mathf.Max(52f * unit, height));
+        toastRoot.anchoredPosition = new Vector2(0f, (ResponsiveCanvas.IsPortrait ? 56f : 72f) * unit);
     }
 
     public void Play(
@@ -138,7 +198,7 @@ public class TrickWinAnimator : MonoBehaviour
             announceRoutine = null;
         }
         stickyToast = false;
-        ShowPlainToast(message);
+        ShowPlainToast(() => message);
         announceRoutine = StartCoroutine(CoAnnounceHoldFade(holdSec, fadeSec, onComplete));
     }
 
@@ -153,12 +213,12 @@ public class TrickWinAnimator : MonoBehaviour
             announceRoutine = null;
         }
         stickyToast = false;
-        string who = string.IsNullOrEmpty(nickname) ? "누군가" : nickname;
-        ShowBidToast(who, noTrump, trumpSuit, score + "장 공약 제출!");
+        string who = string.IsNullOrEmpty(nickname) ? L10n.Text("누군가") : nickname;
+        ShowBidToast(() => string.IsNullOrEmpty(nickname) ? L10n.Text("누군가") : nickname, noTrump, trumpSuit, () => score + L10n.Text("장 공약 제출!"));
         announceRoutine = StartCoroutine(CoAnnounceHoldFade(holdSec, fadeSec, null));
     }
 
-    // 당선: "닉네임가 당선되었습니다! [기루 아이콘] N장"
+    // 당선: "닉네임\n당선! [기루 아이콘] N장"
     public void AnnounceElection(string nickname, bool noTrump, string trumpSuit, int score,
         float holdSec = 2.35f, float fadeSec = 0.35f, Action onComplete = null)
     {
@@ -169,13 +229,13 @@ public class TrickWinAnimator : MonoBehaviour
             announceRoutine = null;
         }
         stickyToast = false;
-        string who = string.IsNullOrEmpty(nickname) ? "주공" : nickname;
-        ShowBidToast(who + "가 당선되었습니다!", noTrump, trumpSuit, score + "장");
+        string who = string.IsNullOrEmpty(nickname) ? L10n.Text("주공") : nickname;
+        ShowBidToast(() => (string.IsNullOrEmpty(nickname) ? L10n.Text("주공") : nickname) + L10n.Text("\n당선!"), noTrump, trumpSuit, () => score + L10n.Text("장"));
         announceRoutine = StartCoroutine(CoAnnounceHoldFade(holdSec, fadeSec, onComplete));
     }
 
     // 사라지지 않는 안내 (예: 카드 고르는 중...)
-    public void ShowStickyToast(string message)
+    public void ShowStickyToast(Func<string> message)
     {
         EnsureToastReady();
         if (announceRoutine != null)
@@ -188,6 +248,17 @@ public class TrickWinAnimator : MonoBehaviour
         ApplyToastStyle();
         if (toastGroup != null) toastGroup.alpha = 1f;
         if (toastRoot != null) toastRoot.SetAsLastSibling();
+    }
+
+    public void Cancel()
+    {
+        StopAllCoroutines();
+        announceRoutine = null;
+        busy = false;
+        ClearStickyToast();
+        if (flyLayer != null)
+            for (int i = flyLayer.childCount - 1; i >= 0; i--)
+                Destroy(flyLayer.GetChild(i).gameObject);
     }
 
     public void ClearStickyToast()
@@ -239,24 +310,26 @@ public class TrickWinAnimator : MonoBehaviour
         if (onComplete != null) onComplete();
     }
 
-    private void ShowPlainToast(string message)
+    private void ShowPlainToast(Func<string> message)
     {
         if (bidRow != null) bidRow.gameObject.SetActive(false);
         if (toastText != null)
         {
             toastText.gameObject.SetActive(true);
-            toastText.text = message ?? "";
+            LocalizedLabel.Bind(toastText, message);
         }
+        ApplyToastStyle();
     }
 
-    private void ShowBidToast(string leftText, bool noTrump, string trumpSuit, string rightText)
+    private void ShowBidToast(Func<string> leftText, bool noTrump, string trumpSuit, Func<string> rightText)
     {
         if (toastText != null) toastText.gameObject.SetActive(false);
         EnsureBidRow();
         if (bidRow != null) bidRow.gameObject.SetActive(true);
-        if (bidLeft != null) bidLeft.text = leftText ?? "";
+        if (bidLeft != null) LocalizedLabel.Bind(bidLeft, leftText);
         IconGui.Apply(bidSuit, IconSpriteAtlas.GetTrump(noTrump, trumpSuit));
-        if (bidRight != null) bidRight.text = rightText ?? "";
+        if (bidRight != null) LocalizedLabel.Bind(bidRight, rightText);
+        ApplyToastStyle();
     }
 
     private void EnsureBidRow()
@@ -321,9 +394,9 @@ public class TrickWinAnimator : MonoBehaviour
         if (toastText != null && toastGroup != null && toastRoot != null)
         {
             ApplyToastStyle();
-            ShowPlainToast(string.IsNullOrEmpty(winnerNickname)
-                ? "승리!"
-                : (winnerNickname + " 승리!"));
+            ShowPlainToast(() => string.IsNullOrEmpty(winnerNickname)
+                ? L10n.Text("승리!")
+                : (winnerNickname + L10n.Text(" 승리!")));
             Sfx.TrickWin();
             toastGroup.alpha = 1f;
             toastRoot.SetAsLastSibling();

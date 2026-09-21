@@ -12,7 +12,7 @@
 //   - 조커콜: 기루다가 클로버면 스페이드 3, 아니면 클로버 3
 //   - 조커는 첫/마지막 트릭에서 효과 없음. 조커콜이 ‘활성화’되어 리드되면 조커 효과 없음.
 //   - 조커 리드 시 선언 무늬를 따라내야 함.
-//   - 조커콜 카드 리드는 선택적으로 활성화. 활성 시 조커 보유자는 조커 강제(마이티 예외).
+//   - 조커콜 카드 리드는 선택적으로 활성화. 활성 시 조커 보유자는 조커 강제.
 //   - 리드무늬 카드를 손에 가지고 있으면 반드시 리드무늬를 내야 함(마이티/조커는 예외).
 
 const { RANKS, SUITS } = require("./Card");
@@ -80,12 +80,11 @@ function canPlayCard({ playerHand, card, tableCards, ruleConfig }) {
 
   const lead = tableCards[0];
 
-  // 조커콜 활성: 조커 보유자는 조커 강제. 예외 — 마이티도 있으면 마이티로 막을 수 있음.
+  // 조커콜 활성: 조커 보유자는 마이티 보유 여부와 관계없이 조커 강제.
   if (isJokerCallActivated(lead, cfg)) {
     const hasJoker = playerHand.some((c) => isJoker(c, cfg));
     if (hasJoker) {
       if (isJoker(card, cfg)) return true;
-      if (isMighty(card, cfg)) return true;
       return false;
     }
   }

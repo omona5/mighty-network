@@ -26,6 +26,7 @@ public static class Sfx
 
     public static void Ensure()
     {
+        GameSettings.Initialize();
         if (source != null) return;
 
         GameObject go = new GameObject("SfxPlayer");
@@ -34,7 +35,17 @@ public static class Sfx
         source.playOnAwake = false;
         source.spatialBlend = 0f;
         source.loop = false;
-        source.volume = 1f;
+        source.volume = GameSettings.SfxVolume;
+        source.mute = GameSettings.SfxMuted;
+        GameSettings.AudioChanged -= ApplyVolume;
+        GameSettings.AudioChanged += ApplyVolume;
+    }
+
+    private static void ApplyVolume()
+    {
+        if (source == null) return;
+        source.volume = GameSettings.SfxVolume;
+        source.mute = GameSettings.SfxMuted;
     }
 
     public static void UiClick() { Play("ui_click", 0.55f); }

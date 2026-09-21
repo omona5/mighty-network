@@ -35,7 +35,7 @@ public class SeatDebugOverlay : MonoBehaviour
         if (root != null) return;
 
         GameObject go = new GameObject("SeatDebugOverlay", typeof(RectTransform), typeof(CanvasGroup));
-        go.transform.SetParent(canvas.transform, false);
+        go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
         root = go.GetComponent<RectTransform>();
         root.anchorMin = Vector2.zero;
         root.anchorMax = Vector2.one;

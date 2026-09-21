@@ -30,6 +30,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     private Color baseTint = Color.white;
     private bool playable = true;
+    private bool dimWhenDisabled = true;
 
     // 바닥패 버리기 선택: LayoutGroup이 LateUpdate 이후 위치를 덮어쓰므로
     // willRenderCanvases에서 Y를 다시 맞춘다.
@@ -198,10 +199,11 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     }
 
     // 내 차례에 못 내는 카드 음영. playable=false 면 클릭 불가.
-    public void SetPlayable(bool canPlay)
+    public void SetPlayable(bool canPlay, bool dimDisabled = true)
     {
         if (Card == null) return;
         playable = canPlay;
+        dimWhenDisabled = dimDisabled;
         ApplyTint();
         if (background != null) background.raycastTarget = canPlay;
     }
@@ -263,7 +265,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private void ApplyTint()
     {
         if (background == null) return;
-        Color c = playable ? baseTint : new Color(
+        Color c = playable || !dimWhenDisabled ? baseTint : new Color(
             baseTint.r * DimMul.r,
             baseTint.g * DimMul.g,
             baseTint.b * DimMul.b,

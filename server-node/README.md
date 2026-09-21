@@ -6,18 +6,21 @@ Unity 클라이언트와 통신하는 Node.js + **순수 WebSocket(ws)** 게임 
 > 이유는 Unity 에디터 Play 모드와 WebGL 빌드 양쪽에서 동일하게 동작해
 > 개발/테스트가 빠르기 때문. 메시지는 `{ "type": ..., "data": ... }` JSON 규칙을 따른다.
 
-## 현재 단계
+## 현재 구현
 
-**01~03단계** 완료.
-- 01~02: ping-pong (`ping_from_client` → `pong_from_server`)
-- 03: 방 생성/입장/퇴장 + 플레이어 목록 브로드캐스트 + reconnectToken 발급
+- ping/pong 및 Heartbeat
+- 방 생성·입장·퇴장, 봇 충원, 준비 및 게임 시작
+- 덱·셔플·배분, 입찰, 바닥패 교환, 프렌드 선택
+- 마이티·조커·조커콜을 포함한 서버 권위형 카드 판정
+- 트릭 및 최종 점수 계산
+- 연결 해제 시 봇 대타와 reconnectToken 기반 복구
 
 ## 폴더 구조
 
 ```text
 server-node/
 ├─ package.json
-├─ server.js          # 서버 진입점 (socket.io + http)
+├─ server.js          # HTTP + WebSocket 서버 진입점
 ├─ public/
 │  └─ test.html       # 브라우저용 ping-pong 테스트 페이지
 └─ src/               # (앞으로 RoomManager, game 로직 등이 들어갈 자리)
@@ -31,10 +34,19 @@ npm install       # 최초 1회
 npm start         # = node server.js
 ```
 
+저장소 루트의 PowerShell 도구를 사용하면 백그라운드 서버를 한 번에 관리할 수 있다.
+
+```powershell
+.\scripts\Start-LocalServer.ps1
+.\scripts\Stop-LocalServer.ps1
+```
+
+상태 확인: `http://localhost:3000/health`
+
 실행되면 콘솔에 다음이 뜬다.
 
 ```text
-socket.io server running on http://localhost:3000
+WebSocket server running on ws://localhost:3000
 ```
 
 ## 테스트 방법
@@ -71,6 +83,10 @@ src/RoomManager.js   # 방 목록 관리 (생성/입장/퇴장, 토큰 발급)
 public/test.html     # 브라우저 테스트 페이지 (방 UI 포함)
 ```
 
-## 다음 단계
+## 테스트
 
-04단계: 준비 상태 + 5인 게임 시작. (+ Heartbeat 연결 감지 보강)
+```bash
+npm test
+```
+
+규칙, 점수 계산, 재접속 테스트를 순서대로 실행한다.

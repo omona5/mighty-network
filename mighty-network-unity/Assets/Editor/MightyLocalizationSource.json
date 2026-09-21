@@ -1,0 +1,767 @@
+{
+  "entries": [
+    {
+      "ko": "설정",
+      "en": "Settings"
+    },
+    {
+      "ko": "마스터 볼륨",
+      "en": "Master Volume"
+    },
+    {
+      "ko": "언어",
+      "en": "Language"
+    },
+    {
+      "ko": "닫기",
+      "en": "Close"
+    },
+    {
+      "ko": "5인용 전략 카드 게임",
+      "en": "A strategy card game for five"
+    },
+    {
+      "ko": "싱글플레이",
+      "en": "Single Player"
+    },
+    {
+      "ko": "멀티플레이",
+      "en": "Multiplayer"
+    },
+    {
+      "ko": "튜토리얼 (준비 중)",
+      "en": "Tutorial (Coming Soon)"
+    },
+    {
+      "ko": "패 모으는 중...",
+      "en": "Collecting cards..."
+    },
+    {
+      "ko": "다시 섞는 중...",
+      "en": "Reshuffling..."
+    },
+    {
+      "ko": "카드 섞는 중...",
+      "en": "Shuffling cards..."
+    },
+    {
+      "ko": "패 나누는 중...",
+      "en": "Dealing cards..."
+    },
+    {
+      "ko": "없음",
+      "en": "None"
+    },
+    {
+      "ko": "주공팀  ",
+      "en": "Attack  "
+    },
+    {
+      "ko": "주공팀 ",
+      "en": "Attack "
+    },
+    {
+      "ko": "공약    ",
+      "en": "Bid    "
+    },
+    {
+      "ko": "    ·    공약 ",
+      "en": "    ·    Bid "
+    },
+    {
+      "ko": "\n공약 ",
+      "en": "\nBid "
+    },
+    {
+      "ko": "판 정보",
+      "en": "Round Info"
+    },
+    {
+      "ko": "기루다",
+      "en": "Trump"
+    },
+    {
+      "ko": "마이티",
+      "en": "Mighty"
+    },
+    {
+      "ko": "조커콜",
+      "en": "Joker Call"
+    },
+    {
+      "ko": "프렌드카드",
+      "en": "Friend Card"
+    },
+    {
+      "ko": "바닥패",
+      "en": "Kitty"
+    },
+    {
+      "ko": "누군가",
+      "en": "Someone"
+    },
+    {
+      "ko": "주공",
+      "en": "Declarer"
+    },
+    {
+      "ko": "장 공약 제출!",
+      "en": "-point bid!"
+    },
+    {
+      "ko": "\n당선!",
+      "en": " wins!"
+    },
+    {
+      "ko": "장",
+      "en": " cards"
+    },
+    {
+      "ko": "승리!",
+      "en": "Wins!"
+    },
+    {
+      "ko": " 승리!",
+      "en": " wins!"
+    },
+    {
+      "ko": "취소",
+      "en": "Cancel"
+    },
+    {
+      "ko": "조커 리드 — 따라낼 무늬",
+      "en": "Joker lead — choose a suit"
+    },
+    {
+      "ko": "조커콜을 사용할까요?",
+      "en": "Use Joker Call?"
+    },
+    {
+      "ko": "조커콜 사용",
+      "en": "Joker Call"
+    },
+    {
+      "ko": "일반으로 내기",
+      "en": "Play Normally"
+    },
+    {
+      "ko": "[봇] ",
+      "en": "[Bot] "
+    },
+    {
+      "ko": "[끊김] ",
+      "en": "[Offline] "
+    },
+    {
+      "ko": " (나)",
+      "en": " (You)"
+    },
+    {
+      "ko": "점",
+      "en": " pts"
+    },
+    {
+      "ko": "대기 중...",
+      "en": "Waiting..."
+    },
+    {
+      "ko": "노기루",
+      "en": "No Trump"
+    },
+    {
+      "ko": "플레이어",
+      "en": "Player"
+    },
+    {
+      "ko": "재연결 중...",
+      "en": "Reconnecting..."
+    },
+    {
+      "ko": "접속됨",
+      "en": "Connected"
+    },
+    {
+      "ko": "오류",
+      "en": "Error"
+    },
+    {
+      "ko": "끊김",
+      "en": "Disconnected"
+    },
+    {
+      "ko": "재접속 중...",
+      "en": "Reconnecting..."
+    },
+    {
+      "ko": "싱글플레이 연결 시간 초과 — 서버 연결을 확인해 주세요.",
+      "en": "Single-player connection timed out. Please check the server connection."
+    },
+    {
+      "ko": " 딜미스!\n카드 재분배 중...",
+      "en": " declared a misdeal!\nRedealing cards..."
+    },
+    {
+      "ko": "버릴 카드 3장을 선택하세요.",
+      "en": "Choose 3 cards to discard."
+    },
+    {
+      "ko": "카드 고르는 중...",
+      "en": "Choosing cards..."
+    },
+    {
+      "ko": "0점",
+      "en": "0 pts"
+    },
+    {
+      "ko": "미정",
+      "en": "Undecided"
+    },
+    {
+      "ko": " (미공개)",
+      "en": " (Hidden)"
+    },
+    {
+      "ko": "조커",
+      "en": "Joker"
+    },
+    {
+      "ko": "카드 프렌드",
+      "en": "Card Friend"
+    },
+    {
+      "ko": "조커 프렌드",
+      "en": "Joker Friend"
+    },
+    {
+      "ko": "마이티 프렌드 (",
+      "en": "Mighty Friend ("
+    },
+    {
+      "ko": " 프렌드",
+      "en": " Friend"
+    },
+    {
+      "ko": "방 나가기",
+      "en": "Leave Room"
+    },
+    {
+      "ko": "버리기 (",
+      "en": "Discard ("
+    },
+    {
+      "ko": "선택 ",
+      "en": "Selected "
+    },
+    {
+      "ko": "3장 버리기",
+      "en": "Discard 3 Cards"
+    },
+    {
+      "ko": "연결 상태  ",
+      "en": "Connection  "
+    },
+    {
+      "ko": "서버: ",
+      "en": "Server: "
+    },
+    {
+      "ko": "싱글플레이 준비 중...",
+      "en": "Preparing single player..."
+    },
+    {
+      "ko": "봇 4명과 게임을 시작합니다.",
+      "en": "Starting a game with 4 bots."
+    },
+    {
+      "ko": "서버:",
+      "en": "Server:"
+    },
+    {
+      "ko": "서버 URL:",
+      "en": "Server URL:"
+    },
+    {
+      "ko": "저장·재연결",
+      "en": "Save & Reconnect"
+    },
+    {
+      "ko": "주소 저장·재연결",
+      "en": "Save & Reconnect"
+    },
+    {
+      "ko": "기본값",
+      "en": "Default"
+    },
+    {
+      "ko": "(WebGL: ?ws=wss://호스트 로도 지정 가능)",
+      "en": "(WebGL: you can also use ?ws=wss://host)"
+    },
+    {
+      "ko": "닉네임:",
+      "en": "Name:"
+    },
+    {
+      "ko": "방 코드:",
+      "en": "Room:"
+    },
+    {
+      "ko": "비번:",
+      "en": "Password:"
+    },
+    {
+      "ko": "방 만들기",
+      "en": "Create Room"
+    },
+    {
+      "ko": "입장",
+      "en": "Join"
+    },
+    {
+      "ko": "방 ",
+      "en": "Room "
+    },
+    {
+      "ko": " · 대기실",
+      "en": " · Lobby"
+    },
+    {
+      "ko": "방 코드: ",
+      "en": "Room code: "
+    },
+    {
+      "ko": "   (상태: ",
+      "en": "   (Status: "
+    },
+    {
+      "ko": "플레이어 (",
+      "en": "Players ("
+    },
+    {
+      "ko": "[방장] ",
+      "en": "[Host] "
+    },
+    {
+      "ko": "  누적 ",
+      "en": "  Total "
+    },
+    {
+      "ko": " [준비]",
+      "en": " [Ready]"
+    },
+    {
+      "ko": " [대기]",
+      "en": " [Waiting]"
+    },
+    {
+      "ko": "  <- 나",
+      "en": "  <- You"
+    },
+    {
+      "ko": "준비",
+      "en": "Ready"
+    },
+    {
+      "ko": "준비 / 취소",
+      "en": "Ready / Cancel"
+    },
+    {
+      "ko": "시작",
+      "en": "Start"
+    },
+    {
+      "ko": "게임 시작(방장)",
+      "en": "Start Game (Host)"
+    },
+    {
+      "ko": "섞기",
+      "en": "Shuffle"
+    },
+    {
+      "ko": "자리 섞기(방장)",
+      "en": "Shuffle Seats (Host)"
+    },
+    {
+      "ko": "점수 초기화",
+      "en": "Reset Scores"
+    },
+    {
+      "ko": "점수 초기화(방장)",
+      "en": "Reset Scores (Host)"
+    },
+    {
+      "ko": "지연 ",
+      "en": "Latency "
+    },
+    {
+      "ko": "측정 중",
+      "en": "Measuring"
+    },
+    {
+      "ko": "지연 측정 중...",
+      "en": "Measuring latency..."
+    },
+    {
+      "ko": "나가기",
+      "en": "Leave"
+    },
+    {
+      "ko": "[방] ",
+      "en": "[Host] "
+    },
+    {
+      "ko": " 나",
+      "en": " You"
+    },
+    {
+      "ko": "점 ",
+      "en": " pts "
+    },
+    {
+      "ko": "카드를 섞고 나누는 중...",
+      "en": "Shuffling and dealing cards..."
+    },
+    {
+      "ko": "최고 공약: ",
+      "en": "Highest bid: "
+    },
+    {
+      "ko": "아직 공약 없음",
+      "en": "No bids yet"
+    },
+    {
+      "ko": "최소 ",
+      "en": "Minimum "
+    },
+    {
+      "ko": "  · 올릴 최소 ",
+      "en": "  · Minimum raise "
+    },
+    {
+      "ko": "공약:",
+      "en": "Bid:"
+    },
+    {
+      "ko": "기루다:",
+      "en": "Trump:"
+    },
+    {
+      "ko": "공약 제출 (",
+      "en": "Bid ("
+    },
+    {
+      "ko": "패스",
+      "en": "Pass"
+    },
+    {
+      "ko": "(다른 사람 입찰을 기다리는 중...)",
+      "en": "(Waiting for other players to bid...)"
+    },
+    {
+      "ko": "딜미스 (손패≤0.5점 · 다시 돌리기)",
+      "en": "Misdeal (hand ≤ 0.5 points · redeal)"
+    },
+    {
+      "ko": "바닥패 교환",
+      "en": "Kitty Exchange"
+    },
+    {
+      "ko": "주공: ",
+      "en": "Declarer: "
+    },
+    {
+      "ko": " / 승리 조건 ",
+      "en": " / Target: "
+    },
+    {
+      "ko": "점 이상",
+      "en": "+ points"
+    },
+    {
+      "ko": "손패에서 버릴 카드 3장을 고르세요. (다시 클릭=해제)",
+      "en": "Select 3 cards to discard. Click again to deselect."
+    },
+    {
+      "ko": "선택: ",
+      "en": "Selected: "
+    },
+    {
+      "ko": "(주공이 바닥패 3장을 고르는 중...)",
+      "en": "(The declarer is choosing 3 cards to discard...)"
+    },
+    {
+      "ko": "프렌드 선택 단계",
+      "en": "Choose a Friend"
+    },
+    {
+      "ko": " / 기루다 ",
+      "en": " / Trump: "
+    },
+    {
+      "ko": "★ 주공팀 승리 조건: ",
+      "en": "★ Attacking team's target: "
+    },
+    {
+      "ko": "프렌드를 지정하세요:",
+      "en": "Choose your friend:"
+    },
+    {
+      "ko": "노프렌드",
+      "en": "No Friend"
+    },
+    {
+      "ko": "카드 프렌드 — 무늬 선택 후 카드 클릭:",
+      "en": "Card friend — select a suit, then a card:"
+    },
+    {
+      "ko": "플레이어 프렌드 (즉시 공개):",
+      "en": "Player friend (revealed immediately):"
+    },
+    {
+      "ko": "(주공이 프렌드를 고르는 중...)",
+      "en": "(The declarer is choosing a friend...)"
+    },
+    {
+      "ko": "한 판 종료",
+      "en": "Round Complete"
+    },
+    {
+      "ko": "자동 대기방 복귀: ",
+      "en": "Returning to lobby in: "
+    },
+    {
+      "ko": "초",
+      "en": "s"
+    },
+    {
+      "ko": "대기실로",
+      "en": "Lobby"
+    },
+    {
+      "ko": "대기방으로 돌아가기",
+      "en": "Return to Lobby"
+    },
+    {
+      "ko": "(결과 수신 대기...)",
+      "en": "(Waiting for results...)"
+    },
+    {
+      "ko": "승자: ",
+      "en": "Winner: "
+    },
+    {
+      "ko": "주공팀 목표였던 점수: ",
+      "en": "Attacking team's target: "
+    },
+    {
+      "ko": " (단독)",
+      "en": " (Solo)"
+    },
+    {
+      "ko": " + 프렌드 ",
+      "en": " + Friend "
+    },
+    {
+      "ko": "결과 — 주공팀 ",
+      "en": "Result — Attack "
+    },
+    {
+      "ko": "  |  수비팀 ",
+      "en": "  |  Defense "
+    },
+    {
+      "ko": "  |  바닥패 ",
+      "en": "  |  Kitty "
+    },
+    {
+      "ko": "(목표 ",
+      "en": "(Target: "
+    },
+    {
+      "ko": "점 달성)",
+      "en": " points reached)"
+    },
+    {
+      "ko": "점까지 ",
+      "en": " points; short by "
+    },
+    {
+      "ko": "점 부족)",
+      "en": " points)"
+    },
+    {
+      "ko": "★ 런! (주공팀 20점 전부)",
+      "en": "★ Run! (Attack took all 20 points)"
+    },
+    {
+      "ko": "★ 백런! (주공팀 10점 이하)",
+      "en": "★ Backrun! (Attack took 10 points or less)"
+    },
+    {
+      "ko": "배수: ×",
+      "en": "Multiplier: ×"
+    },
+    {
+      "ko": "배수: ×1",
+      "en": "Multiplier: ×1"
+    },
+    {
+      "ko": "정산 단위: ",
+      "en": "Stakes: "
+    },
+    {
+      "ko": "이번 판 정산 / 누적 스코어:",
+      "en": "Round / Total Scores:"
+    },
+    {
+      "ko": " → 누적 ",
+      "en": " → Total "
+    },
+    {
+      "ko": "주공팀:",
+      "en": "Attacking Team:"
+    },
+    {
+      "ko": "수비팀:",
+      "en": "Defending Team:"
+    },
+    {
+      "ko": "★ 주공팀 목표: ",
+      "en": "★ Attacking team's target: "
+    },
+    {
+      "ko": "  (현재 ",
+      "en": "  (Current: "
+    },
+    {
+      "ko": "점 / 남은 ",
+      "en": " pts / Need: "
+    },
+    {
+      "ko": "점)",
+      "en": " pts)"
+    },
+    {
+      "ko": "트릭 ",
+      "en": "Trick "
+    },
+    {
+      "ko": "현재 차례: ",
+      "en": "Current turn: "
+    },
+    {
+      "ko": "  << 내 차례! (카드 클릭)",
+      "en": "  << Your turn! (Click a card)"
+    },
+    {
+      "ko": "직전 트릭 승자: ",
+      "en": "Last trick winner: "
+    },
+    {
+      "ko": "조커 리드 무늬:",
+      "en": "Joker lead suit:"
+    },
+    {
+      "ko": "조커콜 활성",
+      "en": "Joker Call active"
+    },
+    {
+      "ko": "플레이어 (남은/획득트릭):",
+      "en": "Players (cards left / tricks won):"
+    },
+    {
+      "ko": " <- 나",
+      "en": " <- You"
+    },
+    {
+      "ko": " : 남은 ",
+      "en": " : Cards left: "
+    },
+    {
+      "ko": "장, 획득 ",
+      "en": "; Won: "
+    },
+    {
+      "ko": "트릭",
+      "en": " tricks"
+    },
+    {
+      "ko": ", 누적 ",
+      "en": ", Total "
+    },
+    {
+      "ko": " (연결끊김·봇대타)",
+      "en": " (Offline · bot substitute)"
+    },
+    {
+      "ko": " (연결끊김·봇대타 ",
+      "en": " (Offline · bot substitute "
+    },
+    {
+      "ko": "주공팀",
+      "en": "Attacking Team"
+    },
+    {
+      "ko": "수비팀",
+      "en": "Defending Team"
+    },
+    {
+      "ko": "런",
+      "en": "Run"
+    },
+    {
+      "ko": "백런",
+      "en": "Backrun"
+    },
+    {
+      "ko": "waiting",
+      "en": "Waiting"
+    },
+    {
+      "ko": "bidding",
+      "en": "Bidding"
+    },
+    {
+      "ko": "exchanging_kitty",
+      "en": "Kitty Exchange"
+    },
+    {
+      "ko": "choosing_friend",
+      "en": "Choosing a Friend"
+    },
+    {
+      "ko": "playing",
+      "en": "Playing"
+    },
+    {
+      "ko": "finished",
+      "en": "Finished"
+    },
+    {
+      "ko": "메뉴",
+      "en": "Menu"
+    },
+    {
+      "ko": "서버 연결됨",
+      "en": "Server connected"
+    },
+    {
+      "ko": "서버 연결 중...",
+      "en": "Connecting to server..."
+    },
+    {
+      "ko": "서버 연결 안 됨 · 5초마다 재시도",
+      "en": "Offline · Retrying every 5 seconds"
+    },
+    {
+      "ko": "재접속 시도",
+      "en": "Reconnect"
+    },
+    {
+      "ko": "타이틀로",
+      "en": "Back to Title"
+    },
+    {"ko": "효과음", "en": "Sound Effects"},
+    {"ko": "배경음", "en": "Music"},
+    {"ko": "음소거", "en": "Mute"}
+  ]
+}

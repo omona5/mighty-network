@@ -32,7 +32,7 @@ public class KittyView : MonoBehaviour
         if (pileRoot == null)
         {
             GameObject go = new GameObject("KittyPile", typeof(RectTransform));
-            go.transform.SetParent(canvas.transform, false);
+            go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
             pileRoot = go.GetComponent<RectTransform>();
             pileRoot.anchorMin = new Vector2(0.5f, 0.5f);
             pileRoot.anchorMax = new Vector2(0.5f, 0.5f);
@@ -52,7 +52,7 @@ public class KittyView : MonoBehaviour
             hrt.pivot = new Vector2(0.5f, 1f);
             hrt.anchoredPosition = new Vector2(0f, -4f);
             hrt.sizeDelta = new Vector2(UiFonts.Layout(200f), UiFonts.Layout(32f));
-            hintText.text = "바닥패";
+            LocalizedLabel.Bind(hintText, "바닥패");
             hintText.gameObject.SetActive(false);
         }
         else
@@ -66,7 +66,7 @@ public class KittyView : MonoBehaviour
         if (flyLayer == null)
         {
             GameObject fly = new GameObject("KittyFlyLayer", typeof(RectTransform));
-            fly.transform.SetParent(canvas.transform, false);
+            fly.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
             flyLayer = fly.GetComponent<RectTransform>();
             flyLayer.anchorMin = Vector2.zero;
             flyLayer.anchorMax = Vector2.one;

@@ -14,20 +14,28 @@ public class PlayChoicePopup : MonoBehaviour
     private RectTransform row;
     private Action onCancel;
     private bool built;
+    private RectTransform panelRect;
+
+    private void LateUpdate()
+    {
+        if (panelRect == null || root == null || !root.gameObject.activeSelf) return;
+        float width = root.rect.width;
+        panelRect.localScale = Vector3.one * Mathf.Min(ResponsiveCanvas.IsPortrait ? 1.8f : 1.2f, (width - 64f) / panelRect.sizeDelta.x);
+    }
 
     public void Configure(Canvas canvas)
     {
         if (built || canvas == null) return;
 
         GameObject overlay = new GameObject("PlayChoicePopup", typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(Button));
-        overlay.transform.SetParent(canvas.transform, false);
+        overlay.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
         root = overlay.GetComponent<RectTransform>();
         root.anchorMin = Vector2.zero;
         root.anchorMax = Vector2.one;
         root.offsetMin = Vector2.zero;
         root.offsetMax = Vector2.zero;
         Image dim = overlay.GetComponent<Image>();
-        dim.color = new Color(0f, 0f, 0f, 0.55f);
+        dim.color = new Color(MightyTheme.Table.r, MightyTheme.Table.g, MightyTheme.Table.b, 0.78f);
         dim.raycastTarget = true;
         Button dimBtn = overlay.GetComponent<Button>();
         dimBtn.transition = Selectable.Transition.None;
@@ -40,16 +48,17 @@ public class PlayChoicePopup : MonoBehaviour
         GameObject panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
         panel.transform.SetParent(overlay.transform, false);
         RectTransform prt = panel.GetComponent<RectTransform>();
+        panelRect = prt;
         prt.anchorMin = new Vector2(0.5f, 0.5f);
         prt.anchorMax = new Vector2(0.5f, 0.5f);
         prt.pivot = new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = new Vector2(UiFonts.Layout(560f), UiFonts.Layout(200f));
+        prt.sizeDelta = new Vector2(680f, 320f);
         prt.anchoredPosition = new Vector2(0f, 40f);
         Image bg = panel.GetComponent<Image>();
-        bg.color = Color.black;
+        bg.color = MightyTheme.Panel;
         bg.raycastTarget = true;
 
-        title = UiTmp.Create(panel.transform, "Title", UiFonts.Size(32), TextAnchor.MiddleCenter, Color.white);
+        title = UiTmp.Create(panel.transform, "Title", 28, TextAnchor.MiddleCenter, Color.white);
         RectTransform trt = title.rectTransform;
         trt.anchorMin = new Vector2(0f, 1f);
         trt.anchorMax = new Vector2(1f, 1f);
@@ -63,7 +72,7 @@ public class PlayChoicePopup : MonoBehaviour
         row.anchorMin = new Vector2(0.5f, 0.5f);
         row.anchorMax = new Vector2(0.5f, 0.5f);
         row.pivot = new Vector2(0.5f, 0.5f);
-        row.sizeDelta = new Vector2(UiFonts.Layout(500f), UiFonts.Layout(64f));
+        row.sizeDelta = new Vector2(624f, 96f);
         row.anchoredPosition = new Vector2(0f, -8f);
         HorizontalLayoutGroup h = rowGo.GetComponent<HorizontalLayoutGroup>();
         h.childAlignment = TextAnchor.MiddleCenter;
@@ -73,7 +82,7 @@ public class PlayChoicePopup : MonoBehaviour
         h.childControlWidth = true;
         h.childControlHeight = true;
 
-        Button cancel = MakeTextButton(panel.transform, "취소", UiFonts.Layout(100f), UiFonts.Layout(40f), Cancel);
+        Button cancel = MakeTextButton(panel.transform, "취소", 140f, 72f, Cancel);
         RectTransform crt = cancel.GetComponent<RectTransform>();
         crt.anchorMin = new Vector2(0.5f, 0f);
         crt.anchorMax = new Vector2(0.5f, 0f);
@@ -96,7 +105,7 @@ public class PlayChoicePopup : MonoBehaviour
     {
         EnsureReady();
         onCancel = cancel;
-        title.text = "조커 리드 — 따라낼 무늬";
+        LocalizedLabel.Bind(title, "조커 리드 — 따라낼 무늬");
         ClearRow();
         string[] suits = { "SPADE", "DIAMOND", "HEART", "CLUB" };
         for (int i = 0; i < suits.Length; i++)
@@ -115,19 +124,19 @@ public class PlayChoicePopup : MonoBehaviour
     {
         EnsureReady();
         onCancel = cancel;
-        title.text = "조커콜을 사용할까요?";
+        LocalizedLabel.Bind(title, "조커콜을 사용할까요?");
         ClearRow();
         Image preview = IconGui.MakeImage(row, "CallCard",
             IconSpriteAtlas.GetCard(cardId), IconSpriteAtlas.DisplayCard);
         LayoutElement ple = preview.gameObject.AddComponent<LayoutElement>();
         ple.preferredWidth = IconSpriteAtlas.DisplayCard.x;
         ple.preferredHeight = IconSpriteAtlas.DisplayCard.y;
-        MakeTextButton(row, "조커콜 사용", UiFonts.Layout(150f), UiFonts.Layout(52f), () =>
+        MakeTextButton(row, "조커콜 사용", 240f, 88f, () =>
         {
             Hide();
             if (onPick != null) onPick(true);
         });
-        MakeTextButton(row, "일반으로 내기", UiFonts.Layout(150f), UiFonts.Layout(52f), () =>
+        MakeTextButton(row, "일반으로 내기", 240f, 88f, () =>
         {
             Hide();
             if (onPick != null) onPick(false);
@@ -153,26 +162,36 @@ public class PlayChoicePopup : MonoBehaviour
 
     private void EnsureReady()
     {
-        if (built) return;
-        Canvas canvas = FindFirstObjectByType<Canvas>();
-        Configure(canvas);
+        if (!built)
+        {
+            Canvas canvas = FindFirstObjectByType<Canvas>();
+            Configure(canvas);
+        }
+        // TMP initializes its renderer/material in Awake. The parent must be
+        // active before creating labels whose outline is configured by UiTmp.
+        if (root != null) root.gameObject.SetActive(true);
     }
 
     private void ClearRow()
     {
         if (row == null) return;
         for (int i = row.childCount - 1; i >= 0; i--)
-            Destroy(row.GetChild(i).gameObject);
+        {
+            GameObject child = row.GetChild(i).gameObject;
+            child.SetActive(false);
+            Destroy(child);
+        }
     }
 
     private static Button MakeTextButton(Transform parent, string label, float w, float h, Action click)
     {
+        h = Mathf.Max(h, 72f);
         GameObject go = new GameObject(label, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(LayoutElement));
         go.transform.SetParent(parent, false);
         RectTransform rt = go.GetComponent<RectTransform>();
         rt.sizeDelta = new Vector2(w, h);
         Image img = go.GetComponent<Image>();
-        img.color = new Color(0.18f, 0.18f, 0.18f, 1f);
+        img.color = MightyTheme.Primary;
         img.raycastTarget = true;
         LayoutElement le = go.GetComponent<LayoutElement>();
         le.preferredWidth = w;
@@ -180,13 +199,16 @@ public class PlayChoicePopup : MonoBehaviour
         le.minWidth = w;
         le.minHeight = h;
         TextMeshProUGUI t = UiTmp.Create(
-            go.transform, "Label", UiFonts.Size(22), TextAnchor.MiddleCenter, Color.white);
+            go.transform, "Label", 24, TextAnchor.MiddleCenter, Color.white);
         RectTransform trt = t.rectTransform;
         trt.anchorMin = Vector2.zero;
         trt.anchorMax = Vector2.one;
-        trt.offsetMin = Vector2.zero;
-        trt.offsetMax = Vector2.zero;
-        t.text = label;
+        trt.offsetMin = new Vector2(16f, 10f);
+        trt.offsetMax = new Vector2(-16f, -10f);
+        LocalizedLabel.Bind(t, label);
+        t.enableAutoSizing = true;
+        t.fontSizeMin = 14;
+        t.fontSizeMax = 24;
         Button btn = go.GetComponent<Button>();
         btn.targetGraphic = img;
         btn.onClick.AddListener(() => { if (click != null) click(); });
@@ -195,6 +217,7 @@ public class PlayChoicePopup : MonoBehaviour
 
     private static void MakeIconButton(Transform parent, IconSpriteAtlas.Slice slice, Vector2 size, Action click)
     {
+        size *= Mathf.Max(1f, 80f / Mathf.Min(size.x, size.y));
         Image img = IconGui.MakeImage(parent, "IconBtn", slice, size);
         img.raycastTarget = true;
         LayoutElement le = img.gameObject.AddComponent<LayoutElement>();

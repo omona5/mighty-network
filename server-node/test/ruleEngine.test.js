@@ -200,7 +200,7 @@ test("조커 리드(중간트릭)면 조커가 승자", () => {
 });
 
 // 9. 조커콜 활성 시 조커 강제
-test("조커콜 활성 시 조커 보유자는 조커(또는 마이티)만 가능", () => {
+test("조커콜 활성 시 조커 보유자는 조커만 가능 (마이티도 불가)", () => {
   const hand = [makeJoker(), makeCard("CLUB", "K"), makeCard("SPADE", "A")];
   const table = [{ clientId: "A", card: makeCard("CLUB", "3"), jokerCallActivated: true }];
   assert.strictEqual(
@@ -213,7 +213,7 @@ test("조커콜 활성 시 조커 보유자는 조커(또는 마이티)만 가�
   );
   assert.strictEqual(
     RE.canPlayCard({ playerHand: hand, card: makeCard("SPADE", "A"), tableCards: table, ruleConfig: cfg }),
-    true
+    false
   );
 });
 

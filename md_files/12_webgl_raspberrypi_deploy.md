@@ -6,7 +6,7 @@ Unity WebGL 빌드 파일과 Node.js(순수 WebSocket) 서버를 Raspberry Pi에
 
 ## 지금 당장 (Pi 없이)
 
-1. Unity 서버 URL 설정 분리 ✅ (`ServerUrlResolver` + 로비 UI)
+1. Unity 서버 URL 설정 분리 ✅ (`ServerUrlResolver` + 타이틀 자동 연결)
 2. WebGL 빌드 체크리스트 (아래)
 3. 로컬/LAN에서 WebGL ↔ `ws://...:3000` 접속 확인
 
@@ -19,9 +19,16 @@ Pi SSH/IP는 준비되면 알려주면 된다.
 우선순위:
 
 1. **URL 쿼리** — `https://게임주소/?ws=wss://서버호스트`
-2. **PlayerPrefs** (`mighty.serverUrl`) — 로비에서「주소 저장·재연결」
-3. **WebGL 같은 호스트** — 페이지가 `https://x.com`이면 기본 `wss://x.com` (리버스 프록시 전제)
-4. **Inspector 기본값** — `ws://localhost:3000`
+2. **WebGL 같은 호스트** — 페이지가 `https://x.com`이면 기본 `wss://x.com` (리버스 프록시 전제)
+3. **개발 기본값** — `ws://localhost:3000`
+
+타이틀에서 자동 연결하고 연결 상태만 표시한다. 서버 연결 전에는 싱글/멀티플레이가
+비활성화되며, 5초 간격 자동 재접속과 수동「재접속 시도」버튼을 지원한다.
+연결은 게임 씬에서도 유지된다. 기존 `mighty.serverUrl` 저장값은 자동 연결에 사용하지
+않으며, 멀티플레이 화면에는 서버 주소 입력 및 연결 상태가 표시되지 않는다.
+
+게임 중「메뉴」에서 설정과 방 나가기를 선택한다. 설정의 마스터 볼륨과 한국어/English
+선택은 즉시 반영되고 저장된다.
 
 예:
 

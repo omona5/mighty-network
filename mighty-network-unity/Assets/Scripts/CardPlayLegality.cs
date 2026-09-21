@@ -32,7 +32,6 @@ public static class CardPlayLegality
             if (hasJoker)
             {
                 if (IsJoker(card)) return true;
-                if (IsMighty(card, mightyCardId)) return true;
                 return false;
             }
         }

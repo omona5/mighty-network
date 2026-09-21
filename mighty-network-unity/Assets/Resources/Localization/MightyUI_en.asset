@@ -1,0 +1,799 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: MightyUI_en
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: en
+  m_SharedData: {fileID: 11400000, guid: 735e36a19b383024ab6940870b58ad86, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 887070720
+    m_Localized: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 924819456
+    m_Localized: Master Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013760
+    m_Localized: Language
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013761
+    m_Localized: Close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013762
+    m_Localized: A strategy card game for five
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013763
+    m_Localized: Single Player
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013764
+    m_Localized: Multiplayer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013765
+    m_Localized: Tutorial (Coming Soon)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013766
+    m_Localized: Collecting cards...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013767
+    m_Localized: Reshuffling...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013768
+    m_Localized: Shuffling cards...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013769
+    m_Localized: Dealing cards...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013770
+    m_Localized: None
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013771
+    m_Localized: 'Attack  '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013772
+    m_Localized: 'Attack '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013773
+    m_Localized: 'Bid    '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013774
+    m_Localized: "    \xB7    Bid "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013775
+    m_Localized: '
+
+      Bid '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013776
+    m_Localized: Round Info
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013777
+    m_Localized: Trump
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013778
+    m_Localized: Mighty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013779
+    m_Localized: Joker Call
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013780
+    m_Localized: Friend Card
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013781
+    m_Localized: Kitty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013782
+    m_Localized: Someone
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013783
+    m_Localized: Declarer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013784
+    m_Localized: -point bid!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013785
+    m_Localized: ' wins!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013786
+    m_Localized: ' cards'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013787
+    m_Localized: Wins!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013788
+    m_Localized: ' wins!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013789
+    m_Localized: Cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013790
+    m_Localized: "Joker lead \u2014 choose a suit"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013791
+    m_Localized: Use Joker Call?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013792
+    m_Localized: Joker Call
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013793
+    m_Localized: Play Normally
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013794
+    m_Localized: '[Bot] '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013795
+    m_Localized: '[Offline] '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013796
+    m_Localized: ' (You)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013797
+    m_Localized: ' pts'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013798
+    m_Localized: Waiting...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013799
+    m_Localized: No Trump
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013800
+    m_Localized: Player
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013801
+    m_Localized: Reconnecting...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013802
+    m_Localized: Connected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013803
+    m_Localized: Error
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013804
+    m_Localized: Disconnected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013805
+    m_Localized: Reconnecting...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013806
+    m_Localized: Single-player connection timed out. Please check the server connection.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013807
+    m_Localized: ' declared a misdeal!
+
+      Redealing cards...'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013808
+    m_Localized: Choose 3 cards to discard.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013809
+    m_Localized: Choosing cards...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013810
+    m_Localized: 0 pts
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013811
+    m_Localized: Undecided
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013812
+    m_Localized: ' (Hidden)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013813
+    m_Localized: Joker
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013814
+    m_Localized: Card Friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013815
+    m_Localized: Joker Friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013816
+    m_Localized: Mighty Friend (
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013817
+    m_Localized: ' Friend'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013818
+    m_Localized: Leave Room
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013819
+    m_Localized: Discard (
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013820
+    m_Localized: 'Selected '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013821
+    m_Localized: Discard 3 Cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013822
+    m_Localized: 'Connection  '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013823
+    m_Localized: 'Server: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013824
+    m_Localized: Preparing single player...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013825
+    m_Localized: Starting a game with 4 bots.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013826
+    m_Localized: 'Server:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013827
+    m_Localized: 'Server URL:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013828
+    m_Localized: Save & Reconnect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013829
+    m_Localized: Save & Reconnect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013830
+    m_Localized: Default
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013831
+    m_Localized: '(WebGL: you can also use ?ws=wss://host)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013832
+    m_Localized: 'Name:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013833
+    m_Localized: 'Room:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013834
+    m_Localized: 'Password:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013835
+    m_Localized: Create Room
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013836
+    m_Localized: Join
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013837
+    m_Localized: 'Room '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013838
+    m_Localized: " \xB7 Lobby"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013839
+    m_Localized: 'Room code: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013840
+    m_Localized: '   (Status: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013841
+    m_Localized: Players (
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013842
+    m_Localized: '[Host] '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013843
+    m_Localized: '  Total '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013844
+    m_Localized: ' [Ready]'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013845
+    m_Localized: ' [Waiting]'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013846
+    m_Localized: '  <- You'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013847
+    m_Localized: Ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013848
+    m_Localized: Ready / Cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013849
+    m_Localized: Start
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013850
+    m_Localized: Start Game (Host)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013851
+    m_Localized: Shuffle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013852
+    m_Localized: Shuffle Seats (Host)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013853
+    m_Localized: Reset Scores
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013854
+    m_Localized: Reset Scores (Host)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013855
+    m_Localized: 'Latency '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013856
+    m_Localized: Measuring
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013857
+    m_Localized: Measuring latency...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013858
+    m_Localized: Leave
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013859
+    m_Localized: '[Host] '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013860
+    m_Localized: ' You'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013861
+    m_Localized: ' pts '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013862
+    m_Localized: Shuffling and dealing cards...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013863
+    m_Localized: 'Highest bid: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013864
+    m_Localized: No bids yet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013865
+    m_Localized: 'Minimum '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013866
+    m_Localized: "  \xB7 Minimum raise "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013867
+    m_Localized: 'Bid:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013868
+    m_Localized: 'Trump:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013869
+    m_Localized: Bid (
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013870
+    m_Localized: Pass
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013871
+    m_Localized: (Waiting for other players to bid...)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013872
+    m_Localized: "Misdeal (hand \u2264 0.5 points \xB7 redeal)"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013873
+    m_Localized: Kitty Exchange
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013874
+    m_Localized: 'Declarer: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013875
+    m_Localized: ' / Target: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013876
+    m_Localized: + points
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013877
+    m_Localized: Select 3 cards to discard. Click again to deselect.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013878
+    m_Localized: 'Selected: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013879
+    m_Localized: (The declarer is choosing 3 cards to discard...)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013880
+    m_Localized: Choose a Friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013881
+    m_Localized: ' / Trump: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013882
+    m_Localized: "\u2605 Attacking team's target: "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013883
+    m_Localized: 'Choose your friend:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013884
+    m_Localized: No Friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013885
+    m_Localized: "Card friend \u2014 select a suit, then a card:"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013886
+    m_Localized: 'Player friend (revealed immediately):'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013887
+    m_Localized: (The declarer is choosing a friend...)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013888
+    m_Localized: Round Complete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013889
+    m_Localized: 'Returning to lobby in: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013890
+    m_Localized: s
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013891
+    m_Localized: Lobby
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013892
+    m_Localized: Return to Lobby
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013893
+    m_Localized: (Waiting for results...)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013894
+    m_Localized: 'Winner: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013895
+    m_Localized: 'Attacking team''s target: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013896
+    m_Localized: ' (Solo)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013897
+    m_Localized: ' + Friend '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013898
+    m_Localized: "Result \u2014 Attack "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013899
+    m_Localized: '  |  Defense '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013900
+    m_Localized: '  |  Kitty '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013901
+    m_Localized: '(Target: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013902
+    m_Localized: ' points reached)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013903
+    m_Localized: ' points; short by '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013904
+    m_Localized: ' points)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013905
+    m_Localized: "\u2605 Run! (Attack took all 20 points)"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013906
+    m_Localized: "\u2605 Backrun! (Attack took 10 points or less)"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013907
+    m_Localized: "Multiplier: \xD7"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013908
+    m_Localized: "Multiplier: \xD71"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013909
+    m_Localized: 'Stakes: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013910
+    m_Localized: 'Round / Total Scores:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013911
+    m_Localized: " \u2192 Total "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013912
+    m_Localized: 'Attacking Team:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013913
+    m_Localized: 'Defending Team:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013914
+    m_Localized: "\u2605 Attacking team's target: "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013915
+    m_Localized: '  (Current: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013916
+    m_Localized: ' pts / Need: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013917
+    m_Localized: ' pts)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013918
+    m_Localized: 'Trick '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013919
+    m_Localized: 'Current turn: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013920
+    m_Localized: '  << Your turn! (Click a card)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013921
+    m_Localized: 'Last trick winner: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013922
+    m_Localized: 'Joker lead suit:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013923
+    m_Localized: Joker Call active
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013924
+    m_Localized: 'Players (cards left / tricks won):'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013925
+    m_Localized: ' <- You'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013926
+    m_Localized: ' : Cards left: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013927
+    m_Localized: '; Won: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013928
+    m_Localized: ' tricks'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013929
+    m_Localized: ', Total '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013930
+    m_Localized: " (Offline \xB7 bot substitute)"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013931
+    m_Localized: " (Offline \xB7 bot substitute "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013932
+    m_Localized: Attacking Team
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013933
+    m_Localized: Defending Team
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013934
+    m_Localized: Run
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013935
+    m_Localized: Backrun
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013936
+    m_Localized: Waiting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013937
+    m_Localized: Bidding
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013938
+    m_Localized: Kitty Exchange
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013939
+    m_Localized: Choosing a Friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013940
+    m_Localized: Playing
+    m_Metadata:
+      m_Items: []
+  - m_Id: 929013941
+    m_Localized: Finished
+    m_Metadata:
+      m_Items: []
+  - m_Id: 346080304668672
+    m_Localized: Menu
+    m_Metadata:
+      m_Items: []
+  - m_Id: 346080334028800
+    m_Localized: Server connected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 346080334028801
+    m_Localized: Connecting to server...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 346080334028802
+    m_Localized: "Offline \xB7 Retrying every 5 seconds"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 346080334028803
+    m_Localized: Reconnect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 346080334028804
+    m_Localized: Back to Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1471020508618752
+    m_Localized: Sound Effects
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1471020537978880
+    m_Localized: Music
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1471020537978881
+    m_Localized: Mute
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

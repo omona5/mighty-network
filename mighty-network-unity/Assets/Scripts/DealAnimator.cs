@@ -21,6 +21,7 @@ public class DealAnimator : MonoBehaviour
 
     public struct SeatTarget
     {
+        public int relativeFromSelf;
         public string nickname;
         public Vector2 normalizedAnchor;
         public Vector3 selfWorldPos;
@@ -236,7 +237,7 @@ public class DealAnimator : MonoBehaviour
         if (root == null)
         {
             GameObject go = new GameObject("DealAnimatorRoot", typeof(RectTransform));
-            go.transform.SetParent(canvas.transform, false);
+            go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
             root = go.GetComponent<RectTransform>();
             root.anchorMin = Vector2.zero;
             root.anchorMax = Vector2.one;
@@ -259,7 +260,8 @@ public class DealAnimator : MonoBehaviour
                 CardSpriteAtlas.DisplayHeight + 40f);
 
             hintText = UiTmp.Create(
-                deckRoot, "Hint", UiFonts.Size(16), TextAnchor.MiddleCenter,
+                // Keep the shuffle/deal status as legible as the player IDs on table cards.
+                deckRoot, "Hint", UiFonts.Size(30), TextAnchor.MiddleCenter,
                 new Color(0.95f, 0.95f, 0.88f, 0.95f));
             RectTransform hrt = hintText.rectTransform;
             hrt.anchorMin = new Vector2(0.5f, 0f);
@@ -280,7 +282,7 @@ public class DealAnimator : MonoBehaviour
             // 마커(SeatDebugOverlay)와 동일한 Canvas 직속 stretch 공간 사용
             // DealAnimatorRoot 하위에 두면 비활성→활성 직후 rect/Y가 어긋날 수 있음
             GameObject fly = new GameObject("DealFlyLayer", typeof(RectTransform));
-            fly.transform.SetParent(canvas.transform, false);
+            fly.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
             flyLayer = fly.GetComponent<RectTransform>();
             flyLayer.anchorMin = Vector2.zero;
             flyLayer.anchorMax = Vector2.one;
@@ -319,6 +321,17 @@ public class DealAnimator : MonoBehaviour
         holdingCollectedDeck = false;
         ClearDeck();
         ClearFlightEndMarkers();
+        // Cancelled flight coroutines never reach their final Destroy call.
+        // This layer lives outside root, so hiding root alone leaves cards behind.
+        if (flyLayer != null)
+        {
+            for (int i = flyLayer.childCount - 1; i >= 0; i--)
+            {
+                GameObject flight = flyLayer.GetChild(i).gameObject;
+                flight.SetActive(false);
+                Destroy(flight);
+            }
+        }
         if (root != null) root.gameObject.SetActive(false);
         busy = false;
     }
@@ -401,7 +414,7 @@ public class DealAnimator : MonoBehaviour
                 deckLocal = ResolveWorldToFlightLocal(
                     deckRoot != null ? deckRoot.position : Vector3.zero);
                 yield return CoFlyOneLocal(
-                    deckLocal, ends[s], startSize, endSizes[s], 0f, 6f + (round % 3) * 4f);
+                    deckLocal, ends[s], startSize, endSizes[s], 0f, 6f + (round % 3) * 4f, seats[s]);
                 counts[s]++;
                 dealt++;
                 if (onCardLanded != null)
@@ -570,18 +583,16 @@ public class DealAnimator : MonoBehaviour
         if (flyLayer != null) return flyLayer;
         if (root != null && root.parent is RectTransform prt) return prt;
         Canvas canvas = FindFirstObjectByType<Canvas>();
-        return canvas != null ? canvas.transform as RectTransform : root;
+        return canvas != null ? ResponsiveCanvas.Content(canvas) as RectTransform : root;
     }
 
     private Vector2 ResolveSeatToFlightLocal(SeatTarget t, RectTransform space)
     {
         if (space == null) space = flyLayer;
         Vector2 spaceLocal;
-        if (t.isSelf && t.selfWorldPos.sqrMagnitude > 0.01f)
-            spaceLocal = OpponentHandsView.WorldToAnchored(space, t.selfWorldPos);
-        else
-            spaceLocal = OpponentHandsView.NormalizedToAnchored(
-                space, t.isSelf ? OpponentHandsView.GetSelfHandAnchor(space) : t.normalizedAnchor);
+        spaceLocal = OpponentHandsView.NormalizedToAnchored(space,
+            t.isSelf ? OpponentHandsView.GetSelfHandAnchor(space)
+                : OpponentHandsView.GetRelativeSeatAnchor(t.relativeFromSelf - 1));
 
         if (space == flyLayer || flyLayer == null)
             return spaceLocal;
@@ -676,7 +687,8 @@ public class DealAnimator : MonoBehaviour
     }
 
     private IEnumerator CoFlyOneLocal(
-        Vector2 start, Vector2 end, Vector2 startSize, Vector2 endSize, float delay, float spin)
+        Vector2 start, Vector2 end, Vector2 startSize, Vector2 endSize, float delay, float spin,
+        SeatTarget? target = null)
     {
         if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
         if (cardPrefab == null || flyLayer == null) yield break;
@@ -705,9 +717,18 @@ public class DealAnimator : MonoBehaviour
             t += Time.unscaledDeltaTime;
             float u = Mathf.Clamp01(t / flyDuration);
             float e = 1f - Mathf.Pow(1f - u, 3f);
+            float endRotation = 0f;
+            if (target.HasValue)
+            {
+                SeatTarget seat = target.Value;
+                end = ResolveSeatToFlightLocal(seat, flyLayer);
+                Vector2 anchor = OpponentHandsView.GetRelativeSeatAnchor(seat.relativeFromSelf - 1);
+                if (!seat.isSelf && (ResponsiveCanvas.IsPortrait || seat.relativeFromSelf == 1 || seat.relativeFromSelf == 4))
+                    endRotation = anchor.x < 0.5f ? 90f : -90f;
+            }
             rt.anchoredPosition = Vector2.LerpUnclamped(start, end, e);
             rt.sizeDelta = Vector2.LerpUnclamped(startSize, endSize, e);
-            rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(spin, 0f, e));
+            rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(spin, endRotation, e));
             if (u > 0.7f && view.background != null)
             {
                 Color c = view.background.color;
@@ -773,7 +794,7 @@ public class DealAnimator : MonoBehaviour
     {
         if (hintText == null) return;
         hintText.gameObject.SetActive(true);
-        hintText.text = msg ?? "";
+        LocalizedLabel.Bind(hintText, msg ?? "");
     }
 
     private void EnsureConfigured()

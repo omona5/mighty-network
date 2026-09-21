@@ -19,6 +19,9 @@ public class OpponentHandsView : MonoBehaviour
     {
         public string nickname;
         public int handCount;
+        // game_state can briefly arrive without counts while the phase itself still
+        // has dealt cards. Keep the card backs visible in that case.
+        public bool retainHandWhenCountUnknown;
         public int score;
         public bool isTurn;
         public bool isBot;
@@ -38,16 +41,16 @@ public class OpponentHandsView : MonoBehaviour
         }
     }
     // 뒷면 스택용 중심 간격 (풀사이즈 기준 촘촘히)
-    private const float CardOverlap = 44f;
+    private static float CardOverlap => ResponsiveCanvas.IsPortrait ? 28f : 36f;
 
     // 상대 4석 앵커 (Canvas 정규화 0~1). 나=하단.
     // 카드 중심을 화면 가장자리에 두어 약 절반만 보이게 함.
     private static readonly Vector2[] SeatAnchors =
     {
-        new Vector2(0.00f, 0.52f), // +1 왼쪽 (절반 화면 밖)
+        new Vector2(0.00f, 0.44f), // +1 왼쪽 (상단 판 정보 아래)
         new Vector2(0.28f, 1.00f), // +2 상단 왼쪽
         new Vector2(0.72f, 1.00f), // +3 상단 오른쪽
-        new Vector2(1.00f, 0.52f), // +4 오른쪽
+        new Vector2(1.00f, 0.44f), // +4 오른쪽
     };
 
     // 내 핸드: 상대처럼 화면 가장자리에 절반 걸친 뒤, 카드 높이×이 값만큼 위로
@@ -83,7 +86,7 @@ public class OpponentHandsView : MonoBehaviour
     public static Vector2 GetSelfHandAnchor(RectTransform space)
     {
         float h = ResolveCanvasHeight(space);
-        return new Vector2(0.5f, cachedSelfCenterYFromBottom / h);
+        return new Vector2(ResponsiveCanvas.SafeArea.center.x / Mathf.Max(1, ResponsiveCanvas.ViewWidth), cachedSelfCenterYFromBottom / h);
     }
 
     // 화면 하단 기준 centerY → stretch 부모(중앙 피벗) 로컬
@@ -100,7 +103,7 @@ public class OpponentHandsView : MonoBehaviour
         Canvas c = Object.FindFirstObjectByType<Canvas>();
         if (c != null)
         {
-            RectTransform crt = c.transform as RectTransform;
+            RectTransform crt = ResponsiveCanvas.Content(c);
             if (crt != null && crt.rect.height > 1f)
                 return crt.rect.height;
         }
@@ -112,7 +115,16 @@ public class OpponentHandsView : MonoBehaviour
     {
         if (relativeIndex < 0 || relativeIndex >= SeatAnchors.Length)
             return new Vector2(0.5f, 0.5f);
-        return SeatAnchors[relativeIndex];
+        Vector2 anchor = SeatAnchors[relativeIndex];
+        if (ResponsiveCanvas.IsPortrait)
+            // Keep the upper pair below the portrait header (exit controls +
+            // rule panel). The whole seat moves, including its hand and name,
+            // and deal/trick animations share this same anchor.
+            anchor = new Vector2(relativeIndex < 2 ? 0f : 1f,
+                relativeIndex == 0 || relativeIndex == 3 ? 0.31f : 0.56f);
+        Rect safe = ResponsiveCanvas.SafeArea;
+        return new Vector2((safe.x + anchor.x * safe.width) / Mathf.Max(1, ResponsiveCanvas.ViewWidth),
+            (safe.y + anchor.y * safe.height) / Mathf.Max(1, ResponsiveCanvas.ViewHeight));
     }
 
     // stretch 부모(앵커 풀스크린) 기준: 정규화 → 중앙 피벗 자식의 anchoredPosition
@@ -126,8 +138,8 @@ public class OpponentHandsView : MonoBehaviour
         {
             // 레이아웃 전: 스크린 기준으로라도 Y 분리
             return new Vector2(
-                (normalized.x - 0.5f) * Screen.width,
-                (normalized.y - 0.5f) * Screen.height);
+                (normalized.x - 0.5f) * ResponsiveCanvas.ViewWidth,
+                (normalized.y - 0.5f) * ResponsiveCanvas.ViewHeight);
         }
         return new Vector2(
             (normalized.x - 0.5f) * r.width,
@@ -169,8 +181,28 @@ public class OpponentHandsView : MonoBehaviour
     }
 
     private readonly List<GameObject> panels = new List<GameObject>();
+    private SeatInfo[] lastSeats;
+    private SeatInfo? lastSelf;
+    private Vector2 lastScreen;
+    private Rect lastSafeArea;
+
+    private void LateUpdate()
+    {
+        Vector2 screen = new Vector2(ResponsiveCanvas.ViewWidth, ResponsiveCanvas.ViewHeight);
+        if (screen == lastScreen && lastSafeArea == ResponsiveCanvas.SafeArea) return;
+        lastScreen = screen;
+        lastSafeArea = ResponsiveCanvas.SafeArea;
+        // Show is the existing state-driven renderer; reuse it on orientation changes.
+        SeatInfo[] seats = lastSeats;
+        SeatInfo? self = lastSelf;
+        lastSeats = null; // force the orientation-specific anchors and rotations to rebuild
+        if (seats != null) Show(seats);
+        if (self.HasValue) ShowSelf(self.Value);
+    }
     private readonly Dictionary<string, RectTransform> seatByNickname =
         new Dictionary<string, RectTransform>();
+    private readonly Dictionary<string, int> lastKnownHandCounts =
+        new Dictionary<string, int>();
 
     public void Clear()
     {
@@ -180,23 +212,46 @@ public class OpponentHandsView : MonoBehaviour
         }
         panels.Clear();
         seatByNickname.Clear();
+        lastSeats = null;
+        lastSelf = null;
     }
 
     // seats: 내 다음 자리부터 시계방향 순서 (최대 4)
     public void Show(SeatInfo[] seats)
     {
         EnsureRoot();
+        // game_state is sent frequently while bidding. Recreating all card backs
+        // each time leaves a visible blank frame before Unity destroys old cards.
+        if (SameSeats(lastSeats, seats)) return;
         Clear();
+        lastSeats = seats;
         if (seats == null || cardPrefab == null) return;
 
         int n = Mathf.Min(seats.Length, SeatAnchors.Length);
         for (int i = 0; i < n; i++)
-            panels.Add(BuildPanel(seats[i], SeatAnchors[i], false));
+            panels.Add(BuildPanel(seats[i], GetRelativeSeatAnchor(i), false));
+    }
+
+    private static bool SameSeats(SeatInfo[] a, SeatInfo[] b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a == null || b == null || a.Length != b.Length) return false;
+        for (int i = 0; i < a.Length; i++)
+        {
+            if (a[i].nickname != b[i].nickname || a[i].handCount != b[i].handCount
+                || a[i].score != b[i].score || a[i].isTurn != b[i].isTurn
+                || a[i].isDeclarer != b[i].isDeclarer || a[i].isFriend != b[i].isFriend
+                || a[i].isFriendSecret != b[i].isFriendSecret
+                || a[i].retainHandWhenCountUnknown != b[i].retainHandWhenCountUnknown)
+                return false;
+        }
+        return true;
     }
 
     // 내 정보: 손패 아래 + Canvas 맨 앞에 표시
     public void ShowSelf(SeatInfo self)
     {
+        lastSelf = self;
         EnsureRoot();
         for (int i = panels.Count - 1; i >= 0; i--)
         {
@@ -210,16 +265,16 @@ public class OpponentHandsView : MonoBehaviour
         if (root != null)
         {
             Canvas.ForceUpdateCanvases();
-            RefreshSelfHandMetrics(root.rect.height, CardSpriteAtlas.DisplayHeight);
+            cachedCanvasHeight = Mathf.Max(1f, root.rect.height);
         }
         GameObject panel = BuildPanel(self, GetSelfHandAnchor(root), true);
         panels.Add(panel);
 
         // OpponentHandsRoot는 손패보다 뒤에 있음 → Self만 Canvas 맨 앞으로
-        Canvas canvas = FindFirstObjectByType<Canvas>();
+        Canvas canvas = root != null ? root.GetComponentInParent<Canvas>() : FindFirstObjectByType<Canvas>();
         if (canvas != null && panel != null)
         {
-            panel.transform.SetParent(canvas.transform, true);
+            panel.transform.SetParent(ResponsiveCanvas.Content(canvas), true);
             panel.transform.SetAsLastSibling();
         }
     }
@@ -244,19 +299,19 @@ public class OpponentHandsView : MonoBehaviour
     }
 
     // 좌상단 GameRuleHud body와 동일
-    private static int StatusFontSize { get { return UiFonts.Size(14); } }
+    private static int StatusFontSize => UiFonts.PlayerStatusSize;
 
     // 스페이스 2칸 정도 (모든 좌석 박스 공통)
     private static float InfoEdgeInset
     {
-        get { return StatusFontSize * 0.55f * 2f; }
+        get { return 16f; }
     }
 
     private static float InfoRoleGap { get { return 4f; } }
 
     private static float InfoLineHeight
     {
-        get { return StatusFontSize * 1.05f; }
+        get { return StatusFontSize * 1.4f; }
     }
 
     private static float InfoLineGap { get { return 2f; } }
@@ -277,32 +332,22 @@ public class OpponentHandsView : MonoBehaviour
     {
         get
         {
-            float inset = InfoEdgeInset;
-            float textW = UiFonts.Layout(180f);
-            float midGap = inset;
-            float fullW = inset + textW + midGap + InfoMaxIconWidth + inset;
-            // 아이콘도 줄인 뒤 가로 60%
-            float baseIconW = 2f * IconSpriteAtlas.DisplaySquare.x + InfoRoleGap;
-            float legacyFullW = inset + textW + midGap + baseIconW + inset;
-            float w = legacyFullW * 0.6f;
-            float textBlockH = InfoLineHeight * 2f + InfoLineGap;
-            float h = inset * 2f + Mathf.Max(textBlockH, InfoIconSide);
-            return new Vector2(w, h);
+            return ResponsiveCanvas.IsPortrait ? new Vector2(260f, 112f) : new Vector2(290f, 96f);
         }
     }
 
     public static string FormatStatusLine(SeatInfo seat, bool isSelf)
     {
-        string prefix = seat.isBot ? "[봇] " : "";
-        if (seat.disconnected) prefix = "[끊김] ";
+        string prefix = seat.isBot ? L10n.Text("[봇] ") : "";
+        if (seat.disconnected) prefix = L10n.Text("[끊김] ");
         string turn = seat.isTurn ? " <<" : "";
-        string who = isSelf ? (seat.nickname + " (나)") : seat.nickname;
+        string who = isSelf ? (seat.nickname + L10n.Text(" (나)")) : seat.nickname;
         return prefix + who + turn;
     }
 
     public static string FormatScoreLine(SeatInfo seat)
     {
-        return seat.score + "점";
+        return seat.score + L10n.Text("점");
     }
 
     private static bool IsSideSeat(Vector2 anchor)
@@ -312,7 +357,11 @@ public class OpponentHandsView : MonoBehaviour
 
     private void EnsureRoot()
     {
-        if (root != null) return;
+        if (root != null)
+        {
+            EnsureLayerOrder();
+            return;
+        }
 
         Canvas canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)
@@ -322,14 +371,30 @@ public class OpponentHandsView : MonoBehaviour
         }
 
         GameObject go = new GameObject("OpponentHandsRoot", typeof(RectTransform));
-        go.transform.SetParent(canvas.transform, false);
+        go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
         root = go.GetComponent<RectTransform>();
         root.anchorMin = Vector2.zero;
         root.anchorMax = Vector2.one;
         root.offsetMin = Vector2.zero;
         root.offsetMax = Vector2.zero;
-        // HandContainer보다 위, OnGUI보다 아래 — 형제 중 앞쪽
-        root.SetAsFirstSibling();
+        EnsureLayerOrder();
+    }
+
+    private void EnsureLayerOrder()
+    {
+        if (root == null || root.parent == null) return;
+        // Backdrop must render first. Putting the hands first hides every opponent
+        // behind the opaque background created by NetworkManager.
+        Transform backdrop = root.parent.Find("MightyTableBackdrop");
+        if (backdrop != null)
+        {
+            backdrop.SetAsFirstSibling();
+            root.SetSiblingIndex(1);
+        }
+        else
+        {
+            root.SetAsFirstSibling();
+        }
     }
 
     private GameObject BuildPanel(SeatInfo seat, Vector2 anchor, bool isSelf)
@@ -351,7 +416,20 @@ public class OpponentHandsView : MonoBehaviour
         float boxW = boxSize.x;
         float boxH = boxSize.y;
 
-        int count = isSelf ? 0 : Mathf.Clamp(seat.handCount, 0, 13);
+        int count = 0;
+        if (!isSelf)
+        {
+            count = Mathf.Clamp(seat.handCount, 0, 13);
+            if (count > 0 && !string.IsNullOrEmpty(seat.nickname))
+                lastKnownHandCounts[seat.nickname] = count;
+            else if (seat.retainHandWhenCountUnknown)
+            {
+                int known;
+                count = !string.IsNullOrEmpty(seat.nickname)
+                    && lastKnownHandCounts.TryGetValue(seat.nickname, out known)
+                    ? known : 10;
+            }
+        }
         float rowLen = Mathf.Max(CardSize.x, (Mathf.Max(count, 1) - 1) * CardOverlap + CardSize.x);
         // 회전 전 로컬: 가로 rowLen × 세로 CardSize.y
         // 90° 회전 후 화면: 가로 CardSize.y × 세로 rowLen
@@ -419,7 +497,9 @@ public class OpponentHandsView : MonoBehaviour
         else if (isSide)
         {
             // 좌·우: 카드 안쪽(테이블 쪽)에 박스
-            float inward = (cardsVisualW * 0.5f) + nameGap + (boxW * 0.5f);
+            float inward = ResponsiveCanvas.IsPortrait
+                ? boxW * 0.5f + 8f
+                : (cardsVisualW * 0.5f) + nameGap + (boxW * 0.5f);
             boxPos = new Vector2(isLeftSeat ? inward : -inward, 0f);
         }
         else
@@ -441,7 +521,7 @@ public class OpponentHandsView : MonoBehaviour
         Vector2 anchoredPos)
     {
         float inset = InfoEdgeInset;
-        float iconSide = InfoIconSide;
+        float iconSide = ResponsiveCanvas.IsPortrait ? 32f : 28f;
         int roleN = (seat.isDeclarer ? 1 : 0)
             + ((seat.isFriend || seat.isFriendSecret) ? 1 : 0);
         float iconW = roleN > 0
@@ -460,18 +540,21 @@ public class OpponentHandsView : MonoBehaviour
         Image bg = box.GetComponent<Image>();
         bg.raycastTarget = false;
         if (seat.isTurn)
-            bg.color = new Color(0.28f, 0.22f, 0.06f, 0.88f);
+            bg.color = new Color(MightyTheme.Accent.r, MightyTheme.Accent.g, MightyTheme.Accent.b, 0.84f);
         else if (seat.disconnected)
-            bg.color = new Color(0.12f, 0.12f, 0.12f, 0.75f);
+            bg.color = MightyTheme.PanelSoft;
         else
-            bg.color = new Color(0f, 0f, 0f, 0.72f);
+            bg.color = MightyTheme.Panel;
 
         Color textColor = seat.isTurn
-            ? new Color(1f, 0.88f, 0.35f)
-            : (seat.disconnected ? new Color(0.7f, 0.7f, 0.7f) : Color.white);
+            ? MightyTheme.Panel
+            : (seat.disconnected ? MightyTheme.Muted : MightyTheme.Ink);
 
         // 텍스트: 왼쪽 정렬, 줄간격 타이트하게 세로 중앙
-        float textRightReserve = inset + InfoMaxIconWidth + inset;
+        // Opponent panels deliberately retain their shared fixed width. The self
+        // panel, however, grows to the rendered name (including " (나)" and
+        // the active-turn " <<") so that the label is never needlessly clipped.
+        float textRightReserve = inset + (isSelf && iconW > 0f ? iconW + InfoRoleGap : 0f);
         float textW = Mathf.Max(8f, boxW - inset - textRightReserve);
         float lineH = InfoLineHeight;
         float lineGap = InfoLineGap;
@@ -486,7 +569,24 @@ public class OpponentHandsView : MonoBehaviour
         nrt.pivot = new Vector2(0f, 0.5f);
         nrt.sizeDelta = new Vector2(textW, lineH);
         nrt.anchoredPosition = new Vector2(inset, nameY);
-        nameText.text = FormatStatusLine(seat, isSelf);
+        LocalizedLabel.Bind(nameText, () => FormatStatusLine(seat, isSelf));
+        nameText.enableWordWrapping = false;
+        nameText.overflowMode = TextOverflowModes.Ellipsis;
+
+        if (isSelf)
+        {
+            float nameWidth = Mathf.Ceil(nameText.GetPreferredValues(nameText.text).x);
+            float desiredWidth = nameWidth + inset + textRightReserve;
+            float availableWidth = root != null
+                ? Mathf.Max(120f, root.rect.width - 32f)
+                : desiredWidth;
+            boxW = Mathf.Min(desiredWidth, availableWidth);
+            brt.sizeDelta = new Vector2(boxW, boxH);
+            RectTransform panelRt = parent as RectTransform;
+            if (panelRt != null) panelRt.sizeDelta = new Vector2(boxW, boxH);
+            textW = Mathf.Max(8f, boxW - inset - textRightReserve);
+            nrt.sizeDelta = new Vector2(textW, lineH);
+        }
 
         TextMeshProUGUI scoreText = UiTmp.Create(
             box.transform, "Score", StatusFontSize, TextAnchor.MiddleLeft, textColor);
@@ -496,7 +596,7 @@ public class OpponentHandsView : MonoBehaviour
         srt.pivot = new Vector2(0f, 0.5f);
         srt.sizeDelta = new Vector2(textW, lineH);
         srt.anchoredPosition = new Vector2(inset, scoreY);
-        scoreText.text = FormatScoreLine(seat);
+        LocalizedLabel.Bind(scoreText, () => FormatScoreLine(seat));
 
         // 주공·프렌드 아이콘: 오른쪽, 동일 여백 (있을 때만)
         if (roleN > 0)
@@ -508,7 +608,7 @@ public class OpponentHandsView : MonoBehaviour
             roleRt.anchorMax = new Vector2(1f, 0.5f);
             roleRt.pivot = new Vector2(1f, 0.5f);
             roleRt.sizeDelta = new Vector2(iconW, iconSide);
-            roleRt.anchoredPosition = new Vector2(-inset, 0f);
+            roleRt.anchoredPosition = new Vector2(-12f, -24f);
             IconGui.PlaceRoleIcons(
                 roles.transform, seat.isDeclarer, seat.isFriend, Vector2.zero,
                 seat.isFriendSecret, iconSide);

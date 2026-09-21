@@ -10,6 +10,19 @@ using UnityEngine;
 public static class ServerUrlResolver
 {
     public const string PrefsKey = "mighty.serverUrl";
+    public const string DefaultUrl = "ws://localhost:3000";
+
+    // Automatic connection uses deployment configuration, not the retired URL field.
+    public static string ResolveDefault(string inspectorDefault = DefaultUrl)
+    {
+        string query = FromQueryParam();
+        if (!string.IsNullOrEmpty(query)) return Normalize(query);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        string page = FromPageHost();
+        if (!string.IsNullOrEmpty(page)) return page;
+#endif
+        return Normalize(string.IsNullOrWhiteSpace(inspectorDefault) ? DefaultUrl : inspectorDefault);
+    }
 
     public static string Resolve(string inspectorDefault)
     {
