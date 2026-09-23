@@ -794,6 +794,26 @@ MonoBehaviour:
     m_Localized: Mute
     m_Metadata:
       m_Items: []
+  - m_Id: 2567876202438656
+    m_Localized: Choose 3 cards to discard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2567876256964608
+    m_Localized: Declare {0} as your friend?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2567876256964609
+    m_Localized: Declare no friend?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2567876256964610
+    m_Localized: Yes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2567876256964611
+    m_Localized: No
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

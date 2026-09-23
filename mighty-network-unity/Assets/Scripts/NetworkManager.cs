@@ -72,6 +72,8 @@ public partial class NetworkManager : MonoBehaviour
     private string[] trumpLabels => new[] { "S", "H", "D", "C", L10n.Text("노기루") };
     private int trumpIndex = 0;
     private int friendSuitPick = 0;
+    private FriendData pendingFriendChoice;
+    private string pendingFriendLabel;
     private bool myCanDealMiss = false; // your_hand로 수신한 딜미스 가능 여부
     [Header("재접속")]
     [Tooltip("에디터에서 Play 시 PlayerPrefs 토큰으로 이전 게임에 자동 재입장. 테스트용(기본 꺼짐).")]
@@ -455,6 +457,9 @@ public partial class NetworkManager : MonoBehaviour
                 if (!inRoom || m.data == null || m.data.roomId != myRoomId) break;
                 string prevStatus = lastPhaseStatus;
                 currentState = m.data;
+                if (prevStatus != "choosing_friend" || currentState.status != "choosing_friend"
+                    || currentState.declarerClientId != myClientId)
+                    ClearFriendChoice();
                 if (singlePlayerStarting && !singlePlayerStartSent && currentState != null
                     && currentState.roomId == myRoomId && currentState.canStart)
                 {
@@ -835,6 +840,7 @@ public partial class NetworkManager : MonoBehaviour
 
     private void ResetLocalHandState()
     {
+        ClearFriendChoice();
         myHandCards = null;
         discardSelected.Clear();
         myCanDealMiss = false;
@@ -1588,19 +1594,11 @@ public partial class NetworkManager : MonoBehaviour
         EnsureTrickWinAnimator();
         if (trickWinAnimator == null) return;
 
-        string declId = declarerClientId;
-        if (string.IsNullOrEmpty(declId) && currentState != null)
-            declId = currentState.declarerClientId;
-
         StartCoroutine(AfterPassToast(() => trickWinAnimator.AnnounceElection(nickname, noTrump, trumpSuit, targetScore, 2.35f, 0.35f, () =>
         {
             if (currentState == null || currentState.status != "exchanging_kitty")
                 return;
-            bool iAmDeclarer = !string.IsNullOrEmpty(declId) && declId == myClientId;
-            if (iAmDeclarer)
-                ShowKittyPhaseToast(() => L10n.Text("버릴 카드 3장을 선택하세요."));
-            else
-                ShowKittyPhaseToast(() => L10n.Text("카드 고르는 중..."));
+            ShowChoosingToast();
         })));
     }
 
@@ -1628,10 +1626,7 @@ public partial class NetworkManager : MonoBehaviour
         // 재접속 등으로 당선 토스트를 못 본 경우 바로 표시
         if (lastPhaseStatus == "exchanging_kitty" || lastElectionAnnounceKey == "")
         {
-            bool iAmDeclarer = state.declarerClientId == myClientId;
-            ShowKittyPhaseToast(() => iAmDeclarer
-                ? L10n.Text("버릴 카드 3장을 선택하세요.")
-                : L10n.Text("카드 고르는 중..."));
+            ShowChoosingToast();
         }
     }
 
@@ -1648,7 +1643,10 @@ public partial class NetworkManager : MonoBehaviour
     // 호환용 별칭
     private void ShowChoosingToast()
     {
-        ShowKittyPhaseToast(() => L10n.Text("카드 고르는 중..."));
+        ShowKittyPhaseToast(() => currentState != null
+            && !string.IsNullOrEmpty(myClientId) && currentState.declarerClientId == myClientId
+                ? L10n.Text("버릴 카드 3장을 고르세요")
+                : L10n.Text("카드 고르는 중..."));
     }
 
     private static CardData[] DedupeCardsById(CardData[] cards)
@@ -1733,24 +1731,59 @@ public partial class NetworkManager : MonoBehaviour
 
     private void ChooseFriend(string friendCardId)
     {
+        if (!CanChooseFriend()) return;
         if (string.IsNullOrWhiteSpace(friendCardId))
         {
             Log("프렌드 카드 id를 입력하세요. (노프렌드는 '노프렌드' 버튼)");
             return;
         }
-        Send(JsonUtility.ToJson(new ChooseFriendMsg { data = new FriendData { friendCardId = friendCardId } }));
-        Log("[choose_friend] 카드: " + friendCardId);
+        pendingFriendChoice = new FriendData { friendCardId = friendCardId };
+        pendingFriendLabel = friendCardId == "NONE" ? L10n.Text("노프렌드")
+            : friendCardId == currentState.mightyCardId ? L10n.Text("마이티") + " (" + CardKor(friendCardId) + ")"
+            : CardKor(friendCardId);
     }
 
     private void ChooseFriendPlayer(string friendClientId)
     {
+        if (!CanChooseFriend()) return;
         if (string.IsNullOrEmpty(friendClientId))
         {
             Log("프렌드 플레이어를 선택하세요.");
             return;
         }
-        Send(JsonUtility.ToJson(new ChooseFriendMsg { data = new FriendData { friendClientId = friendClientId } }));
-        Log("[choose_friend] 플레이어: " + friendClientId);
+        if (currentState.players == null) return;
+        foreach (PlayerInfo player in currentState.players)
+        {
+            if (player == null || player.clientId != friendClientId || player.clientId == myClientId) continue;
+            pendingFriendChoice = new FriendData { friendClientId = friendClientId };
+            pendingFriendLabel = player.nickname;
+            return;
+        }
+    }
+
+    private bool CanChooseFriend()
+    {
+        return inRoom && currentState != null && currentState.status == "choosing_friend"
+            && !string.IsNullOrEmpty(myClientId) && currentState.declarerClientId == myClientId;
+    }
+
+    private void ClearFriendChoice()
+    {
+        pendingFriendChoice = null;
+        pendingFriendLabel = null;
+    }
+
+    private void ConfirmFriendChoice()
+    {
+        if (!CanChooseFriend() || pendingFriendChoice == null)
+        {
+            ClearFriendChoice();
+            return;
+        }
+        FriendData choice = pendingFriendChoice;
+        ClearFriendChoice();
+        Send(JsonUtility.ToJson(new ChooseFriendMsg { data = choice }));
+        Log("[choose_friend] " + (choice.friendCardId ?? choice.friendClientId));
     }
 
     // 테이블(낸 카드)을 화면 중앙에 갱신한다. — 낸 순서 그대로(정렬 없음)
@@ -2868,6 +2901,19 @@ public partial class NetworkManager : MonoBehaviour
         bool iAmDeclarer = currentState.declarerClientId == myClientId;
         if (iAmDeclarer)
         {
+            if (pendingFriendChoice != null)
+            {
+                GUILayout.Space(12);
+                GUILayout.Label(pendingFriendChoice.friendCardId == "NONE"
+                    ? L10n.Text("노프렌드로 선언하시겠습니까?")
+                    : string.Format(L10n.Text("{0}을 프렌드로 선언하시겠습니까?"), pendingFriendLabel));
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(L10n.Text("네"), GUILayout.Height(GuiControlHeight))) ConfirmFriendChoice();
+                GUILayout.Space(guiColGap);
+                if (GUILayout.Button(L10n.Text("아니오"), GUILayout.Height(GuiControlHeight))) ClearFriendChoice();
+                GUILayout.EndHorizontal();
+                return;
+            }
             GUILayout.Label(L10n.Text("프렌드를 지정하세요:"));
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(L10n.Text("마이티"), GUILayout.Height(GuiControlHeight)))

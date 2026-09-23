@@ -31,6 +31,8 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private Color baseTint = Color.white;
     private bool playable = true;
     private bool dimWhenDisabled = true;
+    private Material glassMaterial;
+    private Material originalMaterial;
 
     // 바닥패 버리기 선택: LayoutGroup이 LateUpdate 이후 위치를 덮어쓰므로
     // willRenderCanvases에서 Y를 다시 맞춘다.
@@ -50,6 +52,37 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private void OnDisable()
     {
         UnsubscribeCanvas();
+    }
+
+    private void OnDestroy()
+    {
+        if (glassMaterial != null) Destroy(glassMaterial);
+    }
+
+    // 스프라이트 시트의 해당 카드 영역을 0..1로 환산해 빛을 통과시킨다.
+    private void RefreshGlassShine()
+    {
+        if (background == null) return;
+        Sprite sprite = background.sprite;
+        bool show = Card != null && Card.point > 0 && sprite != null;
+        if (!show)
+        {
+            if (glassMaterial != null && background.material == glassMaterial)
+                background.material = originalMaterial;
+            return;
+        }
+
+        if (glassMaterial == null)
+        {
+            Shader shader = Resources.Load<Shader>("Cards/CardGlassShine");
+            if (shader == null) return;
+            originalMaterial = background.material;
+            glassMaterial = new Material(shader) { name = "Card Glass Shine (Runtime)" };
+        }
+
+        Vector4 uv = UnityEngine.Sprites.DataUtility.GetOuterUV(sprite);
+        glassMaterial.SetVector("_CardUV", new Vector4(uv.x, uv.y, uv.z - uv.x, uv.w - uv.y));
+        background.material = glassMaterial;
     }
 
     // 딜/트릭/키티 비행 카드: 손패 raise Y 보정 끄기
@@ -161,7 +194,11 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     {
         Card = card;
         playable = true;
-        if (card == null) return;
+        if (card == null)
+        {
+            RefreshGlassShine();
+            return;
+        }
 
         Sprite sprite = CardSpriteAtlas.Get(card.id);
         if (sprite != null)
@@ -177,6 +214,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     {
         Card = null;
         playable = false;
+        RefreshGlassShine();
         Sprite back = CardSpriteAtlas.GetBack();
         if (back != null)
         {
@@ -274,6 +312,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         if (raised && playable)
             c = Color.Lerp(c, Color.white, 0.18f);
         background.color = c;
+        RefreshGlassShine();
     }
 
     private void EnsureLabelFont()

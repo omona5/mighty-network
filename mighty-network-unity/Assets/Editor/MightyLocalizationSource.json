@@ -762,6 +762,11 @@
     },
     {"ko": "효과음", "en": "Sound Effects"},
     {"ko": "배경음", "en": "Music"},
-    {"ko": "음소거", "en": "Mute"}
+    {"ko": "음소거", "en": "Mute"},
+    {"ko": "버릴 카드 3장을 고르세요", "en": "Choose 3 cards to discard"},
+    {"ko": "{0}을 프렌드로 선언하시겠습니까?", "en": "Declare {0} as your friend?"},
+    {"ko": "노프렌드로 선언하시겠습니까?", "en": "Declare no friend?"},
+    {"ko": "네", "en": "Yes"},
+    {"ko": "아니오", "en": "No"}
   ]
 }
