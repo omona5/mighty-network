@@ -8,7 +8,8 @@ public static class GameScenes
 
     // One-shot launch request; direct Game scene launches retain the lobby.
     public static bool StartSinglePlayer;
+    public static bool StartTutorial;
 
     [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetLaunchMode() => StartSinglePlayer = false;
+    private static void ResetLaunchMode() { StartSinglePlayer = false; StartTutorial = false; }
 }

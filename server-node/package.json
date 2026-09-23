@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/ruleEngine.test.js && node test/scoring.test.js && node test/reconnect.test.js",
+    "test": "node test/ruleEngine.test.js && node test/scoring.test.js && node test/reconnect.test.js && node test/tutorial.test.js && node test/tutorialSocket.test.js",
     "check": "npm test"
   },
   "keywords": [],

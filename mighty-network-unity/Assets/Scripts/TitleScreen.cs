@@ -18,6 +18,7 @@ public class TitleScreen : MonoBehaviour
     private ServerConnection connection;
     private Button singleButton;
     private Button multiButton;
+    private Button tutorialButton;
     private Button retryButton;
     private TextMeshProUGUI connectionLabel;
 
@@ -91,11 +92,12 @@ public class TitleScreen : MonoBehaviour
     {
         bool ready = connection != null && connection.IsReady;
         singleButton.interactable = multiButton.interactable = ready && !loading;
+        tutorialButton.interactable = ready && !loading;
         retryButton.interactable = !ready && connection != null;
         connectionLabel.text = L10n.Text(ready ? "서버 연결됨" : connection != null && connection.IsConnecting
             ? "서버 연결 중..." : "서버 연결 안 됨 · 5초마다 재시도");
         connectionLabel.color = ready ? MightyTheme.Ink : MightyTheme.Muted;
-        foreach (var button in new[] { singleButton, multiButton })
+        foreach (var button in new[] { singleButton, multiButton, tutorialButton })
             button.GetComponentInChildren<TextMeshProUGUI>().color = button.interactable ? MightyTheme.Ink : MightyTheme.Muted;
     }
 
@@ -107,6 +109,23 @@ public class TitleScreen : MonoBehaviour
     public void StartSinglePlayer()
     {
         LoadGame(true);
+    }
+
+    private void StartTutorialIntroduction()
+    {
+        if (loading) return;
+        var introduction = GetComponent<TutorialOverlay>();
+        if (introduction == null) introduction = gameObject.AddComponent<TutorialOverlay>();
+        introduction.Show("마이티는 어떤 게임인가요?",
+            "마이티는 5명이 두 팀으로 나뉘어 점수 카드를 모으는 게임입니다. 주공과 프렌드가 한 팀이고, 나머지 3명은 수비팀입니다.\n\n" +
+            "한 사람씩 카드 1장을 내고, 가장 강한 카드를 낸 사람이 5장을 가져갑니다. 이것을 트릭이라고 하며 한 판에 10번 진행합니다.\n\n" +
+            "A·K·Q·J·10은 각각 1점, 총 20점입니다. 주공팀은 미리 약속한 점수 이상을 모으면 승리합니다.\n\n" +
+            "지금부터 두 개의 짧은 연습을 해 봅니다. 설명을 읽고 확인을 누르면 다음 단계로 넘어갑니다.",
+            "", true, false, () =>
+            {
+                GameScenes.StartTutorial = true;
+                LoadGame(false);
+            }, StartTutorialIntroduction, () => introduction.Hide());
     }
 
     private void LoadGame(bool singlePlayer)
@@ -244,7 +263,7 @@ public class TitleScreen : MonoBehaviour
         Vector2 menuSize = new Vector2(280f, 48f);
         singleButton = MakeButton(menuParent, "SinglePlayerButton", "싱글플레이", menuSize, Vector2.zero, StartSinglePlayer);
         multiButton = MakeButton(menuParent, "MultiplayerButton", "멀티플레이", menuSize, Vector2.zero, StartGame);
-        MakeButton(menuParent, "TutorialButton", "튜토리얼 (준비 중)", menuSize, Vector2.zero, null);
+        tutorialButton = MakeButton(menuParent, "TutorialButton", "튜토리얼", menuSize, Vector2.zero, StartTutorialIntroduction);
         MakeButton(menuParent, "SettingsButton", "설정", menuSize, Vector2.zero, () => SettingsPanel.Open(titleCanvas));
         connectionLabel = UiTmp.Create(menuParent, "ConnectionStatus", 16, TextAnchor.MiddleCenter, MightyTheme.Muted);
         connectionLabel.rectTransform.anchorMin = connectionLabel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);

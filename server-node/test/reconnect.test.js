@@ -66,3 +66,38 @@ assert.strictEqual(rooms.findByReconnectToken(first.reconnectToken), null);
 rooms.removePlayerByClientId(second.clientId);
 assert.strictEqual(rooms.getRoom(multi.roomId), undefined);
 console.log("intentional leave tests OK");
+
+// A deliberate exit must preserve all five seats and the departing player's cards.
+for (const status of ["bidding", "discarding_kitty", "choosing_friend", "playing", "finished"]) {
+  const r = rooms.createRoom(null);
+  const departing = rooms.addPlayer(r, "Departing", fakeWs("depart-" + status)).player;
+  const remaining = rooms.addPlayer(r, "Remaining", fakeWs("remain-" + status)).player;
+  rooms.fillWithBots(r);
+  r.status = status;
+  const savedToken = departing.reconnectToken;
+  departing.hand = [{ id: "S_A" }, { id: "H_2" }];
+  departing.sessionScore = 12;
+  r.declarerClientId = departing.clientId;
+  const seats = r.players.slice();
+  const hand = departing.hand;
+  assert.strictEqual(rooms.removePlayerByClientId(departing.clientId), r);
+  assert.strictEqual(r.players.length, 5);
+  seats.forEach((p, i) => assert.strictEqual(r.players[i], p));
+  assert.strictEqual(departing.hand, hand);
+  assert.strictEqual(departing.sessionScore, 12);
+  assert.strictEqual(r.declarerClientId, departing.clientId);
+  assert.strictEqual(departing.isBot, true);
+  assert.strictEqual(departing.ws, null);
+  assert.strictEqual(rooms.isBotControlled(departing), true);
+  assert.strictEqual(rooms.findByReconnectToken(savedToken), null);
+  assert.strictEqual(r.hostClientId, remaining.clientId);
+  // The same browser can leave a new room without removing its old bot seat.
+  const next = rooms.createRoom(null);
+  rooms.addPlayer(next, "Returned", fakeWs(departing.clientId));
+  rooms.removePlayerByClientId(departing.clientId);
+  assert.strictEqual(rooms.getRoom(next.roomId), undefined);
+  assert.strictEqual(r.players.length, 5);
+  rooms.removePlayerByClientId(remaining.clientId);
+  assert.strictEqual(rooms.getRoom(r.roomId), undefined);
+}
+console.log("in-game leave bot replacement tests OK");

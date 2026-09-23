@@ -17,9 +17,9 @@
     const canvas = document.getElementById('unity-canvas');
     const status = document.getElementById('status');
     const config = {
-      dataUrl: 'Build/260921.data',
-      frameworkUrl: 'Build/260921.framework.js',
-      codeUrl: 'Build/260921.wasm',
+      dataUrl: 'Build/260922.data',
+      frameworkUrl: 'Build/260922.framework.js',
+      codeUrl: 'Build/260922.wasm',
       streamingAssetsUrl: 'StreamingAssets',
       companyName: "DefaultCompany",
       productName: "mighty-network-unity",
@@ -27,7 +27,7 @@
       matchWebGLToCanvasSize: true
     };
     const script = document.createElement('script');
-    script.src = 'Build/260921.loader.js';
+    script.src = 'Build/260922.loader.js';
     script.onerror = () => { status.textContent = '게임 파일을 불러오지 못했습니다. 새로고침해 주세요.'; };
     script.onload = () => createUnityInstance(canvas, config, progress => {
       status.textContent = 'Loading ' + Math.round(progress * 100) + '%';

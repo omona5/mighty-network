@@ -1007,15 +1007,26 @@ class RoomManager {
     return room.hostClientId === clientId;
   }
 
-  // clientId로 플레이어를 찾아 방에서 제거한다.
+  // 대기 중에는 제거하고, 시작된 게임에서는 같은 좌석을 영구 봇으로 넘긴다.
   // 방이 비면 방도 삭제. 영향을 받은 방을 반환(없으면 null).
   removePlayerByClientId(clientId) {
     for (const roomId in this.rooms) {
       const room = this.rooms[roomId];
-      const idx = room.players.findIndex((p) => p.clientId === clientId);
+      const idx = room.players.findIndex((p) => p.clientId === clientId && !p.isBot);
       if (idx !== -1) {
         const wasHost = room.hostClientId === clientId;
-        room.players.splice(idx, 1);
+        if (room.status === "waiting") {
+          room.players.splice(idx, 1);
+        } else {
+          // Keep identity, seat index, hand, role and scores intact for this round.
+          const player = room.players[idx];
+          player.isBot = true;
+          player.reconnectToken = null;
+          player.connected = true;
+          player.disconnectedAt = null;
+          player.ws = null;
+          player.isReady = true;
+        }
 
         // 사람(비봇)이 한 명도 안 남으면 방을 삭제한다. (봇만 남겨두지 않음)
         const humans = room.players.filter((p) => !p.isBot);

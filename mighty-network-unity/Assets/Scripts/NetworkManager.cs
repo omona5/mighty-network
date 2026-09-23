@@ -143,6 +143,11 @@ public partial class NetworkManager : MonoBehaviour
 
     private void Start()
     {
+        tutorialStarting = GameScenes.StartTutorial;
+        tutorialRequested = tutorialStarting;
+        tutorialRequestTime = Time.realtimeSinceStartup;
+        GameScenes.StartTutorial = false;
+        if (tutorialStarting) ClearReconnectPrefs();
         singlePlayerStarting = GameScenes.StartSinglePlayer;
         GameScenes.StartSinglePlayer = false;
         if (singlePlayerStarting)
@@ -269,6 +274,7 @@ public partial class NetworkManager : MonoBehaviour
 
     private void Update()
     {
+        UpdateTutorial();
         if (singlePlayerStarting && Time.realtimeSinceStartup >= singlePlayerDeadline)
         {
             singlePlayerStarting = false;
@@ -291,6 +297,7 @@ public partial class NetworkManager : MonoBehaviour
         TypeOnly head = JsonUtility.FromJson<TypeOnly>(json);
         // Packets already queued when leaving must not restore the old room.
         if (intentionalLeave && head.type != "welcome" && head.type != "pong_from_server") return;
+        if (HandleTutorialMessage(head.type, json)) return;
         switch (head.type)
         {
             case "welcome":
@@ -298,6 +305,7 @@ public partial class NetworkManager : MonoBehaviour
                 WelcomeMsg m = JsonUtility.FromJson<WelcomeMsg>(json);
                 myClientId = m.data.clientId;
                 Log("[welcome] 내 id: " + myClientId);
+                if (tutorialStarting) { tutorialStarting = false; Send("{\"type\":\"start_tutorial\"}"); break; }
                 if (singlePlayerStarting && !inRoom) CreateRoom();
                 break;
             }
@@ -606,6 +614,9 @@ public partial class NetworkManager : MonoBehaviour
 
     private void LeaveRoom()
     {
+        tutorialRequested = tutorialStarting = false;
+        tutorialState = null;
+        if (tutorialOverlay != null) tutorialOverlay.Hide();
         intentionalLeave = true;
         ClearReconnectPrefs();
         Send(JsonUtility.ToJson(new LeaveRoomMsg()));
@@ -682,6 +693,8 @@ public partial class NetworkManager : MonoBehaviour
     // 손패 카드 클릭 시 호출됨
     private void OnHandCardClicked(CardData card)
     {
+        if (TutorialBlocksInput) return;
+        if (!TutorialAllowsCard(card)) return;
         if (SettingsPanel.IsOpen) return;
         if (card == null) return;
         // 바닥패 교환: 카드 선택 토글
@@ -854,7 +867,8 @@ public partial class NetworkManager : MonoBehaviour
             // 손패가 토스트/오버레이보다 앞에 오도록
             if (handView.cardContainer != null)
                 handView.cardContainer.SetAsLastSibling();
-            handView.SetAllPlayable(true);
+            if (tutorialState != null) handView.ApplyPlayability(TutorialAllowsCard);
+            else handView.SetAllPlayable(true);
             handView.ApplyDiscardSelectionRaise(discardSelected);
         }
         else
@@ -2075,7 +2089,7 @@ public partial class NetworkManager : MonoBehaviour
         string jokerCall = currentState.jokerCallCardId;
         CardData[] hand = myHandCards;
         handView.ApplyPlayability(c =>
-            CardPlayLegality.CanPlay(c, hand, table, mighty, jokerCall));
+            TutorialAllowsCard(c) && CardPlayLegality.CanPlay(c, hand, table, mighty, jokerCall));
     }
 
     private static TableCardSnapshot[] BuildTableSnapshots(GameState state)
@@ -2418,6 +2432,22 @@ public partial class NetworkManager : MonoBehaviour
 
     private void DrawIdleCornerHud(bool showKittyDiscard)
     {
+        // The tutorial owns the top bar and exit button. Keep the one required
+        // exchange action below the table, clear of its persistent instruction.
+        if (tutorialState != null)
+        {
+            if (showKittyDiscard)
+            {
+                Rect tutorialSafe = GuiSafeArea;
+                float width = Mathf.Min(220f, tutorialSafe.width - 24f);
+                GUI.enabled = discardSelected.Count == 3;
+                if (GUI.Button(new Rect(tutorialSafe.center.x - width * 0.5f,
+                    tutorialSafe.yMin + tutorialSafe.height * 0.68f, width, 44f),
+                    "3장 버리기 (" + discardSelected.Count + "/3)")) DiscardKitty();
+                GUI.enabled = true;
+            }
+            return;
+        }
         float mw = showKittyDiscard ? 208f : 148f;
         float mh = CornerHudHeight(showKittyDiscard);
         Rect safe = GuiSafeArea;
@@ -2456,6 +2486,7 @@ public partial class NetworkManager : MonoBehaviour
 
     private void OnGUI()
     {
+        if (TutorialBlocksInput) return;
         if (SettingsPanel.IsOpen) return;
         Matrix4x4 previousMatrix = GUI.matrix;
         GUISkin previousSkin = GUI.skin;

@@ -30,6 +30,7 @@ const PORT = Number.isInteger(configuredPort) && configuredPort > 0
 
 let nextClientId = 1;
 const rooms = new RoomManager();
+const tutorial = new (require('./src/Tutorial'))(rooms, send);
 
 // 1) HTTP 서버: 테스트 페이지 + WebGL 정적 파일
 const MIME = {
@@ -135,6 +136,13 @@ wss.on("connection", (ws) => {
     }
     const data = msg.data || {};
 
+    if (msg.type === 'start_tutorial') {
+      if (ws.roomId) leaveCurrentRoom(ws);
+      tutorial.start(ws);
+      return;
+    }
+    if (tutorial.handle(ws, msg.type, data)) return;
+
     switch (msg.type) {
       // ---- 01~02단계: ping-pong ----
       case "ping_from_client":
@@ -192,6 +200,10 @@ wss.on("connection", (ws) => {
         const room = rooms.getRoom(roomId);
         if (!room) {
           send(ws, "error_message", { message: "방을 찾을 수 없습니다: " + roomId });
+          break;
+        }
+        if (room.tutorial) {
+          send(ws, 'error_message', { message: '튜토리얼은 혼자 진행하는 연습입니다.' });
           break;
         }
         if (room.password && room.password !== data.password) {
@@ -274,6 +286,7 @@ wss.on("connection", (ws) => {
           });
         }
         broadcast(room, "game_state", rooms.publicState(room));
+        if (room.tutorial) tutorial.sync(room);
         if (room.status === "finished" && room.lastResult) {
           send(ws, "game_finished", room.lastResult);
         }
@@ -602,6 +615,7 @@ function beginFriendSelection(room) {
 
 // 주공이 봇(또는 끊긴 사람)이면 자동으로 약한 카드 3장 버림
 function maybeBotDiscardKitty(room) {
+  if (room && room.tutorial) return;
   if (!room || room.status !== "exchanging_kitty") return;
   const decl = room.players.find((p) => p.clientId === room.declarerClientId);
   if (!rooms.isBotControlled(decl)) return;
@@ -643,6 +657,7 @@ function waitingForDealAnimation(room) {
 }
 
 function maybeBotBid(room) {
+  if (room && room.tutorial) return;
   if (!room || room.status !== "bidding") return;
   if (waitingForDealAnimation(room)) return;
   const bidder = rooms.currentBidder(room);
@@ -679,6 +694,7 @@ function maybeBotBid(room) {
 
 // 09단계: 주공이 봇(또는 끊긴 사람)이면 자동 프렌드 지정
 function maybeBotChooseFriend(room) {
+  if (room && room.tutorial) return;
   if (!room || room.status !== "choosing_friend") return;
   const decl = room.players.find((p) => p.clientId === room.declarerClientId);
   if (!rooms.isBotControlled(decl)) return;
@@ -730,6 +746,7 @@ const BOT_PLAY_DELAY = 700; // ms
 // 트릭 종료 연출(토스트+점수카드 이동) 여유
 const TRICK_RESOLVE_DELAY = 1800; // ms
 function maybeBotPlay(room, delayMs) {
+  if (room && room.tutorial) return;
   if (!room || room.status !== "playing") return;
   const player = rooms.currentTurnPlayer(room);
   if (!rooms.isBotControlled(player)) return;
@@ -780,15 +797,17 @@ function resumeBotActions(room) {
   maybeBotPlay(room);
 }
 
-// 의도적 퇴장: 좌석 즉시 삭제
+// 의도적 퇴장: 대기 중 제거, 게임 중에는 손패를 유지한 채 봇으로 전환
 function leaveCurrentRoom(ws) {
   if (!ws.roomId) return;
+  if (tutorial.handle(ws, 'leave_room')) return;
   const room = rooms.removePlayerByClientId(ws.clientId);
   const leftRoomId = ws.roomId;
   ws.roomId = null;
   if (room) {
     if (room.status === "waiting") rooms.fillWithBots(room);
     broadcast(room, "game_state", rooms.publicState(room));
+    resumeBotActions(room);
   }
   console.log("[room] left", leftRoomId, "by", ws.clientId);
 }
