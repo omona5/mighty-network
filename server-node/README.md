@@ -90,3 +90,17 @@ npm test
 ```
 
 규칙, 점수 계산, 재접속 테스트를 순서대로 실행한다.
+
+## 방 초대 URL (로컬)
+
+- 멀티플레이 로비: `http://localhost:3000/multiplayer`
+- 초대 입장: `http://localhost:3000/room/ABCD` — 닉네임 입력 후 입장. 실제 방 코드로 바꿔 사용합니다.
+- 싱글플레이: `http://localhost:3000/singleplayer`
+- 튜토리얼: `http://localhost:3000/tutorial`
+- 타이틀: `http://localhost:3000/webgl/` (기존 `/test.html` 진단 페이지 유지)
+
+방 생성·참여 성공 시 주소가 `/room/{roomCode}`로 바뀌며, 대기실의 **초대 링크 복사**는 현재 브라우저의 origin을 사용합니다. 다른 기기에서 접속할 때는 `localhost` 대신 LAN IP 또는 도메인으로 먼저 접속하세요. 비밀번호가 설정된 방은 기존 비밀번호 검증을 유지하며, 초대 입장 시 서버가 요구하면 비밀번호 입력란이 표시됩니다. 초대 토큰은 적용하지 않았습니다.
+
+Unity WebGL 빌드는 `Responsive` 템플릿을 사용하고 `public/webgl/`에 배치합니다. 템플릿의 `/webgl/` base 경로 덕분에 `/room/...` 새로고침 시에도 Build·StreamingAssets를 같은 위치에서 읽습니다. C# 또는 `.jslib` 수정은 WebGL 재빌드가 필요합니다.
+
+`npm test`에 `test/roomInvite.test.js`가 포함되어 있습니다. 임시 포트의 실제 HTTP/WebSocket 서버로 경로, 정상 입장, 잘못된 코드, 없는/종료된 방, 정원 초과, 게임 진행 중 입장 및 비밀번호 검증을 검사합니다. 브라우저 브리지의 origin 기반 링크·URL 변경·클립보드 성공/실패/폴백도 검사합니다.

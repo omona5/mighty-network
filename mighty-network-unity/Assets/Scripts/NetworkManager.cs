@@ -49,6 +49,12 @@ public partial class NetworkManager : MonoBehaviour
     private string nickname = "";
     private string roomIdInput = "";
     private string passwordInput = "";
+    private bool inviteMode;
+    private bool inviteNeedsPassword;
+    private bool joinMode;
+    private bool singlePlayerSession;
+    private string lobbyFeedback = "";
+    private string inviteFeedback = "";
 
     // 방 상태
     private bool inRoom = false;
@@ -145,12 +151,21 @@ public partial class NetworkManager : MonoBehaviour
 
     private void Start()
     {
+        inviteMode = !string.IsNullOrEmpty(RoomNavigation.InviteCode);
+        if (inviteMode)
+        {
+            roomIdInput = RoomNavigation.InviteCode;
+            ClearReconnectPrefs();
+            GameScenes.StartSinglePlayer = GameScenes.StartTutorial = false;
+        }
+        RoomNavigation.EntryPending = false;
         tutorialStarting = GameScenes.StartTutorial;
         tutorialRequested = tutorialStarting;
         tutorialRequestTime = Time.realtimeSinceStartup;
         GameScenes.StartTutorial = false;
         if (tutorialStarting) ClearReconnectPrefs();
         singlePlayerStarting = GameScenes.StartSinglePlayer;
+        singlePlayerSession = singlePlayerStarting;
         GameScenes.StartSinglePlayer = false;
         if (singlePlayerStarting)
         {
@@ -389,6 +404,8 @@ public partial class NetworkManager : MonoBehaviour
                 RoomAckMsg m = JsonUtility.FromJson<RoomAckMsg>(json);
                 myRoomId = m.data.roomId;
                 inRoom = true;
+                lobbyFeedback = "";
+                if (!singlePlayerSession && !tutorialRequested) RoomNavigation.SetRoom(myRoomId);
                 intentionalLeave = false;
                 gameStarted = false;
                 ResetLocalHandState();
@@ -559,6 +576,8 @@ public partial class NetworkManager : MonoBehaviour
             {
                 singlePlayerStarting = false;
                 ErrorMsg m = JsonUtility.FromJson<ErrorMsg>(json);
+                lobbyFeedback = m.data.message;
+                if (inviteMode && m.data.message.Contains("비밀번호")) inviteNeedsPassword = true;
                 Log("[error_message] " + m.data.message);
                 break;
             }
@@ -599,7 +618,9 @@ public partial class NetworkManager : MonoBehaviour
 
     private void CreateRoom()
     {
-        if (string.IsNullOrWhiteSpace(nickname)) { Log("닉네임을 입력하세요."); return; }
+        if (inviteMode) return;
+        if (string.IsNullOrWhiteSpace(nickname)) { lobbyFeedback = "닉네임을 입력하세요."; return; }
+        lobbyFeedback = "";
         intentionalLeave = false;
         Send(JsonUtility.ToJson(new CreateRoomMsg { data = new CreateRoomData {
             nickname = nickname, password = passwordInput,
@@ -610,15 +631,22 @@ public partial class NetworkManager : MonoBehaviour
 
     private void JoinRoom()
     {
-        if (string.IsNullOrWhiteSpace(nickname)) { Log("닉네임을 입력하세요."); return; }
-        if (string.IsNullOrWhiteSpace(roomIdInput)) { Log("방 코드를 입력하세요."); return; }
+        if (string.IsNullOrWhiteSpace(nickname)) { lobbyFeedback = "닉네임을 입력하세요."; return; }
+        if (string.IsNullOrWhiteSpace(roomIdInput)) { lobbyFeedback = "방 코드를 입력하세요."; return; }
+        lobbyFeedback = "";
         intentionalLeave = false;
-        Send(JsonUtility.ToJson(new JoinRoomMsg { data = new JoinRoomData { roomId = roomIdInput.ToUpper(), nickname = nickname, password = passwordInput } }));
+        Send(JsonUtility.ToJson(new JoinRoomMsg { data = new JoinRoomData { roomId = roomIdInput.Trim().ToUpperInvariant(), nickname = nickname, password = passwordInput } }));
         Log("[join_room] 전송: " + roomIdInput.ToUpper());
     }
 
     private void LeaveRoom()
     {
+        // Startup ends when cards are dealt; the session flag survives the
+        // whole game, including results and a return to the waiting room.
+        bool returnToTitle = singlePlayerSession;
+        RoomNavigation.SetMode(returnToTitle ? "" : "multiplayer");
+        inviteMode = inviteNeedsPassword = singlePlayerSession = false;
+        lobbyFeedback = inviteFeedback = "";
         tutorialRequested = tutorialStarting = false;
         tutorialState = null;
         if (tutorialOverlay != null) tutorialOverlay.Hide();
@@ -662,6 +690,14 @@ public partial class NetworkManager : MonoBehaviour
         choosingToastVisible = false;
         if (trickWinAnimator != null) trickWinAnimator.ClearStickyToast();
         Log("[leave_room] 전송");
+        if (returnToTitle)
+            UnityEngine.SceneManagement.SceneManager.LoadScene(GameScenes.Title);
+    }
+
+    public void OnInviteCopied(string result)
+    {
+        inviteFeedback = result == "success" ? "초대 링크를 복사했습니다."
+            : "복사하지 못했습니다. 브라우저 주소창의 링크를 복사해 주세요.";
     }
 
     private void ClearReconnectPrefs()
@@ -2587,7 +2623,7 @@ public partial class NetworkManager : MonoBehaviour
             : !inRoom ? 540f : phase == "waiting" ? 600f
             : isFinished ? 720f : myBidTurn ? 420f : 640f;
         float panelW = Mathf.Min(desiredW, availableW);
-        float desiredH = !inRoom ? (compactUi ? 320f : 240f)
+        float desiredH = !inRoom ? (compactUi ? 480f : 420f)
             : phase == "waiting" ? (compactUi ? 480f : 420f)
             : isFinished ? 680f
             : myBidTurn ? 360f : 560f;
@@ -2634,36 +2670,46 @@ public partial class NetworkManager : MonoBehaviour
             float fieldH = GuiControlHeight;
             float btnH = GuiControlHeight;
             // ---- 로비 화면 ----
+            if (inviteMode) GUILayout.Label(L10n.Text("초대받은 방: ") + roomIdInput);
+            else
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Toggle(!joinMode, L10n.Text("방 만들기"), GUI.skin.button, GUILayout.Height(btnH))) joinMode = false;
+                if (GUILayout.Toggle(joinMode, L10n.Text("방 참여"), GUI.skin.button, GUILayout.Height(btnH))) joinMode = true;
+                GUILayout.EndHorizontal();
+            }
             GUILayout.BeginHorizontal();
             GUILayout.Label(L10n.Text("닉네임:"), GUILayout.Width(labelW));
             nickname = GUILayout.TextField(nickname, 12, GUILayout.Width(guiColW * 2f + guiColGap - labelW), GUILayout.Height(fieldH));
             GUILayout.EndHorizontal();
 
-            float passwordLabelW = GameSettings.Language == "en" ? 100f : 52f;
-            float roomFieldW = compactUi ? contentWidth - labelW
-                : (contentWidth - labelW - passwordLabelW - guiColGap) * 0.5f;
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(L10n.Text("방 코드:"), GUILayout.Width(labelW));
-            roomIdInput = GUILayout.TextField(roomIdInput, 4, GUILayout.Width(roomFieldW), GUILayout.Height(fieldH));
-            if (compactUi)
+            if (!inviteMode && joinMode)
             {
-                GUILayout.EndHorizontal();
+                GUILayout.Label(L10n.Text("참여할 방 코드를 입력하세요"));
                 GUILayout.BeginHorizontal();
+                GUILayout.Label(L10n.Text("방 코드:"), GUILayout.Width(labelW));
+                roomIdInput = GUILayout.TextField(roomIdInput, 4, GUILayout.Height(fieldH));
+                GUILayout.EndHorizontal();
             }
-            else GUILayout.Space(guiColGap);
-            GUILayout.Label(L10n.Text("비번:"), GUILayout.Width(compactUi ? labelW : passwordLabelW));
-            passwordInput = GUILayout.TextField(passwordInput, GUILayout.Width(roomFieldW), GUILayout.Height(fieldH));
-            GUILayout.EndHorizontal();
+            if (!inviteMode || inviteNeedsPassword)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(L10n.Text("비번:"), GUILayout.Width(labelW));
+                passwordInput = GUILayout.PasswordField(passwordInput, '*', GUILayout.Height(fieldH));
+                GUILayout.EndHorizontal();
+            }
 
             GUILayout.Space(6);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button(L10n.Text("방 만들기"), GUILayout.Width(guiColW), GUILayout.Height(btnH))) CreateRoom();
-            GUILayout.Space(guiColGap);
-            if (GUILayout.Button(L10n.Text("입장"), GUILayout.Width(guiColW), GUILayout.Height(btnH))) JoinRoom();
-            GUILayout.EndHorizontal();
+            bool joining = inviteMode || joinMode;
+            if (GUILayout.Button(L10n.Text(joining ? "입장" : "방 만들기"), GUILayout.Height(btnH)))
+            {
+                if (joining) JoinRoom(); else CreateRoom();
+            }
+            if (!string.IsNullOrEmpty(lobbyFeedback)) GUILayout.Label(L10n.Text(lobbyFeedback));
             if (GUILayout.Button(L10n.Text("타이틀로"), GUILayout.Height(btnH)))
             {
                 LeaveRoom();
+                RoomNavigation.SetMode("");
                 UnityEngine.SceneManagement.SceneManager.LoadScene(GameScenes.Title);
             }
         }
@@ -2688,6 +2734,15 @@ public partial class NetworkManager : MonoBehaviour
     // ---- 대기방 화면 (게임 시작 전) ----
     private void DrawWaitingRoom()
     {
+        if (!singlePlayerSession && !tutorialRequested)
+        {
+            if (GUILayout.Button(L10n.Text("초대 링크 복사"), GUILayout.Height(GuiControlHeight)))
+            {
+                inviteFeedback = "초대 링크 복사 중...";
+                RoomNavigation.CopyInvite(myRoomId, gameObject.name);
+            }
+            if (!string.IsNullOrEmpty(inviteFeedback)) GUILayout.Label(L10n.Text(inviteFeedback));
+        }
         GUILayout.Label(compactUi
             ? (L10n.Text("방 ") + myRoomId + L10n.Text(" · 대기실"))
             : (L10n.Text("방 코드: ") + myRoomId

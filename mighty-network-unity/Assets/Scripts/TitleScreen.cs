@@ -34,9 +34,9 @@ public class TitleScreen : MonoBehaviour
         float width = Mathf.Min(portrait ? 342f : 620f, ResponsiveCanvas.SafeArea.width / UiFonts.MenuScale - 32f);
         unit *= Mathf.Min(1f, ResponsiveCanvas.SafeArea.height / UiFonts.MenuScale / 610f);
         SetTitleElement("Glow", width, 590f, -32f, 0, unit);
-        SetTitleElement("Eyebrow", width - 32f, 24f, 210f, 12, unit);
-        SetTitleElement("Title", width - 32f, 88f, 154f, portrait ? 52 : 64, unit);
-        SetTitleElement("Subtitle", width - 32f, 36f, 92f, 18, unit);
+
+        SetTitleElement("Title", Mathf.Min(width - 32f, 540f), 180f, 154f, 0, unit);
+
         string[] buttons = { "SinglePlayerButton", "MultiplayerButton", "TutorialButton", "SettingsButton" };
         for (int i = 0; i < buttons.Length; i++)
             SetTitleElement(buttons[i], portrait ? width - 48f : 280f, 48f, 28f - i * 60f, 18, unit);
@@ -99,6 +99,12 @@ public class TitleScreen : MonoBehaviour
         connectionLabel.color = ready ? MightyTheme.Ink : MightyTheme.Muted;
         foreach (var button in new[] { singleButton, multiButton, tutorialButton })
             button.GetComponentInChildren<TextMeshProUGUI>().color = button.interactable ? MightyTheme.Ink : MightyTheme.Muted;
+        if (ready && !loading && RoomNavigation.EntryPending)
+        {
+            RoomNavigation.EntryPending = false;
+            if (RoomNavigation.Mode == "tutorial") StartTutorialIntroduction();
+            else LoadGame(RoomNavigation.Mode == "singleplayer");
+        }
     }
 
     public void StartGame()
@@ -114,6 +120,7 @@ public class TitleScreen : MonoBehaviour
     private void StartTutorialIntroduction()
     {
         if (loading) return;
+        RoomNavigation.SetMode("tutorial");
         var introduction = GetComponent<TutorialOverlay>();
         if (introduction == null) introduction = gameObject.AddComponent<TutorialOverlay>();
         introduction.Show("마이티는 어떤 게임인가요?",
@@ -134,6 +141,8 @@ public class TitleScreen : MonoBehaviour
         loading = true;
         RefreshConnection();
         GameScenes.StartSinglePlayer = singlePlayer;
+        if (string.IsNullOrEmpty(RoomNavigation.InviteCode))
+            RoomNavigation.SetMode(GameScenes.StartTutorial ? "tutorial" : singlePlayer ? "singleplayer" : "multiplayer");
         Sfx.Title();
         string scene = string.IsNullOrEmpty(gameSceneName) ? GameScenes.Game : gameSceneName;
         SceneManager.LoadScene(scene);
@@ -221,44 +230,15 @@ public class TitleScreen : MonoBehaviour
         glow.color = MightyTheme.Panel;
         glow.raycastTarget = false;
 
-        TextMeshProUGUI eyebrow = UiTmp.Create(
-            ResponsiveCanvas.Content(canvas), "Eyebrow", UiFonts.Size(14), TextAnchor.MiddleCenter,
-            MightyTheme.Muted);
-        RectTransform eyebrowRt = eyebrow.rectTransform;
-        eyebrowRt.anchorMin = new Vector2(0.5f, 0.5f);
-        eyebrowRt.anchorMax = new Vector2(0.5f, 0.5f);
-        eyebrowRt.pivot = new Vector2(0.5f, 0.5f);
-        eyebrowRt.sizeDelta = new Vector2(contentW - UiFonts.Layout(32f), UiFonts.Layout(30f));
-        eyebrowRt.anchoredPosition = new Vector2(0f, UiFonts.Layout(150f));
-        eyebrow.text = "ONLINE CARD TABLE";
-
-        TextMeshProUGUI title = UiTmp.Create(
-            ResponsiveCanvas.Content(canvas), "Title", UiFonts.Size(72), TextAnchor.MiddleCenter,
-            MightyTheme.Accent);
-        RectTransform titleRt = title.rectTransform;
-        titleRt.anchorMin = new Vector2(0.5f, 0.5f);
-        titleRt.anchorMax = new Vector2(0.5f, 0.5f);
+        GameObject titleGo = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.Image));
+        titleGo.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
+        RectTransform titleRt = titleGo.GetComponent<RectTransform>();
+        titleRt.anchorMin = titleRt.anchorMax = new Vector2(0.5f, 0.5f);
         titleRt.pivot = new Vector2(0.5f, 0.5f);
-        titleRt.sizeDelta = new Vector2(
-            Mathf.Min(UiFonts.Layout(900f), contentW - UiFonts.Layout(32f)),
-            UiFonts.Layout(110f));
-        titleRt.anchoredPosition = new Vector2(0f, UiFonts.Layout(90f));
-        title.text = "MIGHTY";
-        title.fontStyle = FontStyles.Bold;
-
-        TextMeshProUGUI sub = UiTmp.Create(
-            ResponsiveCanvas.Content(canvas), "Subtitle", UiFonts.Size(22), TextAnchor.MiddleCenter,
-            MightyTheme.Ink);
-        RectTransform subRt = sub.rectTransform;
-        subRt.anchorMin = new Vector2(0.5f, 0.5f);
-        subRt.anchorMax = new Vector2(0.5f, 0.5f);
-        subRt.pivot = new Vector2(0.5f, 0.5f);
-        subRt.sizeDelta = new Vector2(
-            Mathf.Min(UiFonts.Layout(700f), contentW - UiFonts.Layout(32f)),
-            UiFonts.Layout(40f));
-        subRt.anchoredPosition = new Vector2(0f, UiFonts.Layout(20f));
-        LocalizedLabel.Bind(sub, "5인용 전략 카드 게임");
-
+        UnityEngine.UI.Image title = titleGo.GetComponent<UnityEngine.UI.Image>();
+        title.sprite = Resources.Load<Sprite>("title");
+        title.preserveAspect = true;
+        title.raycastTarget = false;
         Transform menuParent = ResponsiveCanvas.Content(canvas);
         Vector2 menuSize = new Vector2(280f, 48f);
         singleButton = MakeButton(menuParent, "SinglePlayerButton", "싱글플레이", menuSize, Vector2.zero, StartSinglePlayer);

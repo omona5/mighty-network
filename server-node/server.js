@@ -58,6 +58,11 @@ const httpServer = http.createServer((req, res) => {
   // 쿼리/해시 제거
   let urlPath = (req.url || "/").split("?")[0].split("#")[0];
   if (urlPath === "/") urlPath = "/test.html";
+  // Deep links must serve the same WebGL shell, including on refresh.
+  if (/^\/room\/[a-z0-9]{4}\/?$/i.test(urlPath)
+      || /^\/(multiplayer|singleplayer|tutorial)\/?$/.test(urlPath)) {
+    urlPath = "/webgl/index.html";
+  }
 
   // public 밖으로 못 나가게
   const publicRoot = path.join(__dirname, "public");
@@ -196,7 +201,11 @@ wss.on("connection", (ws) => {
           send(ws, "error_message", { message: "닉네임을 입력하세요. (1~12자)" });
           break;
         }
-        const roomId = (data.roomId || "").toUpperCase();
+        if (typeof data.roomId !== "string" || !/^[a-z0-9]{4}$/i.test(data.roomId.trim())) {
+          send(ws, "error_message", { message: "방 코드는 영문·숫자 4자리로 입력하세요." });
+          break;
+        }
+        const roomId = data.roomId.trim().toUpperCase();
         const room = rooms.getRoom(roomId);
         if (!room) {
           send(ws, "error_message", { message: "방을 찾을 수 없습니다: " + roomId });

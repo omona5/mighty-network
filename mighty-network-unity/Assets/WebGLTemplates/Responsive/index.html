@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
+  <base href="/webgl/">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{{ PRODUCT_NAME }}}</title>
   <style>
@@ -20,7 +21,7 @@
       dataUrl: 'Build/{{{ DATA_FILENAME }}}',
       frameworkUrl: 'Build/{{{ FRAMEWORK_FILENAME }}}',
       codeUrl: 'Build/{{{ CODE_FILENAME }}}',
-      streamingAssetsUrl: 'StreamingAssets',
+      streamingAssetsUrl: new URL('StreamingAssets', document.baseURI).href,
       companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
       productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
       productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},

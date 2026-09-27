@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
+  <base href="/webgl/">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>mighty-network-unity</title>
   <style>
@@ -17,17 +18,17 @@
     const canvas = document.getElementById('unity-canvas');
     const status = document.getElementById('status');
     const config = {
-      dataUrl: 'Build/260922.data',
-      frameworkUrl: 'Build/260922.framework.js',
-      codeUrl: 'Build/260922.wasm',
-      streamingAssetsUrl: 'StreamingAssets',
+      dataUrl: 'Build/invite-webgl.data',
+      frameworkUrl: 'Build/invite-webgl.framework.js',
+      codeUrl: 'Build/invite-webgl.wasm',
+      streamingAssetsUrl: new URL('StreamingAssets', document.baseURI).href,
       companyName: "DefaultCompany",
       productName: "mighty-network-unity",
       productVersion: "1.0",
       matchWebGLToCanvasSize: true
     };
     const script = document.createElement('script');
-    script.src = 'Build/260922.loader.js';
+    script.src = 'Build/invite-webgl.loader.js';
     script.onerror = () => { status.textContent = '게임 파일을 불러오지 못했습니다. 새로고침해 주세요.'; };
     script.onload = () => createUnityInstance(canvas, config, progress => {
       status.textContent = 'Loading ' + Math.round(progress * 100) + '%';
