@@ -19,6 +19,7 @@ public partial class NetworkManager
     private int tutorialWaitMessage = -1;
     private int tutorialDisplayedRevision = -1;
     private bool tutorialDisplayedPaused;
+    private string tutorialDisplayedLanguage;
     private bool TutorialBlocksInput => tutorialRequested && tutorialState == null
         || tutorialStarting || (tutorialState != null && tutorialState.paused);
 
@@ -98,7 +99,9 @@ public partial class NetworkManager
             || (kittyView != null && kittyView.IsBusy);
         if (busy && tutorialState.paused) { tutorialOverlay.Hide(); return; }
         if (tutorialDisplayedRevision == tutorialState.revision
-            && tutorialDisplayedPaused == tutorialState.paused && tutorialOverlay.IsVisible) return;
+            && tutorialDisplayedPaused == tutorialState.paused
+            && tutorialDisplayedLanguage == GameSettings.Language && tutorialOverlay.IsVisible) return;
+        tutorialDisplayedLanguage = GameSettings.Language;
         tutorialDisplayedRevision = tutorialState.revision;
         tutorialDisplayedPaused = tutorialState.paused;
         int displayedRevision = tutorialState.revision;

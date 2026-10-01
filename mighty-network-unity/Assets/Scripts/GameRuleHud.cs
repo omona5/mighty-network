@@ -127,6 +127,9 @@ public class GameRuleHud : MonoBehaviour
         bodyText.text = L10n.Text("주공팀 ") + NullDash(currentInfo.teamScoreLabel)
             + (portrait ? L10n.Text("    ·    공약 ") : L10n.Text("\n공약 ")) + NullDash(currentInfo.bidLabel);
         bodyText.fontSize = portrait ? 36 : 24;
+        bodyText.enableAutoSizing = true;
+        bodyText.fontSizeMax = portrait ? 36 : 24;
+        bodyText.fontSizeMin = portrait ? 20 : 14;
         bodyText.alignment = TextAlignmentOptions.Center;
         bodyText.rectTransform.sizeDelta = new Vector2(-24f, portrait ? 54f : 64f);
         Image[] icons = { trumpIcon, mightyIcon, jokerCallIcon, friendCardIcon };

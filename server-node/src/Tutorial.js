@@ -23,7 +23,7 @@ class Tutorial {
   }
 
   snapshot(room) {
-    this.emit(room, 'game_state', this.rooms.publicState(room));
+    this.emit(room, 'game_state', this.rooms.publicState(room, room.tutorial.owner));
     this.emit(room, 'your_hand', { cards: room.players[0].hand, canDealMiss: false });
   }
 

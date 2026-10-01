@@ -112,3 +112,28 @@ assert.strictEqual(rFriend.deltas.A + rFriend.deltas.B + rFriend.deltas.C, -15);
 assert.strictEqual(Object.values(rFriend.deltas).reduce((a, b) => a + b, 0), 0);
 
 console.log("Scoring tests OK");
+
+// IDs, not nickname/seat/bot ownership, define teams. Defender points never leak.
+for (const [type, revealed, id, expectedFriend] of [
+  ['player', true, 'F', 'F'], ['card', true, 'F', 'F'],
+  ['card', false, 'F', null], ['none', true, 'F', null],
+  ['card', true, 'D', null], ['card', true, 'missing', null],
+]) {
+  const testRoom = { ...room, friendType: type, friendRevealed: revealed, friendClientId: id,
+    discardedKitty: [c('kitty', 1)],
+    players: room.players.map(p => ({ ...p, nickname: 'Same name' })).reverse() };
+  const result = Scoring.calculateResult(testRoom);
+  assert.deepEqual(result.declarerTeam.map(p => p.clientId).sort(), expectedFriend ? ['D', 'F'] : ['D']);
+  assert.equal(result.declarerTeamScore, 9 + (expectedFriend ? 6 : 0));
+  assert.equal(result.defenderTeamScore, expectedFriend ? 5 : 11);
+  assert.equal(result.declarerTeamScore + result.defenderTeamScore, 20);
+  assert.equal(result.friendClientId, expectedFriend);
+  assert.equal(Scoring.liveTeamScores(testRoom).declarerTeamScore, result.declarerTeamScore - result.kittyScore);
+  assert.equal(Scoring.liveTeamScores(testRoom, 'D').declarerTeamScore, result.declarerTeamScore);
+  for (const defender of result.defenderTeam) {
+    const copy = structuredClone(testRoom);
+    copy.players.find(p => p.clientId === defender.clientId).wonCards.push(c('extra', 1));
+    assert.equal(Scoring.calculateResult(copy).declarerTeamScore, result.declarerTeamScore);
+  }
+}
+console.log('Team isolation: card/player/no/self/missing friend, duplicate names and shuffled seats passed.');

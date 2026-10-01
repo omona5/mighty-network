@@ -13,6 +13,7 @@ public sealed class TutorialOverlay : MonoBehaviour
     private bool modal;
     private Vector2 lastSize;
     private Canvas hostCanvas;
+    private TMP_SpriteAsset roleSprites;
     public bool IsVisible => root != null && root.activeSelf;
 
     public void Show(string title, string text, string task, bool paused, bool complete,
@@ -24,9 +25,9 @@ public sealed class TutorialOverlay : MonoBehaviour
         root.SetActive(true);
         dim.color = paused ? new Color(0, 0, 0, 0.68f) : Color.clear;
         dim.raycastTarget = paused;
-        heading.text = title;
-        body.text = text;
-        hint.text = task;
+        heading.text = RoleText(title);
+        body.text = RoleText(text);
+        hint.text = RoleText(task);
         body.gameObject.SetActive(paused);
         hint.gameObject.SetActive(!paused);
         confirm.gameObject.SetActive(paused && !complete);
@@ -38,9 +39,13 @@ public sealed class TutorialOverlay : MonoBehaviour
         Layout();
     }
 
-    public void Feedback(string message) { if (hint != null) hint.text = message; }
+    public void Feedback(string message) { if (hint != null) hint.text = RoleText(message); }
     public void Hide() { if (root != null) root.SetActive(false); }
-    private void OnDestroy() { if (root != null) Destroy(root); }
+    private void OnDestroy()
+    {
+        if (root != null) Destroy(root);
+        if (roleSprites != null) { Destroy(roleSprites.material); Destroy(roleSprites); }
+    }
     private void Update()
     {
         if (IsVisible && lastSize != new Vector2(Screen.width, Screen.height)) Layout();
@@ -63,6 +68,7 @@ public sealed class TutorialOverlay : MonoBehaviour
         Color panelColor = MightyTheme.Panel;
         panelColor.a = 1f;
         panel = Box(root.transform, "Lesson", panelColor);
+        CreateRoleSprites();
         heading = Label("Heading", 23, MightyTheme.Accent);
         body = Label("Body", 19, MightyTheme.Ink);
         hint = Label("Task", 17, MightyTheme.Ink);
@@ -78,7 +84,48 @@ public sealed class TutorialOverlay : MonoBehaviour
         t.enableAutoSizing = true;
         t.fontSizeMin = 13; t.fontSizeMax = size;
         t.textWrappingMode = TextWrappingModes.Normal;
+        t.richText = true;
+        t.spriteAsset = roleSprites;
         return t;
+    }
+
+    private string RoleText(string text)
+    {
+        string value = L10n.Text(text) ?? "";
+        if (roleSprites == null) return value;
+        // Inline glyphs wrap and scale with the sentence in either language.
+        return System.Text.RegularExpressions.Regex.Replace(value,
+            "주공|(?<!노)프렌드|프랜드|\\b[Dd]eclarer\\b|\\b[Ff]riend\\b", match =>
+            "<sprite index=" + ((match.Value == "주공" || match.Value.ToLowerInvariant() == "declarer") ? "0" : "1")
+                + ">" + match.Value);
+    }
+
+    private void CreateRoleSprites()
+    {
+        var slices = new[] { IconSpriteAtlas.GetDeclarer(), IconSpriteAtlas.GetFriend() };
+        if (!slices[0].IsValid || !slices[1].IsValid) return;
+        var defaultSprites = TMP_Settings.defaultSpriteAsset;
+        if (defaultSprites == null || defaultSprites.material == null) return;
+        // Clone a current-format asset: newly created TMP assets have an empty
+        // version and trigger the legacy upgrader before glyphs can be added.
+        roleSprites = Instantiate(defaultSprites);
+        roleSprites.spriteCharacterTable.Clear();
+        roleSprites.spriteGlyphTable.Clear();
+        roleSprites.spriteSheet = slices[0].tex;
+        // TMP's default sprite material retains the sprite shader in WebGL builds.
+        roleSprites.material = new Material(defaultSprites.material);
+        roleSprites.material.mainTexture = slices[0].tex;
+        for (int i = 0; i < slices.Length; i++)
+        {
+            Rect r = slices[i].sprite.rect;
+            var glyph = new TMP_SpriteGlyph((uint)i,
+                new UnityEngine.TextCore.GlyphMetrics(r.width, r.height, 0, r.height * 0.85f, r.width),
+                new UnityEngine.TextCore.GlyphRect((int)r.x, (int)r.y, (int)r.width, (int)r.height), 1, 0);
+            roleSprites.spriteGlyphTable.Add(glyph);
+            roleSprites.spriteCharacterTable.Add(new TMP_SpriteCharacter((uint)(0xE000 + i), glyph)
+                { name = i == 0 ? "declarer" : "friend", scale = 1 });
+        }
+        roleSprites.UpdateLookupTables();
     }
 
     private UnityEngine.UI.Button Button(string name, string text)

@@ -814,6 +814,22 @@ MonoBehaviour:
     m_Localized: No
     m_Metadata:
       m_Items: []
+  - m_Id: 4321347998031872
+    m_Localized: Cancel Ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4690287722995712
+    m_Localized: ' (discarded {0})'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4690287752355840
+    m_Localized: 'Discarded: {0} pts (included in declarer team total)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4690287752355841
+    m_Localized: ' / needed '
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

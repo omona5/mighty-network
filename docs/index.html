@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <base href="./">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>mighty-network-unity</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #231f20; }
+    #unity-canvas { display: block; width: 100%; height: 100%; }
+    #status { position: fixed; inset: 45% 10% auto; text-align: center; color: white; font: 16px sans-serif; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="status">Loading…</div>
+  <script>
+    const canvas = document.getElementById('unity-canvas');
+    const status = document.getElementById('status');
+    const config = {
+      dataUrl: 'Build/078d6163cc9f6ff3545dcbf557051900.data.unityweb',
+      frameworkUrl: 'Build/a62cf6f042b17a51cb3013f6736f8225.framework.js.unityweb',
+      codeUrl: 'Build/bf175aa7824b08b18b29428526ff7d8a.wasm.unityweb',
+      streamingAssetsUrl: new URL('StreamingAssets', document.baseURI).href,
+      companyName: "DefaultCompany",
+      productName: "mighty-network-unity",
+      productVersion: "1.0",
+      matchWebGLToCanvasSize: true
+    };
+    const script = document.createElement('script');
+    script.src = 'Build/9931bbbe516847add291310988d0bdaa.loader.js';
+    script.onerror = () => { status.textContent = '게임 파일을 불러오지 못했습니다. 새로고침해 주세요.'; };
+    script.onload = () => createUnityInstance(canvas, config, progress => {
+      status.textContent = 'Loading ' + Math.round(progress * 100) + '%';
+    }).then(() => {
+      status.remove();
+      canvas.focus();
+    }).catch(error => { status.textContent = String(error); });
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>

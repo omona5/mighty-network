@@ -12,16 +12,8 @@ function scoreOfCards(cards) {
   return cards.reduce((sum, c) => sum + (c && c.point ? c.point : 0), 0);
 }
 
-/**
- * 한 판 결과 계산.
- * @param {object} room
- * @returns {object} game_finished 페이로드
- */
-function calculateResult(room) {
-  const players = room.players || [];
-  const declarerId = room.declarerClientId;
-  const targetScore = room.targetScore || 13;
-
+// One public team identity for scoring and client role badges.
+function resolvedFriendId(room) {
   // 프렌드 확정: 공개됐으면 사용. 카드 프렌드가 끝까지 안 나왔으면 주공 단독.
   let friendId = null;
   if (room.friendType === "player" && room.friendClientId) {
@@ -32,12 +24,22 @@ function calculateResult(room) {
     friendId = null;
   }
   // 주공 자신 = 프렌드면 단독으로 취급
-  if (friendId === declarerId) friendId = null;
+  if (friendId === room.declarerClientId) friendId = null;
+  return (room.players || []).some(p => p.clientId === friendId) ? friendId : null;
+}
+
+/** Calculate the game_finished payload, including each player's scoring role. */
+function calculateResult(room) {
+  const players = room.players || [];
+  const declarerId = room.declarerClientId;
+  const targetScore = room.targetScore || 13;
+  const friendId = resolvedFriendId(room);
 
   const playerScores = players.map((p) => ({
     clientId: p.clientId,
     nickname: p.nickname,
     isBot: !!p.isBot,
+    role: p.clientId === declarerId ? "declarer" : p.clientId === friendId ? "friend" : "defender",
     score: scoreOfCards(p.wonCards),
     trickCount: p.wonCards ? Math.floor(p.wonCards.length / players.length) : 0,
   }));
@@ -127,6 +129,7 @@ function calculateResult(room) {
     kittyScore,
     declarerNickname: declarer ? declarer.nickname : null,
     friendNickname: friend ? friend.nickname : null,
+    friendClientId: friendId,
     friendType: room.friendType || null,
     friendCardId: room.friendType === "card" ? room.friendCardId : null,
     friendRevealed: !!room.friendRevealed,
@@ -169,24 +172,31 @@ function applySessionScores(room, result) {
 }
 
 /**
- * 진행 중 점수(공개용). 프렌드 미공개면 주공 단독으로 계산.
+ * 진행 중에는 버린패 점수를 주공에게만 공개한다. 종료 시 모두에게 합산 공개.
+ * viewerClientId 생략은 관전자와 동일하며 비공개 정보를 포함하지 않는다.
  */
-function liveTeamScores(room) {
+function liveTeamScores(room, viewerClientId) {
   if (!room || !room.declarerClientId) {
-    return { declarerTeamScore: 0, defenderTeamScore: 0, kittyScore: 0, pointsNeeded: null };
+    return { declarerTeamScore: 0, defenderTeamScore: 0, pointsNeeded: null };
   }
   const result = calculateResult(room);
-  const pointsNeeded = Math.max(0, result.targetScore - result.declarerTeamScore);
+  const finished = room.status === "finished";
+  const canSeeKitty = finished || viewerClientId === room.declarerClientId;
+  const kittyScore = finished ? result.kittyScore : scoreOfCards(room.discardedKitty || []);
+  const declarerTeamScore = result.declarerTeamScore - result.kittyScore
+    + (canSeeKitty ? kittyScore : 0);
+  const pointsNeeded = Math.max(0, result.targetScore - declarerTeamScore);
   return {
-    declarerTeamScore: result.declarerTeamScore,
+    declarerTeamScore,
     defenderTeamScore: result.defenderTeamScore,
-    kittyScore: result.kittyScore,
+    ...(canSeeKitty ? { kittyScore } : {}),
     pointsNeeded,
     targetScore: result.targetScore,
   };
 }
 
 module.exports = {
+  resolvedFriendId,
   scoreOfCards,
   calculateResult,
   applySessionScores,

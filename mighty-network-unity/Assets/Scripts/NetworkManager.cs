@@ -2268,27 +2268,17 @@ public partial class NetworkManager : MonoBehaviour
     }
 
     // 마이티 공개 전: 주공 개인 점수만 / 공개 후: 주공팀 합산(서버 live)
-    private static string FormatDeclarerTeamScoreHud(GameState state)
+    private string FormatDeclarerTeamScoreHud(GameState state)
     {
         if (state == null) return null;
         string st = state.status;
         if (st != "playing" && st != "finished" && st != "exchanging_kitty" && st != "choosing_friend")
             return null;
 
-        if (!state.mightyRevealed)
-        {
-            if (state.players == null || string.IsNullOrEmpty(state.declarerClientId))
-                return L10n.Text("0점");
-            for (int i = 0; i < state.players.Length; i++)
-            {
-                PlayerInfo p = state.players[i];
-                if (p != null && p.clientId == state.declarerClientId)
-                    return p.score + L10n.Text("점");
-            }
-            return L10n.Text("0점");
-        }
-
-        return state.declarerTeamScore + L10n.Text("점");
+        string score = state.declarerTeamScore + L10n.Text("점");
+        if (st != "finished" && state.declarerClientId == myClientId && state.kittyScore > 0)
+            score += string.Format(L10n.Text(" (버린패 {0})"), state.kittyScore);
+        return score;
     }
 
     private static string FormatBidHud(GameState state)
@@ -2403,12 +2393,9 @@ public partial class NetworkManager : MonoBehaviour
     {
         if (p == null || state == null || !state.friendChosen) return false;
         if (state.friendType == "none") return false;
-        if (state.friendType == "player")
-            return !string.IsNullOrEmpty(state.friendNickname) && p.nickname == state.friendNickname;
-        // 카드 프렌드: 공개된 뒤에만 보라 F
-        return state.friendRevealed
-            && !string.IsNullOrEmpty(state.friendNickname)
-            && p.nickname == state.friendNickname;
+        return (state.friendType == "player" || state.friendRevealed)
+            && !string.IsNullOrEmpty(state.friendClientId)
+            && p.clientId == state.friendClientId;
     }
 
     // 미공개 카드 프렌드 — 본인 손패에 지정 카드가 있을 때만 회색 F
@@ -2767,7 +2754,7 @@ public partial class NetworkManager : MonoBehaviour
                 {
                     GUILayout.Label("  " + (p.isHost ? L10n.Text("[방장] ") : "") + (p.isBot ? L10n.Text("[봇] ") : "") + p.nickname
                         + L10n.Text("  누적 ") + p.sessionScore
-                        + (p.isReady ? L10n.Text(" [준비]") : L10n.Text(" [대기]"))
+                        + (p.isReady ? " ●" : " ○")
                         + DisconnectLabel(p)
                         + (p.clientId == myClientId ? L10n.Text("  <- 나") : ""));
                 }
@@ -2781,7 +2768,7 @@ public partial class NetworkManager : MonoBehaviour
         if (IAmHost())
         {
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(compactUi ? L10n.Text("준비") : L10n.Text("준비 / 취소"), GUILayout.Width(col), GUILayout.Height(btnH)))
+            if (GUILayout.Button(ReadyButtonLabel(), GUILayout.Width(col), GUILayout.Height(btnH)))
                 ToggleReady();
             GUILayout.Space(gap);
             GUI.enabled = currentState != null && currentState.canStart;
@@ -2799,7 +2786,7 @@ public partial class NetworkManager : MonoBehaviour
         }
         else
         {
-            if (GUILayout.Button(compactUi ? L10n.Text("준비") : L10n.Text("준비 / 취소"), GUILayout.Width(col * 2f + gap), GUILayout.Height(btnH)))
+            if (GUILayout.Button(ReadyButtonLabel(), GUILayout.Width(col * 2f + gap), GUILayout.Height(btnH)))
                 ToggleReady();
         }
 
@@ -2808,6 +2795,15 @@ public partial class NetworkManager : MonoBehaviour
         if (GUILayout.Button(L10n.Text("메뉴"), GUILayout.Width(col), GUILayout.Height(btnH)))
             OpenGameMenu();
         GUILayout.EndHorizontal();
+    }
+
+    private string ReadyButtonLabel()
+    {
+        bool ready = false;
+        if (currentState != null && currentState.players != null)
+            foreach (var player in currentState.players)
+                if (player.clientId == myClientId) { ready = player.isReady; break; }
+        return (ready ? "● " : "○ ") + L10n.Text(ready ? "준비 취소" : "준비");
     }
 
     private GUIStyle WaitingPlayerStyle()
@@ -3065,8 +3061,8 @@ public partial class NetworkManager : MonoBehaviour
         GUILayout.Label(L10n.Text("주공: ") + r.declarerNickname
             + (string.IsNullOrEmpty(r.friendNickname) ? L10n.Text(" (단독)") : L10n.Text(" + 프렌드 ") + r.friendNickname));
         GUILayout.Label(L10n.Text("결과 — 주공팀 ") + r.declarerTeamScore + L10n.Text("점")
-            + L10n.Text("  |  수비팀 ") + r.defenderTeamScore + L10n.Text("점")
-            + L10n.Text("  |  바닥패 ") + r.kittyScore + L10n.Text("점"));
+            + L10n.Text("  |  수비팀 ") + r.defenderTeamScore + L10n.Text("점"));
+        GUILayout.Label(string.Format(L10n.Text("버린패 {0}점 (주공팀 합계에 포함)"), r.kittyScore));
         if (r.winner == "declarer")
             GUILayout.Label(L10n.Text("(목표 ") + r.targetScore + L10n.Text("점 달성)"));
         else
@@ -3128,7 +3124,7 @@ public partial class NetworkManager : MonoBehaviour
         {
             // 기루다/마이티/조커콜/주공/프렌드는 좌상단 GameRuleHud
             GUILayout.Label(L10n.Text("★ 주공팀 목표: ") + currentState.targetScore + L10n.Text("점")
-                + L10n.Text("  (현재 ") + currentState.declarerTeamScore + L10n.Text("점 / 남은 ")
+                + L10n.Text("  (현재 ") + FormatDeclarerTeamScoreHud(currentState) + L10n.Text(" / 남은 ")
                 + currentState.pointsNeeded + L10n.Text("점)"));
             GUILayout.Label(L10n.Text("트릭 ") + currentState.trickNumber + " / 10");
 

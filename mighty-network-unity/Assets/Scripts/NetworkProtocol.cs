@@ -43,7 +43,7 @@ public partial class NetworkManager
     {
         public string winner; public string winnerLabel; public int targetScore;
         public int declarerTeamScore; public int defenderTeamScore; public int kittyScore;
-        public string declarerNickname; public string friendNickname;
+        public string declarerNickname; public string friendNickname; public string friendClientId;
         public string friendType; public string friendCardId; public bool friendRevealed;
         public string trumpSuit; public bool noTrump;
         public bool isRun; public bool isBackrun; public int multiplier;
@@ -75,7 +75,7 @@ public partial class NetworkManager
     }
 
     [System.Serializable] private class HighestBid { public string nickname; public int targetScore; public string trumpSuit; public bool noTrump; }
-    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public double reconnectGraceMs; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public bool trickComplete; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public bool jokerPlayed; public bool mightyRevealed; public string mightyPlayerNickname; public int minBid; public int nextMinBid; public string currentBidderClientId; public string currentBidderNickname; public string[] passedClientIds; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public int kittyCount; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
+    [System.Serializable] private class GameState { public string roomId; public string status; public string hostClientId; public bool canStart; public double reconnectGraceMs; public string currentTurnClientId; public string currentTurnNickname; public string lastTrickWinnerNickname; public bool trickComplete; public int trickNumber; public string trumpSuit; public bool noTrump; public string mightyCardId; public string jokerCallCardId; public bool jokerPlayed; public bool mightyRevealed; public string mightyPlayerNickname; public int minBid; public int nextMinBid; public string currentBidderClientId; public string currentBidderNickname; public string[] passedClientIds; public HighestBid highestBid; public string declarerClientId; public string declarerNickname; public int targetScore; public int declarerTeamScore; public int defenderTeamScore; public int kittyScore; public int pointsNeeded; public bool friendChosen; public string friendType; public string friendCardId; public bool friendRevealed; public string friendNickname; public string friendClientId; public int kittyCount; public TableCardInfo[] tableCards; public PlayerInfo[] players; }
     [System.Serializable] private class GameStateMsg { public string type; public GameState data; }
     [System.Serializable] private class BidResultData { public string declarerNickname; public int targetScore; public string trumpSuit; public bool noTrump; }
     [System.Serializable] private class BidResultMsg { public string type; public BidResultData data; }

@@ -30,6 +30,10 @@ const PORT = Number.isInteger(configuredPort) && configuredPort > 0
 
 let nextClientId = 1;
 const rooms = new RoomManager();
+const configuredTurnMs = Number(process.env.TURN_TIMEOUT_MS);
+const actionTimer = new (require('./src/ActionTimer'))(id => rooms.getRoom(id), {
+  humanDelay: Number.isFinite(configuredTurnMs) && configuredTurnMs >= 100 ? configuredTurnMs : 30000,
+});
 const tutorial = new (require('./src/Tutorial'))(rooms, send);
 
 // 1) HTTP 서버: 테스트 페이지 + WebGL 정적 파일
@@ -105,7 +109,9 @@ function send(ws, type, data) {
 function broadcast(room, type, data) {
   for (const p of room.players) {
     if (p.ws && p.ws.readyState === p.ws.OPEN) {
-      p.ws.send(JSON.stringify({ type, data }));
+      // Never broadcast the declarer's private discarded-card score to peers.
+      const payload = type === "game_state" ? rooms.publicState(room, p.clientId) : data;
+      p.ws.send(JSON.stringify({ type, data: payload }));
     }
   }
 }
@@ -299,7 +305,7 @@ wss.on("connection", (ws) => {
         if (room.status === "finished" && room.lastResult) {
           send(ws, "game_finished", room.lastResult);
         }
-        maybeBotBid(room);
+        resumeBotActions(room);
         break;
       }
 
@@ -627,12 +633,10 @@ function maybeBotDiscardKitty(room) {
   if (room && room.tutorial) return;
   if (!room || room.status !== "exchanging_kitty") return;
   const decl = room.players.find((p) => p.clientId === room.declarerClientId);
-  if (!rooms.isBotControlled(decl)) return;
-  setTimeout(() => {
+  actionTimer.arm(room, decl, BOT_KITTY_DELAY, () => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "exchanging_kitty") return;
     const d = r.players.find((p) => p.clientId === r.declarerClientId);
-    if (!rooms.isBotControlled(d)) return; // 재접속했으면 중단
     const ids = rooms.botPickDiscardIds(r);
     const result = rooms.discardKitty(r, r.declarerClientId, ids);
     if (result.error) {
@@ -641,12 +645,12 @@ function maybeBotDiscardKitty(room) {
     }
     console.log("[bot] 바닥패 버림:", d.nickname, ids.join(","));
     broadcast(r, "kitty_discarded", { ok: true });
+    sendHandsToHumans(r);
     beginFriendSelection(r);
-  }, BOT_KITTY_DELAY);
+  });
 }
 
 // 09단계: 입찰 차례가 봇(또는 끊긴 사람)이면 잠시 후 자동
-const pendingBotBids = new WeakSet();
 function beginDealAnimationWait(room) {
   room.dealId = (room.dealId || 0) + 1;
   const dealId = room.dealId;
@@ -671,18 +675,14 @@ function maybeBotBid(room) {
   if (waitingForDealAnimation(room)) return;
   const bidder = rooms.currentBidder(room);
   const dealId = room.dealId;
-  if (!rooms.isBotControlled(bidder) || pendingBotBids.has(room)) return;
-  pendingBotBids.add(room);
-  setTimeout(() => {
-    pendingBotBids.delete(room);
+  actionTimer.arm(room, bidder, 1000 + Math.floor(Math.random() * 1001), () => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "bidding") return;
     if (r.dealId !== dealId || waitingForDealAnimation(r)) { maybeBotBid(r); return; }
     const b = rooms.currentBidder(r);
     if (b !== bidder) { maybeBotBid(r); return; }
-    if (!rooms.isBotControlled(b)) return;
     // 손패 평가로 공약할지 패스할지 결정
-    const decision = rooms.botDecideBid(r, b);
+    const decision = rooms.isBotControlled(b) ? rooms.botDecideBid(r, b) : null;
     let result;
     if (decision) {
       result = rooms.placeBid(r, b.clientId, decision);
@@ -698,7 +698,7 @@ function maybeBotBid(room) {
     }
     if (result.error) return;
     handleBidStep(r, result.complete);
-  }, 1000 + Math.floor(Math.random() * 1001));
+  });
 }
 
 // 09단계: 주공이 봇(또는 끊긴 사람)이면 자동 프렌드 지정
@@ -706,12 +706,10 @@ function maybeBotChooseFriend(room) {
   if (room && room.tutorial) return;
   if (!room || room.status !== "choosing_friend") return;
   const decl = room.players.find((p) => p.clientId === room.declarerClientId);
-  if (!rooms.isBotControlled(decl)) return;
-  setTimeout(() => {
+  actionTimer.arm(room, decl, BOT_BID_DELAY, () => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "choosing_friend") return;
     const d = r.players.find((p) => p.clientId === r.declarerClientId);
-    if (!rooms.isBotControlled(d)) return;
     const cardId = rooms.botFriendCardId(r);
     rooms.chooseFriend(r, r.declarerClientId, { friendCardId: cardId });
     console.log("[bot] 프렌드 지정:", d.nickname, cardId);
@@ -721,7 +719,7 @@ function maybeBotChooseFriend(room) {
       friendCardId: cardId,
     });
     startPlaying(r);
-  }, BOT_BID_DELAY);
+  });
 }
 
 // 09단계: 프렌드 선택 완료 → 본게임 시작
@@ -735,6 +733,7 @@ function startPlaying(room) {
 
 // 10단계: 한 판 종료 처리
 function finishAndBroadcast(room) {
+  if (!rooms.isHandOver(room)) return;
   const result = rooms.finishGame(room);
   console.log(
     "[finish] room", room.roomId,
@@ -758,14 +757,13 @@ function maybeBotPlay(room, delayMs) {
   if (room && room.tutorial) return;
   if (!room || room.status !== "playing") return;
   const player = rooms.currentTurnPlayer(room);
-  if (!rooms.isBotControlled(player)) return;
+  if (rooms.isHandOver(room)) return;
 
   const wait = delayMs != null ? delayMs : BOT_PLAY_DELAY;
-  setTimeout(() => {
+  actionTimer.arm(room, player, wait, () => {
     const r = rooms.getRoom(room.roomId);
     if (!r || r.status !== "playing") return;
     const bot = rooms.currentTurnPlayer(r);
-    if (!rooms.isBotControlled(bot)) return;
 
     const pick = rooms.botPickPlay(r, bot);
     if (!pick || !pick.cardId) return;
@@ -785,6 +783,7 @@ function maybeBotPlay(room, delayMs) {
     if (result.trickResult) {
       console.log("[trick] 승자:", result.trickResult.winnerNickname);
     }
+    sendHandsToHumans(r);
     broadcast(r, "game_state", rooms.publicState(r));
     if (result.trickResult && result.trickResult.handOver) {
       setTimeout(() => {
@@ -794,7 +793,7 @@ function maybeBotPlay(room, delayMs) {
     } else {
       maybeBotPlay(r, result.trickResult ? TRICK_RESOLVE_DELAY : undefined);
     }
-  }, wait);
+  });
 }
 
 // 끊김/재접속 직후 현재 단계에 맞는 봇 행동을 재개

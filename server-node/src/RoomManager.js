@@ -652,11 +652,9 @@ class RoomManager {
   playCard(room, clientId, cardId, options = {}) {
     if (room.status !== "playing") return { error: "게임 중이 아닙니다." };
 
-    // 직전 트릭이 완성된 상태면(테이블에 5장) 새 리드 전에 비운다.
-    if (room.trickComplete) {
-      room.tableCards = [];
-      room.trickComplete = false;
-    }
+    if (this.isHandOver(room)) return { error: "이미 마지막 트릭이 끝났습니다." };
+    // Validate against an empty next trick without mutating the completed one.
+    const tableCards = room.trickComplete ? [] : room.tableCards;
 
     const player = room.players[room.currentTurnIndex];
     if (!player || player.clientId !== clientId) {
@@ -668,7 +666,7 @@ class RoomManager {
 
     // 08단계: 따라내기 / 조커콜 강제 검증
     const card = hand[idx];
-    const isLead = room.tableCards.length === 0;
+    const isLead = tableCards.length === 0;
     const cfg = room.ruleConfig;
 
     let declaredSuit = null;
@@ -689,18 +687,20 @@ class RoomManager {
     const legal = RuleEngine.canPlayCard({
       playerHand: hand,
       card,
-      tableCards: room.tableCards,
+      tableCards,
       ruleConfig: cfg,
     });
     if (!legal) {
-      const lead = room.tableCards[0];
+      const lead = tableCards[0];
       if (lead && RuleEngine.isJokerCallActivated(lead, cfg)) {
         return { error: "조커콜! 조커를 내야 합니다. (마이티로 막을 수 있음)" };
       }
-      const leadSuit = RuleEngine.leadSuitOf(room.tableCards, cfg);
+      const leadSuit = RuleEngine.leadSuitOf(tableCards, cfg);
       return { error: "리드 무늬(" + leadSuit + ")를 따라내야 합니다." };
     }
 
+    room.tableCards = tableCards;
+    room.trickComplete = false;
     hand.splice(idx, 1); // 검증 통과 후 실제 제거
     sortHand(hand);
     const entry = {
@@ -767,7 +767,8 @@ class RoomManager {
 
   // 10트릭 완료 여부
   isHandOver(room) {
-    return room.status === "playing" && room.trickComplete && room.trickNumber >= NUM_TRICKS;
+    return room.status === "playing" && room.trickComplete
+      && room.players.every(p => p.hand && p.hand.length === 0);
   }
 
   // 한 판 종료: 점수 계산 + 세션 누적 정산 + finished 상태
@@ -1046,16 +1047,14 @@ class RoomManager {
   }
 
   // 모두에게 공개 가능한 방 상태 (비밀 정보 제외: password, reconnectToken, ws)
-  publicState(room) {
+  publicState(room, viewerClientId) {
     const turnP = this.currentTurnPlayer(room);
     const bidder = this.currentBidder(room);
     const declarer = room.declarerClientId
       ? room.players.find((p) => p.clientId === room.declarerClientId)
       : null;
-    const friend =
-      room.friendRevealed && room.friendClientId
-        ? room.players.find((p) => p.clientId === room.friendClientId)
-        : null;
+    const friendId = Scoring.resolvedFriendId(room);
+    const friend = room.players.find(p => p.clientId === friendId);
     return {
       roomId: room.roomId,
       status: room.status,
@@ -1104,14 +1103,15 @@ class RoomManager {
       friendCardId: room.friendType === "card" ? room.friendCardId : null,
       friendRevealed: !!room.friendRevealed,
       friendNickname: friend ? friend.nickname : null,
-      // 진행 중 주공팀 점수 / 승리까지 남은 점수 (playing·finished)
-      ...(room.status === "playing" || room.status === "finished"
+      friendClientId: friendId,
+      // 수신자별 점수: 버린패와 그 점수로 역산 가능한 합계/남은 점수도 보호한다.
+      ...(["exchanging_kitty", "choosing_friend", "playing", "finished"].includes(room.status)
         ? (() => {
-            const live = Scoring.liveTeamScores(room);
+            const live = Scoring.liveTeamScores(room, viewerClientId);
             return {
               declarerTeamScore: live.declarerTeamScore,
               defenderTeamScore: live.defenderTeamScore,
-              kittyScore: live.kittyScore,
+              ...(live.kittyScore !== undefined ? { kittyScore: live.kittyScore } : {}),
               pointsNeeded: live.pointsNeeded,
             };
           })()
