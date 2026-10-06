@@ -17,6 +17,7 @@ rooms.fillWithBots(room);
 assert.strictEqual(room.players.length, 5);
 
 // soft disconnect → 봇 대타
+room.status = "playing";
 const soft = rooms.softDisconnect("C1");
 assert.ok(soft);
 assert.strictEqual(add.player.connected, false);
@@ -33,7 +34,7 @@ assert.strictEqual(add.player.connected, true);
 assert.ok(!rooms.isBotControlled(add.player) || add.player.isBot === false);
 assert.strictEqual(rooms.isBotControlled(add.player), false);
 
-// 유예 만료 (대기중) → 제거
+// 게임 중 유예 만료 → 재접속 불가
 rooms.softDisconnect("C1");
 add.player.disconnectedAt = Date.now() - RECONNECT_GRACE_MS - 1;
 const affected = rooms.reclaimExpiredSeats();
@@ -41,6 +42,24 @@ assert.ok(affected.length >= 0);
 assert.ok(!rooms.findByReconnectToken(token));
 
 console.log("reconnect tests OK");
+
+// Waiting-room disconnect removes the seat immediately and transfers hosting.
+const lobby = rooms.createRoom(null);
+const host = rooms.addPlayer(lobby, "Host", fakeWs("lobby-host")).player;
+const guest = rooms.addPlayer(lobby, "Guest", fakeWs("lobby-guest")).player;
+rooms.fillWithBots(lobby);
+assert.strictEqual(rooms.softDisconnect(host.clientId), lobby);
+assert.ok(!lobby.players.includes(host));
+assert.strictEqual(lobby.hostClientId, guest.clientId);
+assert.strictEqual(lobby.players.length, 5);
+assert.strictEqual(rooms.findByReconnectToken(host.reconnectToken), null);
+rooms.softDisconnect(guest.clientId);
+assert.strictEqual(rooms.getRoom(lobby.roomId), undefined);
+assert.strictEqual(rooms.findByReconnectToken(guest.reconnectToken), null);
+
+const electionRoom = rooms.createRoom(null);
+electionRoom.electionUntil = Date.now() + 4000;
+assert.match(rooms.discardKitty(electionRoom, "any", []).error, /당선/);
 
 // Intentional exits delete bot-only rooms immediately, even during a game.
 for (const status of ["waiting", "bidding", "playing", "finished"]) {

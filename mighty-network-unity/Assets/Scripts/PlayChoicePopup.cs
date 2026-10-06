@@ -39,7 +39,7 @@ public class PlayChoicePopup : MonoBehaviour
         dim.raycastTarget = true;
         Button dimBtn = overlay.GetComponent<Button>();
         dimBtn.transition = Selectable.Transition.None;
-        dimBtn.onClick.AddListener(Cancel);
+        dimBtn.onClick.AddListener(() => { Sfx.UiClick(); Cancel(); });
 
         group = overlay.GetComponent<CanvasGroup>();
         group.blocksRaycasts = true;
@@ -211,7 +211,7 @@ public class PlayChoicePopup : MonoBehaviour
         t.fontSizeMax = 24;
         Button btn = go.GetComponent<Button>();
         btn.targetGraphic = img;
-        btn.onClick.AddListener(() => { if (click != null) click(); });
+        btn.onClick.AddListener(() => { Sfx.UiClick(); if (click != null) click(); });
         return btn;
     }
 
@@ -227,6 +227,6 @@ public class PlayChoicePopup : MonoBehaviour
         le.minHeight = size.y;
         Button btn = img.gameObject.AddComponent<Button>();
         btn.targetGraphic = img;
-        btn.onClick.AddListener(() => { if (click != null) click(); });
+        btn.onClick.AddListener(() => { Sfx.UiClick(); if (click != null) click(); });
     }
 }

@@ -33,9 +33,9 @@ public sealed class TutorialOverlay : MonoBehaviour
         confirm.gameObject.SetActive(paused && !complete);
         restart.gameObject.SetActive(paused);
         foreach (var button in new[] { confirm, restart, exit }) button.onClick.RemoveAllListeners();
-        confirm.onClick.AddListener(acknowledge);
-        restart.onClick.AddListener(retry);
-        exit.onClick.AddListener(leave);
+        confirm.onClick.AddListener(() => { Sfx.UiClick(); acknowledge?.Invoke(); });
+        restart.onClick.AddListener(() => { Sfx.UiClick(); retry?.Invoke(); });
+        exit.onClick.AddListener(() => { Sfx.UiClick(); leave?.Invoke(); });
         Layout();
     }
 
@@ -133,7 +133,7 @@ public sealed class TutorialOverlay : MonoBehaviour
         var rt = Box(panel, name, MightyTheme.Table);
         var button = rt.gameObject.AddComponent<UnityEngine.UI.Button>();
         var label = UiTmp.Create(rt, "Label", 17, TextAnchor.MiddleCenter, MightyTheme.Ink);
-        label.text = text; label.raycastTarget = false;
+        LocalizedLabel.Bind(label, text); label.raycastTarget = false;
         label.rectTransform.anchorMin = Vector2.zero; label.rectTransform.anchorMax = Vector2.one;
         label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
         return button;

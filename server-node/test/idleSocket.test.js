@@ -60,7 +60,19 @@ const WebSocket = require('ws');
     host.send('start_game');
     await host.wait('game_state', s => s.status === 'bidding');
     host.send('bid', { targetScore: 13, trumpSuit: 'HEART' });
-    await host.wait('game_state', s => s.status === 'playing');
+    const playing = await host.wait('game_state', s => s.status === 'playing');
+    const introStarted = Date.now();
+    // Real room broadcast: server chooses the identity and echoes to all five.
+    host.send('send_emote', { index: 7, clientId: 'spoofed' });
+    for (const c of clients) {
+      const emote = await c.wait('player_emote');
+      assert.deepEqual(emote, { index: 7, clientId: playing.hostClientId });
+    }
+    host.send('send_emote', { index: 1 });
+    host.send('send_emote', { index: 8 });
+    host.send('ping_from_client');
+    await host.wait('pong_from_server');
+    assert.equal(host.messages.filter(m => m.type === 'player_emote').length, 0);
     const dropped = clients.splice(2, 1)[0];
     dropped.ws.terminate();
     await new Promise(resolve => dropped.ws.once('close', resolve));
@@ -69,6 +81,9 @@ const WebSocket = require('ws');
     await restored.wait('reconnected');
     // Remain connected, answering pings but making no gameplay input, as in a
     // background tab. All bidding/discard/friend/play decisions must progress.
+    const firstPlay = await host.wait('game_state', s => s.status === 'playing' && s.tableCards?.length > 0);
+    assert.ok(Date.now() - introStarted >= 4000, 'automatic players must wait for the 4-second intro');
+    assert.ok(firstPlay.tableCards.length > 0, 'automatic play resumes after the intro');
     const result = await host.wait('game_finished');
     assert.equal(result.declarerTeamScore + result.defenderTeamScore, 20);
     for (const c of clients.slice(1)) assert.deepEqual(await c.wait('game_finished'), result);

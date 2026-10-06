@@ -9,7 +9,7 @@ public static class IconGui
     public static bool Button(IconSpriteAtlas.Slice slice, float w, float h)
     {
         Rect r = GUILayoutUtility.GetRect(w, h, GUILayout.Width(w), GUILayout.Height(h));
-        bool hit = GUI.Button(r, GUIContent.none);
+        bool hit = UiButton.Rect(r, GUIContent.none);
         Draw(r, slice);
         return hit;
     }

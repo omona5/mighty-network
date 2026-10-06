@@ -6,20 +6,22 @@ public static class MightyGuiSkin
     private static GUISkin skin;
     private static Font cachedFont;
     private static int cachedFontSize;
+    private static bool cachedCompact;
 
-    public static GUISkin Get(Font font, int fontSize)
+    public static GUISkin Get(Font font, int fontSize, bool compact = false)
     {
         if (skin == null || skin.button.normal.background == null
-            || cachedFont != font || cachedFontSize != fontSize)
-            Build(font, fontSize);
+            || cachedFont != font || cachedFontSize != fontSize || cachedCompact != compact)
+            Build(font, fontSize, compact);
         return skin;
     }
 
-    private static void Build(Font font, int fontSize)
+    private static void Build(Font font, int fontSize, bool compact)
     {
         skin = Object.Instantiate(GUI.skin);
         cachedFont = font;
         cachedFontSize = fontSize;
+        cachedCompact = compact;
 
         skin.font = font;
         skin.label = TextStyle(MightyTheme.Ink, font, fontSize, TextAnchor.MiddleLeft);
@@ -27,6 +29,14 @@ public static class MightyGuiSkin
         skin.button = ButtonStyle(font, fontSize);
         skin.textField = FieldStyle(font, fontSize);
         skin.textArea = FieldStyle(font, fontSize);
+        if (compact)
+        {
+            skin.box.padding = new RectOffset(12, 12, 10, 10);
+            skin.label.padding = new RectOffset(4, 4, 1, 1);
+            foreach (GUIStyle style in new[] { skin.label, skin.button, skin.textField, skin.textArea })
+                style.margin = new RectOffset(0, 0, 2, 2);
+            skin.button.padding = new RectOffset(6, 6, 5, 5);
+        }
         skin.verticalScrollbar = GUI.skin.verticalScrollbar;
         skin.horizontalScrollbar = GUI.skin.horizontalScrollbar;
     }

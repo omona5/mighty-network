@@ -45,6 +45,15 @@ WebGL:    index.html?ws=wss://mighty.example.com
 
 ## WebGL 빌드 체크리스트
 
+### 로딩 진행률과 캐시
+
+- `Responsive` 템플릿의 `loading.js`가 `.data`, `.wasm`, framework의 용량을 합산해 파일 준비 진행률을 표시한다. 다운로드/캐시 읽기가 끝나면 100%와 실행 준비 문구로 전환한다. 실행 준비 시간은 용량 퍼센트에 포함하지 않는다.
+- WebGL 빌드 후 `WebBuildSizes`가 `build-sizes.json`을 자동 생성한다. 배포 시 `index.html`, `loading.js`, `build-sizes.json`, `Build/`, `StreamingAssets/`를 같은 빌드의 파일로 함께 복사한다. GitHub Pages의 기존 상대 경로 base 설정은 유지한다.
+- Unity Data Caching 및 Name Files As Hashes 설정을 유지한다. 로더는 해시 이름 파일에 `immutable`을 사용하고, 고정 이름 data/wasm 파일은 재검증한다. 용량 목록이 없거나 고정 파일명을 쓰는 구빌드는 HEAD의 Content-Length로 용량을 확인한다.
+- Node 정적 서버는 해시 이름 빌드 파일에 1년 캐시를 적용한다. HTML, 용량 목록과 고정 이름 파일은 `no-cache` + ETag/Last-Modified로 재검증하며, 변경이 없으면 본문 없이 304를 반환한다. 서버 코드 배포 후 Node 프로세스를 재시작한다. Nginx가 정적 파일을 직접 제공한다면 같은 정책을 Nginx에도 적용해야 한다.
+- GitHub Pages는 Node 서버를 사용하지 않으므로 HTTP 헤더 정책은 적용되지 않지만, 로더의 Unity 캐시 정책은 적용된다. 캐시 삭제/브라우저 저장 공간 회수 후에는 다시 다운로드할 수 있다.
+- 확인: 개발자 도구 Network에서 Disable cache를 끄고 같은 버전을 재방문한다. 전송량과 UnityCache 로그를 확인한다. 단순히 로딩 화면이 다시 나타난다는 것만으로 재다운로드 여부를 판단하지 않는다.
+
 ### A. Unity에서 빌드
 
 - [ ] File → Build Settings → Platform = **WebGL** → Switch Platform

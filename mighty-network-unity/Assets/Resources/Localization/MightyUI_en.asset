@@ -47,7 +47,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 929013765
-    m_Localized: Tutorial (Coming Soon)
+    m_Localized: Tutorial
     m_Metadata:
       m_Items: []
   - m_Id: 929013766
@@ -828,6 +828,146 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 4690287752355841
     m_Localized: ' / needed '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4690287752355842
+    m_Localized: Which cards are stronger?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4690287752355843
+    m_Localized: 'Basic order: Mighty > Joker > trump > the led suit
+
+
+      Within
+      the same suit: A > K > Q > J > 10 > 9 > ... > 2. A non-trump card of another
+      suit cannot beat the led suit, even with a higher rank.
+
+
+      Hearts are
+      trump this round. The Mighty is always strongest. The Joker loses its power
+      on the first and last tricks and when a Joker Call is active.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019002216448
+    m_Localized: Join Room
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742400
+    m_Localized: Enter the room code to join
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742401
+    m_Localized: Copy Invite Link
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742402
+    m_Localized: 'Invited room: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742403
+    m_Localized: Choose your friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742404
+    m_Localized: Enter a nickname.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742405
+    m_Localized: Enter a room code.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742406
+    m_Localized: Invite link copied.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742407
+    m_Localized: Could not copy. Please copy the link from your browser's address
+      bar.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742408
+    m_Localized: Copying invite link...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742409
+    m_Localized: "Enter a nickname (1\u201312 characters)."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742410
+    m_Localized: Enter a 4-character room code using letters and numbers.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742411
+    m_Localized: Incorrect room password.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742412
+    m_Localized: This game has already started.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742413
+    m_Localized: The room is full (5 players).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742414
+    m_Localized: 'Room not found: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742415
+    m_Localized: Wait for the game introduction to finish before playing.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742416
+    m_Localized: Wait for the election announcement to finish before discarding.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909019056742417
+    m_Localized: Discard 3 (
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6909462298206208
+    m_Localized: Confirm
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7134920700829696
+    m_Localized: 'Before we begin: four key terms'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7134920772132864
+    m_Localized: 'Declarer: The winner of the bidding. They set the trump suit and
+      target score, then choose a friend.
+
+
+      Friend: The declarer''s teammate.
+      When a card is named, its holder is the friend; playing that card reveals their
+      identity.
+
+
+      Mighty: The strongest card. Usually the ace of spades; when
+      spades are trump, it is the ace of diamonds.
+
+
+      Trump: The strongest suit
+      for this round. It beats other suits except the mighty and joker. No-trump
+      has no trump suit.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7134920772132865
+    m_Localized: 'You have a strong hand with many hearts. Now become the declarer
+      and choose your team''s target score and trump suit.
+
+
+      Select 13 points
+      and hearts, then submit your bid. All bots will pass in this practice.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7134920772132866
+    m_Localized: 'The declarer is a bot, with a bid of 13 points and hearts as trump.
+
+
+      The
+      declarer named the ace of spades as the friend card. You hold it, so you are
+      on the same team. Playing it reveals your identity to everyone.'
     m_Metadata:
       m_Items: []
   references:

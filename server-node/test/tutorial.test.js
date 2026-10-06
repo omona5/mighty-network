@@ -18,6 +18,10 @@ action('play_card', { cardId: 'S_A' }); // cannot bypass a lesson
 assert.equal(room.tableCards.length, 0);
 action('tutorial_ack', { revision: -1 });
 step('intro');
+ack(); step('strength');
+assert.equal(room.tableCards.length, 0);
+action('play_card', { cardId: 'S_A' });
+assert.equal(room.tableCards.length, 0);
 ack(); step('team');
 assert.equal(room.tableCards.length, 0);
 ack(); step('follow');
@@ -26,11 +30,19 @@ ack(); step('mighty');
 assert.equal(room.tableCards.length, 4);
 assert.equal(room.friendRevealed, false);
 assert.equal(room.friendClientId, ws.clientId);
+assert.equal(rooms.publicState(room, ws.clientId).friendClientId, null);
+assert.ok(room.players[0].hand.some(c => c.id === room.friendCardId));
 ack();
 action('play_card', { cardId: 'C_3' }); // wrong legal card cannot derail the script
 assert.equal(room.tableCards.length, 4);
 action('play_card', { cardId: 'S_A' }); step('reveal');
 assert.equal(room.friendRevealed, true);
+for (const player of room.players) {
+  const state = rooms.publicState(room, player.clientId);
+  assert.equal(state.friendRevealed, true);
+  assert.equal(state.friendClientId, ws.clientId);
+}
+assert.ok(!room.players[0].hand.some(c => c.id === room.friendCardId));
 assert.equal(room.lastTrickWinner.clientId, ws.clientId);
 ack(); step('call'); ack();
 action('play_card', { cardId: 'C_3', activateJokerCall: false });

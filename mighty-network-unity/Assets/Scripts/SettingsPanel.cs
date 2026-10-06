@@ -171,7 +171,7 @@ public sealed class SettingsPanel : MonoBehaviour
         var rect = Box(parent, name, new Vector2(140, 44), position, MightyTheme.Primary);
         var button = rect.gameObject.AddComponent<UnityEngine.UI.Button>();
         button.targetGraphic = rect.GetComponent<UnityEngine.UI.Image>();
-        button.onClick.AddListener(action);
+        button.onClick.AddListener(() => { Sfx.UiClick(); action(); });
         Label(rect, "Label", source, 18, new Vector2(132, 40), Vector2.zero);
         return button;
     }

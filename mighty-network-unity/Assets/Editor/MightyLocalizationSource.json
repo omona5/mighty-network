@@ -29,8 +29,8 @@
       "en": "Multiplayer"
     },
     {
-      "ko": "튜토리얼 (준비 중)",
-      "en": "Tutorial (Coming Soon)"
+      "ko": "튜토리얼",
+      "en": "Tutorial"
     },
     {
       "ko": "패 모으는 중...",
@@ -760,17 +760,157 @@
       "ko": "타이틀로",
       "en": "Back to Title"
     },
-    {"ko": "효과음", "en": "Sound Effects"},
-    {"ko": "배경음", "en": "Music"},
-    {"ko": "음소거", "en": "Mute"},
-    {"ko": "버릴 카드 3장을 고르세요", "en": "Choose 3 cards to discard"},
-    {"ko": "{0}을 프렌드로 선언하시겠습니까?", "en": "Declare {0} as your friend?"},
-    {"ko": "노프렌드로 선언하시겠습니까?", "en": "Declare no friend?"},
-    {"ko": "네", "en": "Yes"},
-    {"ko": "아니오", "en": "No"},
-    {"ko": "준비 취소", "en": "Cancel Ready"},
-    {"ko": " (버린패 {0})", "en": " (discarded {0})"},
-    {"ko": "버린패 {0}점 (주공팀 합계에 포함)", "en": "Discarded: {0} pts (included in declarer team total)"},
-    {"ko": " / 남은 ", "en": " / needed "}
+    {
+      "ko": "효과음",
+      "en": "Sound Effects"
+    },
+    {
+      "ko": "배경음",
+      "en": "Music"
+    },
+    {
+      "ko": "음소거",
+      "en": "Mute"
+    },
+    {
+      "ko": "버릴 카드 3장을 고르세요",
+      "en": "Choose 3 cards to discard"
+    },
+    {
+      "ko": "{0}을 프렌드로 선언하시겠습니까?",
+      "en": "Declare {0} as your friend?"
+    },
+    {
+      "ko": "노프렌드로 선언하시겠습니까?",
+      "en": "Declare no friend?"
+    },
+    {
+      "ko": "네",
+      "en": "Yes"
+    },
+    {
+      "ko": "아니오",
+      "en": "No"
+    },
+    {
+      "ko": "준비 취소",
+      "en": "Cancel Ready"
+    },
+    {
+      "ko": " (버린패 {0})",
+      "en": " (discarded {0})"
+    },
+    {
+      "ko": "버린패 {0}점 (주공팀 합계에 포함)",
+      "en": "Discarded: {0} pts (included in declarer team total)"
+    },
+    {
+      "ko": " / 남은 ",
+      "en": " / needed "
+    },
+    {
+      "ko": "어떤 카드가 더 강할까요?",
+      "en": "Which cards are stronger?"
+    },
+    {
+      "ko": "기본 순서: 마이티 > 조커 > 기루다 > 첫 카드의 무늬\n\n같은 무늬에서는 A > K > Q > J > 10 > 9 > … > 2 순서로 강합니다. 기루다가 아닌 다른 무늬는 숫자가 높아도 첫 카드의 무늬를 이길 수 없습니다.\n\n이번 판의 기루다는 하트입니다. 마이티는 언제나 가장 강하고, 조커는 첫·마지막 트릭과 조커콜에서 힘을 잃습니다.",
+      "en": "Basic order: Mighty > Joker > trump > the led suit\n\nWithin the same suit: A > K > Q > J > 10 > 9 > ... > 2. A non-trump card of another suit cannot beat the led suit, even with a higher rank.\n\nHearts are trump this round. The Mighty is always strongest. The Joker loses its power on the first and last tricks and when a Joker Call is active."
+    },
+    {
+      "ko": "방 참여",
+      "en": "Join Room"
+    },
+    {
+      "ko": "참여할 방 코드를 입력하세요",
+      "en": "Enter the room code to join"
+    },
+    {
+      "ko": "초대 링크 복사",
+      "en": "Copy Invite Link"
+    },
+    {
+      "ko": "초대받은 방: ",
+      "en": "Invited room: "
+    },
+    {
+      "ko": "프렌드를 선택하세요",
+      "en": "Choose your friend"
+    },
+    {
+      "ko": "닉네임을 입력하세요.",
+      "en": "Enter a nickname."
+    },
+    {
+      "ko": "방 코드를 입력하세요.",
+      "en": "Enter a room code."
+    },
+    {
+      "ko": "초대 링크를 복사했습니다.",
+      "en": "Invite link copied."
+    },
+    {
+      "ko": "복사하지 못했습니다. 브라우저 주소창의 링크를 복사해 주세요.",
+      "en": "Could not copy. Please copy the link from your browser's address bar."
+    },
+    {
+      "ko": "초대 링크 복사 중...",
+      "en": "Copying invite link..."
+    },
+    {
+      "ko": "닉네임을 입력하세요. (1~12자)",
+      "en": "Enter a nickname (1–12 characters)."
+    },
+    {
+      "ko": "방 코드는 영문·숫자 4자리로 입력하세요.",
+      "en": "Enter a 4-character room code using letters and numbers."
+    },
+    {
+      "ko": "방 비밀번호가 틀렸습니다.",
+      "en": "Incorrect room password."
+    },
+    {
+      "ko": "이미 시작된 방에는 입장할 수 없습니다.",
+      "en": "This game has already started."
+    },
+    {
+      "ko": "방이 가득 찼습니다. (사람 5명)",
+      "en": "The room is full (5 players)."
+    },
+    {
+      "ko": "방을 찾을 수 없습니다: ",
+      "en": "Room not found: "
+    },
+    {
+      "ko": "게임 시작 안내가 끝난 뒤 카드를 낼 수 있습니다.",
+      "en": "Wait for the game introduction to finish before playing."
+    },
+    {
+      "ko": "당선 안내가 끝난 뒤 카드를 버릴 수 있습니다.",
+      "en": "Wait for the election announcement to finish before discarding."
+    },
+    {
+      "ko": "3장 버리기 (",
+      "en": "Discard 3 ("
+    },
+    {
+      "ko": "확인",
+      "en": "Confirm"
+    },
+    {
+      "en": "Before we begin: four key terms",
+      "ko": "시작 전, 네 가지 용어"
+    },
+    {
+      "en": "Declarer: The winner of the bidding. They set the trump suit and target score, then choose a friend.\n\nFriend: The declarer's teammate. When a card is named, its holder is the friend; playing that card reveals their identity.\n\nMighty: The strongest card. Usually the ace of spades; when spades are trump, it is the ace of diamonds.\n\nTrump: The strongest suit for this round. It beats other suits except the mighty and joker. No-trump has no trump suit.",
+      "ko": "주공: 입찰에서 당선된 사람입니다. 기루다와 목표 점수(공약)를 정하고, 함께할 프렌드를 선택합니다.\n\n프렌드: 주공과 같은 팀인 사람입니다. 특정 카드를 지정하면 그 카드를 가진 사람이 프렌드이며, 카드를 내면 정체가 공개됩니다.\n\n마이티: 가장 강한 카드입니다. 보통 ♠A이고, 스페이드가 기루다일 때는 ♦A입니다.\n\n기루다: 이번 판의 으뜸 무늬입니다. 마이티·조커를 제외한 다른 무늬의 카드보다 강합니다. 노기루에서는 으뜸 무늬가 없습니다."
+    },
+    {
+      "en": "You have a strong hand with many hearts. Now become the declarer and choose your team's target score and trump suit.\n\nSelect 13 points and hearts, then submit your bid. All bots will pass in this practice.",
+      "ko": "하트가 많이 들어온 강한 패입니다. 이번에는 직접 주공이 되어 우리 팀의 목표 점수와 기루다를 정해 봅시다.\n\n13점과 하트를 선택한 뒤 공약을 제출하세요. 이 연습에서는 봇들이 모두 패스합니다."
+    },
+    {
+      "en": "The declarer is a bot, with a bid of 13 points and hearts as trump.\n\nThe declarer named the ace of spades as the friend card. You hold it, so you are on the same team. Playing it reveals your identity to everyone.",
+      "ko": "이번 판의 주공은 봇이고, 공약은 하트 기루다·13점입니다.\n\n주공이 프렌드 카드로 ♠A를 지정했습니다. 그 카드를 가진 당신이 같은 팀입니다. ♠A를 내면 다른 사람들에게도 정체가 공개됩니다."
+    }
   ]
 }

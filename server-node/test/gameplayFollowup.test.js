@@ -1,6 +1,48 @@
 const assert = require('node:assert/strict');
 const RoomManager = require('../src/RoomManager');
 const rooms = new RoomManager();
+// Passing must not increase the next bid; all-pass rounds really allow 12/11.
+{
+  const room = rooms.createRoom(null);
+  rooms.addPlayer(room, 'Bidder', { clientId: 'bid-regression' });
+  rooms.fillWithBots(room);
+  room.status = 'bidding';
+  rooms.startBidding(room);
+  assert.ok(rooms.placeBid(room, room.players[0].clientId,
+    { targetScore: 13, trumpSuit: 'HEART' }).ok);
+  assert.equal(rooms.publicState(room).nextMinBid, 14);
+  assert.ok(rooms.passBid(room, room.players[1].clientId).ok);
+  let state = rooms.publicState(room);
+  assert.equal(state.currentBidderClientId, room.players[2].clientId);
+  assert.equal(state.nextMinBid, 14);
+  assert.ok(rooms.placeBid(room, room.players[2].clientId,
+    { targetScore: 14, trumpSuit: 'HEART' }).ok);
+  rooms.startBidding(room);
+  for (const minimum of [13, 12]) {
+    for (let i = 0; i < 5; i++) assert.ok(rooms.passBid(room, rooms.currentBidder(room).clientId).ok);
+    const result = rooms.resolveBidding(room);
+    assert.equal(result.newMin, minimum - 1);
+    rooms.startBidding(room, result.newMin);
+    state = rooms.publicState(room);
+    assert.equal(state.minBid, minimum - 1);
+    assert.equal(state.nextMinBid, minimum - 1);
+    assert.equal(state.highestBid, null);
+  }
+  assert.ok(rooms.placeBid(room, room.players[0].clientId,
+    { targetScore: 11, trumpSuit: 'HEART' }).ok);
+  rooms.startBidding(room, 12);
+  assert.ok(rooms.placeBid(room, room.players[0].clientId,
+    { targetScore: 12, trumpSuit: 'HEART' }).ok);
+  room.declarerClientId = room.players[0].clientId;
+  room.status = 'choosing_friend';
+  assert.ok(rooms.chooseFriend(room, room.declarerClientId,
+    { friendClientId: room.players[2].clientId }).ok);
+  state = rooms.publicState(room);
+  assert.equal(state.friendType, 'player');
+  assert.equal(state.friendNickname, room.players[2].nickname);
+  assert.equal(state.friendCardId, null);
+}
+console.log('Bidding: pass preserves 14, all-pass lowers to 12/11; named friend is public.');
 for (let game = 0; game < 20; game++) {
   const room = rooms.createRoom(null);
   rooms.addPlayer(room, 'Human', { clientId: 'human-' + game });

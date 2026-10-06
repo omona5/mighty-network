@@ -272,6 +272,7 @@ class RoomManager {
 
   // 주공이 손패에서 3장을 버린다. 버린 카드의 점수는 주공팀 점수에 포함.
   discardKitty(room, clientId, cardIds) {
+    if (Date.now() < (room.electionUntil || 0)) return { error: "당선 안내가 끝난 뒤 카드를 버릴 수 있습니다." };
     if (room.status !== "exchanging_kitty") {
       return { error: "지금은 바닥패를 버릴 수 없습니다." };
     }
@@ -650,6 +651,9 @@ class RoomManager {
   // options: { declaredSuit?, activateJokerCall? } — 리드일 때만 사용
   // trickResult: 트릭이 완성됐으면 { winnerClientId, winnerNickname }, 아니면 null.
   playCard(room, clientId, cardId, options = {}) {
+    if (Date.now() < (room.playIntroUntil || 0)) {
+      return { error: "게임 시작 안내가 끝난 뒤 카드를 낼 수 있습니다." };
+    }
     if (room.status !== "playing") return { error: "게임 중이 아닙니다." };
 
     if (this.isHandOver(room)) return { error: "이미 마지막 트릭이 끝났습니다." };
@@ -831,7 +835,16 @@ class RoomManager {
         ruleConfig: room.ruleConfig,
       })
     );
-    const pool = legal.length ? legal : player.hand;
+    let pool = legal.length ? legal : player.hand;
+    const joker = pool.find(c => RuleEngine.isJoker(c, room.ruleConfig));
+    if (room.trickNumber === 1 || room.trickNumber === NUM_TRICKS) {
+      const ordinary = pool.filter(c => !RuleEngine.isJoker(c, room.ruleConfig));
+      // A joker call (or a sole remaining joker) can still force the joker.
+      if (ordinary.length) pool = ordinary;
+    } else if (room.trickNumber === NUM_TRICKS - 1 && joker) {
+      // Spend it while it still has power, instead of keeping it for trick 10.
+      pool = [joker];
+    }
     const card = pool[Math.floor(Math.random() * pool.length)];
     const isLead = tableCards.length === 0;
     const opts = { cardId: card.id };
@@ -862,6 +875,11 @@ class RoomManager {
       const room = this.rooms[roomId];
       const player = room.players.find((p) => p.clientId === clientId);
       if (!player || player.isBot) continue;
+      if (room.status === "waiting") {
+        const remaining = this.removePlayerByClientId(clientId);
+        if (remaining) this.fillWithBots(remaining);
+        return remaining;
+      }
       if (!player.connected && !player.ws) return room; // 이미 soft
       player.connected = false;
       player.disconnectedAt = Date.now();
@@ -1066,6 +1084,16 @@ class RoomManager {
       lastTrickWinnerNickname: room.lastTrickWinner ? room.lastTrickWinner.nickname : null,
       trickComplete: !!room.trickComplete,
       trickNumber: room.trickNumber || 0,
+      tableWinningCardId: (() => {
+        const table = room.tableCards || [];
+        if (table.length < 2 || !room.ruleConfig || room.status !== 'playing') return null;
+        // trickNumber already advances after resolution; retain the resolved winner.
+        const winner = room.trickComplete && room.lastTrickWinner
+          ? room.lastTrickWinner.clientId
+          : RuleEngine.determineTrickWinner({ tableCards: table, ruleConfig: room.ruleConfig,
+              trickNumber: room.trickNumber, numTricks: NUM_TRICKS });
+        return table.find(entry => entry.clientId === winner)?.card.id || null;
+      })(),
       trumpSuit: room.ruleConfig ? room.ruleConfig.trumpSuit : null,
       noTrump: !!room.noTrump,
       mightyCardId: room.ruleConfig ? room.ruleConfig.mightyCardId : null,

@@ -16,7 +16,7 @@
 //   11)    soft disconnect → 봇 대타, reconnect로 복구 (your_hand + game_state)
 
 const http = require("http");
-const fs = require("fs");
+const staticFiles = require("./src/StaticFiles");
 const path = require("path");
 const { WebSocketServer } = require("ws");
 const RoomManager = require("./src/RoomManager");
@@ -37,20 +37,7 @@ const actionTimer = new (require('./src/ActionTimer'))(id => rooms.getRoom(id), 
 const tutorial = new (require('./src/Tutorial'))(rooms, send);
 
 // 1) HTTP 서버: 테스트 페이지 + WebGL 정적 파일
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".ico": "image/x-icon",
-  ".svg": "image/svg+xml",
-  ".wasm": "application/wasm",
-  ".data": "application/octet-stream",
-  ".bundle": "application/octet-stream",
-};
+const serveStatic = staticFiles(path.join(__dirname, "public"));
 
 const httpServer = http.createServer((req, res) => {
   if (req.url === "/health" || req.url === "/health/") {
@@ -59,40 +46,7 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // 쿼리/해시 제거
-  let urlPath = (req.url || "/").split("?")[0].split("#")[0];
-  if (urlPath === "/") urlPath = "/test.html";
-  // Deep links must serve the same WebGL shell, including on refresh.
-  if (/^\/room\/[a-z0-9]{4}\/?$/i.test(urlPath)
-      || /^\/(multiplayer|singleplayer|tutorial)\/?$/.test(urlPath)) {
-    urlPath = "/webgl/index.html";
-  }
-
-  // public 밖으로 못 나가게
-  const publicRoot = path.join(__dirname, "public");
-  let filePath = path.normalize(path.join(publicRoot, urlPath));
-  if (!filePath.startsWith(publicRoot)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-
-  fs.stat(filePath, (err, stat) => {
-    if (!err && stat.isDirectory()) {
-      filePath = path.join(filePath, "index.html");
-    }
-    fs.readFile(filePath, (readErr, content) => {
-      if (readErr) {
-        res.writeHead(404);
-        res.end("Not found: " + urlPath);
-        return;
-      }
-      const ext = path.extname(filePath).toLowerCase();
-      const type = MIME[ext] || "application/octet-stream";
-      res.writeHead(200, { "Content-Type": type });
-      res.end(content);
-    });
-  });
+  serveStatic(req, res);
 });
 
 // 2) WebSocket 서버 (같은 3000 포트)
@@ -150,6 +104,12 @@ wss.on("connection", (ws) => {
     if (msg.type === 'start_tutorial') {
       if (ws.roomId) leaveCurrentRoom(ws);
       tutorial.start(ws);
+      return;
+    }
+    if (msg.type === 'send_emote') {
+      const room = rooms.getRoom(ws.roomId);
+      const emote = require('./src/Emotes').acceptEmote(room, ws, data.index);
+      if (emote) broadcast(room, 'player_emote', emote);
       return;
     }
     if (tutorial.handle(ws, msg.type, data)) return;
@@ -599,6 +559,8 @@ function handleBidStep(room, complete) {
   }
   // 주공 결정 → 바닥패 교환 → (이후) 프렌드 선택
   room.status = "exchanging_kitty";
+  // Final pass (1s), election notice (2s), then fade (0.2s).
+  room.electionUntil = Date.now() + 3200;
   console.log("[bid] 주공:", result.declarerNickname, "공약:", result.targetScore,
     "기루다:", result.noTrump ? "노기루" : result.trumpSuit);
   broadcast(room, "bid_result", {
@@ -620,7 +582,7 @@ function handleBidStep(room, complete) {
 // 바닥패 버리기 완료 → 프렌드 선택
 const BOT_BID_DELAY = 600;
 // 봇 주공: 당선 연출·"카드 고르는 중" 여유
-const BOT_KITTY_DELAY = 2000;
+const BOT_KITTY_DELAY = 0;
 
 function beginFriendSelection(room) {
   room.status = "choosing_friend";
@@ -726,6 +688,7 @@ function maybeBotChooseFriend(room) {
 function startPlaying(room) {
   room.status = "playing";
   rooms.startPlay(room);
+  room.playIntroUntil = Date.now() + 4200;
   console.log("[play] room", room.roomId, "본게임 시작");
   broadcast(room, "game_state", rooms.publicState(room));
   maybeBotPlay(room);
@@ -820,13 +783,14 @@ function leaveCurrentRoom(ws) {
   console.log("[room] left", leftRoomId, "by", ws.clientId);
 }
 
-// 비정상 끊김: 좌석 유지 + 봇 대타
+// 대기실 끊김은 즉시 퇴장, 게임 중에는 좌석 유지 + 봇 대타.
 function softDisconnectCurrent(ws) {
   // leave_room으로 이미 빠진 경우 roomId가 없음. 그래도 clientId로 soft 시도.
   const room = rooms.softDisconnect(ws.clientId);
   ws.roomId = null;
   if (!room) return;
-  console.log("[soft-disconnect] room", room.roomId, "client", ws.clientId, "→ 봇 대타");
+  console.log("[disconnect] room", room.roomId, "client", ws.clientId,
+    room.status === "waiting" ? "→ 대기실 퇴장" : "→ 봇 대타");
   broadcast(room, "game_state", rooms.publicState(room));
   resumeBotActions(room);
 }

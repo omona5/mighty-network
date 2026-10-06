@@ -19,6 +19,7 @@ public class GameRuleHud : MonoBehaviour
     private const int LayoutRev = 9;
     private int builtRev;
     private Info currentInfo;
+    public Info CurrentInfo => currentInfo;
     private Vector2 layoutScreen;
     private Rect layoutSafeArea;
     private float topClearancePixels;
@@ -53,6 +54,7 @@ public class GameRuleHud : MonoBehaviour
         public string friendLabel;
         public string friendCardId;
         public bool friendCardNone;
+        public bool friendIsPlayer;
         public string teamScoreLabel;
         public string bidLabel;
         public bool visible;
@@ -77,13 +79,18 @@ public class GameRuleHud : MonoBehaviour
         IconGui.Apply(trumpIcon, IconSpriteAtlas.GetTrump(info.noTrump, info.trumpSuit));
         IconGui.Apply(mightyIcon, IconSpriteAtlas.GetCard(info.mightyCardId));
         IconGui.Apply(jokerCallIcon, IconSpriteAtlas.GetCard(info.jokerCallCardId));
-        if (info.friendCardNone)
+        LocalizedLabel.Bind(friendCardIcon.transform.parent.Find("Label").GetComponent<TextMeshProUGUI>(),
+            () => info.friendIsPlayer ? L10n.Text(" 프렌드").Trim() : L10n.Text("프렌드카드"));
+        if (info.friendCardNone || info.friendIsPlayer)
         {
             IconGui.Apply(friendCardIcon, default(IconSpriteAtlas.Slice));
             if (friendNoneText != null)
             {
                 friendNoneText.gameObject.SetActive(true);
-                LocalizedLabel.Bind(friendNoneText, "없음");
+                if (info.friendIsPlayer)
+                    LocalizedLabel.Bind(friendNoneText, () => NullDash(info.friendLabel));
+                else
+                    LocalizedLabel.Bind(friendNoneText, "없음");
             }
         }
         else
@@ -155,10 +162,16 @@ public class GameRuleHud : MonoBehaviour
             ir.sizeDelta = (i == 0 ? new Vector2(56f, 56f) : new Vector2(100f, 50f)) * (portrait ? 1f : 0.72f);
         }
         friendNoneText.fontSize = portrait ? 32 : 26;
+        friendNoneText.enableAutoSizing = true;
+        friendNoneText.fontSizeMax = portrait ? 32 : 26;
+        friendNoneText.fontSizeMin = portrait ? 16 : 12;
+        friendNoneText.alignment = TextAlignmentOptions.Center;
+        friendNoneText.textWrappingMode = TextWrappingModes.Normal;
+        friendNoneText.overflowMode = TextOverflowModes.Ellipsis;
         friendNoneText.rectTransform.anchorMin = friendNoneText.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
         friendNoneText.rectTransform.pivot = new Vector2(0.5f, 0.5f);
         friendNoneText.rectTransform.anchoredPosition = new Vector2(0f, portrait ? -26f : -14f);
-        friendNoneText.rectTransform.sizeDelta = new Vector2(80f, 50f);
+        friendNoneText.rectTransform.sizeDelta = new Vector2(portrait ? width / 4f - 8f : 120f, portrait ? 78f : 48f);
     }
 
     public void Clear()

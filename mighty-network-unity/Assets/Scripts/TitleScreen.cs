@@ -128,6 +128,17 @@ public class TitleScreen : MonoBehaviour
             "한 사람씩 카드 1장을 내고, 가장 강한 카드를 낸 사람이 5장을 가져갑니다. 이것을 트릭이라고 하며 한 판에 10번 진행합니다.\n\n" +
             "A·K·Q·J·10은 각각 1점, 총 20점입니다. 주공팀은 미리 약속한 점수 이상을 모으면 승리합니다.\n\n" +
             "지금부터 두 개의 짧은 연습을 해 봅니다. 설명을 읽고 확인을 누르면 다음 단계로 넘어갑니다.",
+            "", true, false, StartTutorialTerms, StartTutorialIntroduction, () => introduction.Hide());
+    }
+
+    private void StartTutorialTerms()
+    {
+        var introduction = GetComponent<TutorialOverlay>();
+        introduction.Show("시작 전, 네 가지 용어",
+            "주공: 입찰에서 당선된 사람입니다. 기루다와 목표 점수(공약)를 정하고, 함께할 프렌드를 선택합니다.\n\n" +
+            "프렌드: 주공과 같은 팀인 사람입니다. 특정 카드를 지정하면 그 카드를 가진 사람이 프렌드이며, 카드를 내면 정체가 공개됩니다.\n\n" +
+            "마이티: 가장 강한 카드입니다. 보통 ♠A이고, 스페이드가 기루다일 때는 ♦A입니다.\n\n" +
+            "기루다: 이번 판의 으뜸 무늬입니다. 마이티·조커를 제외한 다른 무늬의 카드보다 강합니다. 노기루에서는 으뜸 무늬가 없습니다.",
             "", true, false, () =>
             {
                 GameScenes.StartTutorial = true;
@@ -291,7 +302,7 @@ public class TitleScreen : MonoBehaviour
         colors.pressedColor = MightyTheme.Accent;
         btn.colors = colors;
         btn.interactable = onClick != null;
-        if (onClick != null) btn.onClick.AddListener(onClick);
+        if (onClick != null) btn.onClick.AddListener(() => { Sfx.UiClick(); onClick(); });
 
         TextMeshProUGUI text = UiTmp.Create(
             go.transform, "Label", UiFonts.Size(28), TextAnchor.MiddleCenter, Color.white);

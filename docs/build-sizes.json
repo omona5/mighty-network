@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "url": "Build/078d6163cc9f6ff3545dcbf557051900.data.unityweb",
+      "size": 40164089
+    },
+    {
+      "url": "Build/9931bbbe516847add291310988d0bdaa.loader.js",
+      "size": 117893
+    },
+    {
+      "url": "Build/a62cf6f042b17a51cb3013f6736f8225.framework.js.unityweb",
+      "size": 81709
+    },
+    {
+      "url": "Build/bf175aa7824b08b18b29428526ff7d8a.wasm.unityweb",
+      "size": 10694314
+    }
+  ]
+}

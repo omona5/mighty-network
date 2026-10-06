@@ -298,6 +298,13 @@ public class OpponentHandsView : MonoBehaviour
         return true;
     }
 
+    public RectTransform GetEmoteAnchor(string nickname)
+    {
+        RectTransform seat;
+        return !string.IsNullOrEmpty(nickname) && seatByNickname.TryGetValue(nickname, out seat) && seat != null
+            ? seat.Find("InfoBox") as RectTransform : null;
+    }
+
     // 좌상단 GameRuleHud body와 동일
     private static int StatusFontSize => UiFonts.PlayerStatusSize;
 
@@ -570,7 +577,7 @@ public class OpponentHandsView : MonoBehaviour
         nrt.sizeDelta = new Vector2(textW, lineH);
         nrt.anchoredPosition = new Vector2(inset, nameY);
         LocalizedLabel.Bind(nameText, () => FormatStatusLine(seat, isSelf));
-        nameText.enableWordWrapping = false;
+        nameText.textWrappingMode = TextWrappingModes.NoWrap;
         nameText.overflowMode = TextOverflowModes.Ellipsis;
 
         if (isSelf)

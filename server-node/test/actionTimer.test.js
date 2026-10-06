@@ -34,3 +34,25 @@ arm(); room.dealId = 2; jobs.at(-1).fn(); assert.equal(calls, 2);
 arm(); delete rooms.rooms[room.roomId]; jobs.at(-1).fn(); assert.equal(calls, 2);
 room.tutorial = {}; const count = jobs.length; arm(); assert.equal(jobs.length, count);
 console.log('ActionTimer: deadlines, duplicate scheduling, stale turns, reconnect, redeal, deletion and tutorial passed.');
+
+const intro = rooms.createRoom(null);
+const actor = rooms.addPlayer(intro, 'Intro', { clientId: 'intro' }).player;
+intro.status = 'playing';
+const realNow = Date.now;
+try {
+  Date.now = () => 10000;
+  intro.playIntroUntil = 14200;
+  timer.arm(intro, actor, 700, () => {});
+  assert.equal(jobs.at(-1).ms, 34200, 'human timeout starts after the intro');
+  const human = jobs.at(-1);
+  Date.now = () => 11000;
+  actor.connected = false;
+  timer.arm(intro, actor, 700, () => {});
+  assert.equal(human.cancelled, true);
+  assert.equal(jobs.at(-1).ms, 3900, 'disconnect bot retains the remaining intro wait');
+  intro.status = 'exchanging_kitty';
+  intro.electionUntil = 13000;
+  timer.arm(intro, actor, 0, () => {});
+  assert.equal(jobs.at(-1).ms, 2000);
+} finally { Date.now = realNow; }
+console.log('Announcement timers: human, bot replacement and election wait passed.');

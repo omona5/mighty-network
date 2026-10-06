@@ -22,6 +22,7 @@ public class HandView : MonoBehaviour
         public bool isFriendSecret;
         public string declaredSuit;
         public bool jokerCallActivated;
+        public bool isWinning;
     }
 
     [Header("Inspector에서 연결")]
@@ -38,6 +39,7 @@ public class HandView : MonoBehaviour
 
     private readonly List<GameObject> spawned = new List<GameObject>();
     private readonly List<CardView> spawnedViews = new List<CardView>();
+    private int tableLayoutSlots;
 
     private void Awake()
     {
@@ -178,14 +180,23 @@ public class HandView : MonoBehaviour
         ShowTableCards(entries, TableTrickSlots);
     }
 
-    public void ShowTableCards(TableCardEntry[] entries, int slotCount)
+    public void ShowTableCards(TableCardEntry[] entries, int slotCount, bool highlightWinner = true)
     {
-        Clear();
+        int slots = Mathf.Max(slotCount, 1);
+        // Keep landed cards (and their running shadow pulse) when appending a
+        // card or refreshing the same trick after its flight finishes.
+        bool reuse = entries != null && entries.Length > 0 && tableLayoutSlots == slots
+            && spawnedViews.Count == spawned.Count && spawnedViews.Count <= entries.Length;
+        for (int i = 0; reuse && i < spawnedViews.Count; i++)
+            reuse = spawned[i] != null && spawnedViews[i] != null && spawnedViews[i].Card != null
+                && entries[i].card != null && spawnedViews[i].Card.id == entries[i].card.id;
+        if (!reuse) Clear();
+        else if (spawnedViews.Count < entries.Length) ContentRevision++;
         EnsureTableContainerActive();
         if (entries == null || cardPrefab == null) return;
+        tableLayoutSlots = slots;
 
         Transform parent = cardContainer != null ? cardContainer : transform;
-        int slots = Mathf.Max(slotCount, 1);
         // HLG는 장수에 따라 가운데로 다시 모으므로, 고정 슬롯은 수동 배치
         HorizontalLayoutGroup hlg = parent.GetComponent<HorizontalLayoutGroup>();
         if (hlg != null) hlg.enabled = false;
@@ -193,7 +204,7 @@ public class HandView : MonoBehaviour
         float cardW = CardSpriteAtlas.DisplayWidth;
         float cardH = CardSpriteAtlas.DisplayHeight;
 
-        for (int i = 0; i < entries.Length; i++)
+        for (int i = spawnedViews.Count; i < entries.Length; i++)
         {
             TableCardEntry e = entries[i];
             if (e.card == null) continue;
@@ -248,18 +259,52 @@ public class HandView : MonoBehaviour
             label.text = FormatTableNickname(e.playerNickname);
             label.transform.SetAsLastSibling();
 
-            Vector2 sq = IconSpriteAtlas.DisplaySquare;
-            float topY = cardH * 0.5f + sq.y * 0.5f + 4f;
-            var above = new List<IconSpriteAtlas.Slice>();
-            if (e.isDeclarer) above.Add(IconSpriteAtlas.GetDeclarer());
-            if (e.isFriend) above.Add(IconSpriteAtlas.GetFriend());
-            else if (e.isFriendSecret) above.Add(IconSpriteAtlas.GetFriendSecret());
-            if (e.card != null && e.card.id == "JOKER" && !string.IsNullOrEmpty(e.declaredSuit))
-                above.Add(IconSpriteAtlas.GetSuit(e.declaredSuit));
-            PlaceIconsAbove(root.transform, above, topY);
-
             spawned.Add(root);
             spawnedViews.Add(view);
+        }
+
+        for (int i = 0; i < spawnedViews.Count && i < entries.Length; i++)
+        {
+            CardView view = spawnedViews[i];
+            if (view == null || spawned[i] == null) continue;
+            TableCardEntry entry = entries[i];
+            Transform slot = spawned[i].transform;
+            ((RectTransform)slot).anchoredPosition = GetTableSlotLocalPosition(i, slots);
+            Transform nick = slot.Find("Nick");
+            if (nick != null) nick.GetComponent<TextMeshProUGUI>().text = FormatTableNickname(entry.playerNickname);
+
+            // Refresh roles without replacing the landed card or its glow.
+            for (int c = slot.childCount - 1; c >= 0; c--)
+            {
+                Transform child = slot.GetChild(c);
+                if (!child.name.StartsWith("TopIcon")) continue;
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+            var above = new List<IconSpriteAtlas.Slice>();
+            if (entry.isDeclarer) above.Add(IconSpriteAtlas.GetDeclarer());
+            if (entry.isFriend) above.Add(IconSpriteAtlas.GetFriend());
+            else if (entry.isFriendSecret) above.Add(IconSpriteAtlas.GetFriendSecret());
+            if (entry.card != null && entry.card.id == "JOKER" && !string.IsNullOrEmpty(entry.declaredSuit))
+                above.Add(IconSpriteAtlas.GetSuit(entry.declaredSuit));
+            PlaceIconsAbove(slot, above, cardH * 0.5f + IconSpriteAtlas.DisplaySquare.y * 0.5f + 4f);
+
+            // During flight, leave the previous landed winner untouched.
+            // The queued state supplies the new winner only once landing ends.
+            if (!highlightWinner) continue;
+            var glow = view.GetComponent<WinningCardGlow>();
+            bool winning = entries.Length >= 2 && entry.isWinning;
+            if (winning) WinningCardGlow.Attach(view.transform);
+            else if (glow != null) glow.enabled = false;
+
+            CanvasGroup group = view.GetComponent<CanvasGroup>();
+            if (group != null) group.alpha = 1f;
+            foreach (Graphic graphic in slot.GetComponentsInChildren<Graphic>(true))
+            {
+                Color color = graphic.color;
+                color.a = 1f;
+                graphic.color = color;
+            }
         }
     }
 
@@ -468,8 +513,12 @@ public class HandView : MonoBehaviour
         }
     }
 
+    public int ContentRevision { get; private set; }
+
     public void Clear()
     {
+        tableLayoutSlots = 0;
+        ContentRevision++;
         EnsureTableContainerActive();
         foreach (GameObject go in spawned)
         {

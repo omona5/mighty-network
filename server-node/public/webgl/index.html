@@ -9,11 +9,13 @@
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #231f20; }
     #unity-canvas { display: block; width: 100%; height: 100%; }
     #status { position: fixed; inset: 45% 10% auto; text-align: center; color: white; font: 16px sans-serif; }
+    #status progress { display: block; width: min(420px, 100%); height: 14px; margin: 16px auto; accent-color: #d8b77b; }
   </style>
 </head>
 <body>
   <canvas id="unity-canvas" tabindex="-1"></canvas>
   <div id="status">Loading…</div>
+  <script src="loading.js"></script>
   <script>
     const canvas = document.getElementById('unity-canvas');
     const status = document.getElementById('status');
@@ -27,16 +29,7 @@
       productVersion: "1.0",
       matchWebGLToCanvasSize: true
     };
-    const script = document.createElement('script');
-    script.src = 'Build/webgl.loader.js';
-    script.onerror = () => { status.textContent = '게임 파일을 불러오지 못했습니다. 새로고침해 주세요.'; };
-    script.onload = () => createUnityInstance(canvas, config, progress => {
-      status.textContent = 'Loading ' + Math.round(progress * 100) + '%';
-    }).then(() => {
-      status.remove();
-      canvas.focus();
-    }).catch(error => { status.textContent = String(error); });
-    document.body.appendChild(script);
+    MightyLoading.start(canvas, status, config, 'Build/webgl.loader.js');
   </script>
 </body>
 </html>

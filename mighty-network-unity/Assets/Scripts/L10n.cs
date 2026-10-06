@@ -31,4 +31,12 @@ public static class L10n
         }
         return english.TryGetValue(korean, out var value) ? value : korean;
     }
+
+    public static string ServerMessage(string message)
+    {
+        const string missingRoom = "방을 찾을 수 없습니다: ";
+        if (message != null && message.StartsWith(missingRoom, System.StringComparison.Ordinal))
+            return Text(missingRoom) + message.Substring(missingRoom.Length);
+        return Text(message);
+    }
 }

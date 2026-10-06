@@ -12,16 +12,20 @@ public static class Sfx
     private const float DealTickGap = 0.07f;
 
     private static AudioSource source;
+    private static AudioSource electionSource;
     private static readonly Dictionary<string, AudioClip[]> cache =
         new Dictionary<string, AudioClip[]>();
     private static float lastDealTickAt = -10f;
+    private static int lastUiClickFrame = -1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics()
     {
         source = null;
+        electionSource = null;
         cache.Clear();
         lastDealTickAt = -10f;
+        lastUiClickFrame = -1;
     }
 
     public static void Ensure()
@@ -37,18 +41,35 @@ public static class Sfx
         source.loop = false;
         source.volume = GameSettings.SfxVolume;
         source.mute = GameSettings.SfxMuted;
+        electionSource = go.AddComponent<AudioSource>();
+        electionSource.playOnAwake = false;
+        electionSource.spatialBlend = 0f;
+        electionSource.pitch = 0.75f;
+        electionSource.volume = GameSettings.SfxVolume;
+        electionSource.mute = GameSettings.SfxMuted;
         GameSettings.AudioChanged -= ApplyVolume;
         GameSettings.AudioChanged += ApplyVolume;
     }
 
     private static void ApplyVolume()
     {
+        if (electionSource != null)
+        {
+            electionSource.volume = GameSettings.SfxVolume;
+            electionSource.mute = GameSettings.SfxMuted;
+        }
         if (source == null) return;
         source.volume = GameSettings.SfxVolume;
         source.mute = GameSettings.SfxMuted;
     }
 
-    public static void UiClick() { Play("ui_click", 0.55f); }
+    public static void UiClick()
+    {
+        // A button callback can also open a popup with its own click cue.
+        if (lastUiClickFrame == Time.frameCount) return;
+        lastUiClickFrame = Time.frameCount;
+        Play("ui_click", 0.55f);
+    }
     public static void Title() { Play("title", 0.8f); }
     public static void Shuffle() { Play("shuffle", 0.75f); }
     public static void KittyFan() { Play("kitty_fan", 0.7f); }
@@ -56,7 +77,16 @@ public static class Sfx
     public static void Discard() { Play("discard", 0.7f); }
     public static void Bid() { Play("bid", 0.7f); }
     public static void Pass() { Play("pass", 0.6f); }
-    public static void Elected() { Play("elected", 0.85f); }
+    public static void Elected()
+    {
+        Ensure();
+        AudioClip[] clips = Load("elected");
+        if (electionSource != null && clips.Length > 0)
+        {
+            electionSource.Stop();
+            electionSource.PlayOneShot(clips[0], 0.85f);
+        }
+    }
     public static void Mighty() { Play("mighty", 0.9f); }
     public static void Joker() { Play("joker", 0.85f); }
     public static void JokerCall() { Play("joker_call", 0.85f); }

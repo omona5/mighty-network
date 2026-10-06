@@ -1,0 +1,84 @@
+{
+  "files": [
+    {
+      "url": "Build/260921.data",
+      "size": 56586451
+    },
+    {
+      "url": "Build/260921.framework.js",
+      "size": 493949
+    },
+    {
+      "url": "Build/260921.loader.js",
+      "size": 26982
+    },
+    {
+      "url": "Build/260921.wasm",
+      "size": 62494905
+    },
+    {
+      "url": "Build/260922.data",
+      "size": 56586667
+    },
+    {
+      "url": "Build/260922.framework.js",
+      "size": 493949
+    },
+    {
+      "url": "Build/260922.loader.js",
+      "size": 26982
+    },
+    {
+      "url": "Build/260922.wasm",
+      "size": 62495746
+    },
+    {
+      "url": "Build/260926.data",
+      "size": 56588771
+    },
+    {
+      "url": "Build/260926.framework.js",
+      "size": 493949
+    },
+    {
+      "url": "Build/260926.loader.js",
+      "size": 26982
+    },
+    {
+      "url": "Build/260926.wasm",
+      "size": 62465671
+    },
+    {
+      "url": "Build/invite-webgl.data",
+      "size": 56600243
+    },
+    {
+      "url": "Build/invite-webgl.framework.js",
+      "size": 494790
+    },
+    {
+      "url": "Build/invite-webgl.loader.js",
+      "size": 26982
+    },
+    {
+      "url": "Build/invite-webgl.wasm",
+      "size": 62516572
+    },
+    {
+      "url": "Build/webgl.data",
+      "size": 56601691
+    },
+    {
+      "url": "Build/webgl.framework.js",
+      "size": 494790
+    },
+    {
+      "url": "Build/webgl.loader.js",
+      "size": 26982
+    },
+    {
+      "url": "Build/webgl.wasm",
+      "size": 62521305
+    }
+  ]
+}

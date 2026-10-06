@@ -74,7 +74,7 @@ public static class UiTmp
         tmp.alignment = Align(align);
         tmp.color = color;
         tmp.raycastTarget = false;
-        tmp.enableWordWrapping = !overflow;
+        tmp.textWrappingMode = overflow ? TextWrappingModes.NoWrap : TextWrappingModes.Normal;
         tmp.overflowMode = overflow ? TextOverflowModes.Overflow : TextOverflowModes.Truncate;
         tmp.richText = false;
         if (outline)
