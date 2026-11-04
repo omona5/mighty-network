@@ -23,6 +23,7 @@ public class HandView : MonoBehaviour
         public string declaredSuit;
         public bool jokerCallActivated;
         public bool isWinning;
+        public bool isPowerlessJoker;
     }
 
     [Header("Inspector에서 연결")]
@@ -292,6 +293,7 @@ public class HandView : MonoBehaviour
             // During flight, leave the previous landed winner untouched.
             // The queued state supplies the new winner only once landing ends.
             if (!highlightWinner) continue;
+            view.SetPlayable(!entry.isPowerlessJoker);
             var glow = view.GetComponent<WinningCardGlow>();
             bool winning = entries.Length >= 2 && entry.isWinning;
             if (winning) WinningCardGlow.Attach(view.transform);
@@ -431,6 +433,16 @@ public class HandView : MonoBehaviour
             if (v == null || v.Card == null) continue;
             bool ok = canPlay == null || canPlay(v.Card);
             v.SetPlayable(ok);
+        }
+    }
+
+    public void SetTutorialGuidance(string[] cardIds, Action<CardData> unavailable)
+    {
+        foreach (CardView view in spawnedViews)
+        {
+            if (view == null || view.Card == null) continue;
+            view.UnavailableClicked = unavailable;
+            view.SetTutorialEmphasis(cardIds != null && Array.IndexOf(cardIds, view.Card.id) >= 0);
         }
     }
 

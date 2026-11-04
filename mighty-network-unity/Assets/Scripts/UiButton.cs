@@ -3,6 +3,16 @@ using UnityEngine;
 // IMGUI buttons report activation only after a valid enabled click/submit.
 public static class UiButton
 {
+    public static bool Centered(string text, float width, float height)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.FlexibleSpace();
+        bool clicked = Layout(text, GUILayout.Width(width), GUILayout.Height(height));
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
+        return clicked;
+    }
+
     public static bool Layout(string text, params GUILayoutOption[] options)
     {
         bool clicked = GUILayout.Button(text, options);

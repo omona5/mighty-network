@@ -13,6 +13,7 @@ public static class Sfx
 
     private static AudioSource source;
     private static AudioSource electionSource;
+    private static readonly Dictionary<float, AudioSource> pitchedSources = new Dictionary<float, AudioSource>();
     private static readonly Dictionary<string, AudioClip[]> cache =
         new Dictionary<string, AudioClip[]>();
     private static float lastDealTickAt = -10f;
@@ -23,6 +24,7 @@ public static class Sfx
     {
         source = null;
         electionSource = null;
+        pitchedSources.Clear();
         cache.Clear();
         lastDealTickAt = -10f;
         lastUiClickFrame = -1;
@@ -53,6 +55,12 @@ public static class Sfx
 
     private static void ApplyVolume()
     {
+        foreach (AudioSource pitched in pitchedSources.Values)
+        {
+            if (pitched == null) continue;
+            pitched.volume = GameSettings.SfxVolume;
+            pitched.mute = GameSettings.SfxMuted;
+        }
         if (electionSource != null)
         {
             electionSource.volume = GameSettings.SfxVolume;
@@ -87,8 +95,8 @@ public static class Sfx
             electionSource.PlayOneShot(clips[0], 0.85f);
         }
     }
-    public static void Mighty() { Play("mighty", 0.9f); }
-    public static void Joker() { Play("joker", 0.85f); }
+    public static void Mighty() { Play("mighty", 0.9f, 0.7f); }
+    public static void Joker() { Play("joker", 0.85f, 1.2f); }
     public static void JokerCall() { Play("joker_call", 0.85f); }
     public static void Friend() { Play("friend", 0.85f); }
     public static void DealMiss() { Play("deal_miss", 0.85f); }
@@ -97,7 +105,7 @@ public static class Sfx
     public static void GameLose() { Play("game_lose", 0.85f); }
 
     public static void CardPlay() { Play("card_play", 0.72f); }
-    public static void CardLand() { Play("card_land", 0.7f); }
+    public static void CardLand(float pitch = 1f) { Play("card_land", 0.7f, pitch); }
 
     public static void DealTick()
     {
@@ -131,7 +139,7 @@ public static class Sfx
             Friend();
     }
 
-    private static void Play(string id, float volume)
+    private static void Play(string id, float volume, float pitch = 1f)
     {
         Ensure();
         if (source == null) return;
@@ -141,7 +149,21 @@ public static class Sfx
 
         AudioClip clip = clips[Random.Range(0, clips.Length)];
         if (clip == null) return;
-        source.PlayOneShot(clip, volume);
+        AudioSource player = source;
+        if (!Mathf.Approximately(pitch, 1f))
+        {
+            if (!pitchedSources.TryGetValue(pitch, out player) || player == null)
+            {
+                player = source.gameObject.AddComponent<AudioSource>();
+                player.playOnAwake = false;
+                player.spatialBlend = 0f;
+                player.pitch = pitch;
+                pitchedSources[pitch] = player;
+            }
+            player.volume = GameSettings.SfxVolume;
+            player.mute = GameSettings.SfxMuted;
+        }
+        player.PlayOneShot(clip, volume);
     }
 
     private static AudioClip[] Load(string id)

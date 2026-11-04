@@ -33,7 +33,7 @@ public partial class NetworkManager
                 foreach (var player in currentState.players)
                     if (player.clientId == clientId) return opponentHandsView.GetEmoteAnchor(player.nickname);
                 return null;
-            });
+            }, () => handView != null ? handView.cardContainer as RectTransform : null);
         }
         if (emoteChat != null) emoteChat.SetAvailable(CanEmote);
     }

@@ -21,6 +21,20 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     public CardData Card { get; private set; }
     public System.Action<CardData> Clicked;
+    public System.Action<CardData> UnavailableClicked;
+    private UnityEngine.UI.Outline tutorialOutline;
+
+    public void SetTutorialEmphasis(bool emphasized)
+    {
+        if (emphasized && tutorialOutline == null && background != null)
+        {
+            tutorialOutline = background.gameObject.AddComponent<UnityEngine.UI.Outline>();
+            tutorialOutline.effectColor = new Color(0.25f, 0.95f, 1f, 0.95f);
+            tutorialOutline.effectDistance = new Vector2(3f, -3f);
+            tutorialOutline.useGraphicAlpha = true;
+        }
+        if (tutorialOutline != null) tutorialOutline.enabled = emphasized;
+    }
 
     private static readonly Color Red = new Color(0.83f, 0.0f, 0.0f);
     private static readonly Color Black = new Color(0.10f, 0.10f, 0.10f);
@@ -186,7 +200,8 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (!playable || Card == null) return;
+        if (Card == null) return;
+        if (!playable) { UnavailableClicked?.Invoke(Card); return; }
         Clicked?.Invoke(Card);
     }
 

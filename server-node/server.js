@@ -29,10 +29,20 @@ const PORT = Number.isInteger(configuredPort) && configuredPort > 0
   : DEFAULT_PORT;
 
 let nextClientId = 1;
-const rooms = new RoomManager();
+const GameRecorder = require('./src/GameRecorder');
+const recorder = new GameRecorder({ directory: process.env.GAME_LOG_DIR || undefined });
+const rooms = new RoomManager({ recorder });
+const botDealMissTimer = new (require('./src/BotDealMissTimer'))(rooms, (room, player) => {
+  const result = rooms.declareDealMiss(room, player.clientId);
+  if (result.error) return;
+  broadcast(room, 'deal_miss', { nickname: result.nickname });
+  redealAndRestartBidding(room);
+});
 const configuredTurnMs = Number(process.env.TURN_TIMEOUT_MS);
 const actionTimer = new (require('./src/ActionTimer'))(id => rooms.getRoom(id), {
   humanDelay: Number.isFinite(configuredTurnMs) && configuredTurnMs >= 100 ? configuredTurnMs : 30000,
+  bidDelay: Number.isFinite(configuredTurnMs) && configuredTurnMs >= 100 ? configuredTurnMs : 45000,
+  onArmed: (room, timing) => broadcast(room, "action_timer", timing),
 });
 const tutorial = new (require('./src/Tutorial'))(rooms, send);
 
@@ -42,7 +52,8 @@ const serveStatic = staticFiles(path.join(__dirname, "public"));
 const httpServer = http.createServer((req, res) => {
   if (req.url === "/health" || req.url === "/health/") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ status: "ok", port: PORT, rooms: Object.keys(rooms.rooms).length }));
+    res.end(JSON.stringify({ status: "ok", port: PORT, rooms: Object.keys(rooms.rooms).length,
+      gameRecording: recorder.health() }));
     return;
   }
 
@@ -64,7 +75,8 @@ function broadcast(room, type, data) {
   for (const p of room.players) {
     if (p.ws && p.ws.readyState === p.ws.OPEN) {
       // Never broadcast the declarer's private discarded-card score to peers.
-      const payload = type === "game_state" ? rooms.publicState(room, p.clientId) : data;
+      const payload = type === "game_state"
+        ? { ...rooms.publicState(room, p.clientId), ...actionTimer.snapshot(room) } : data;
       p.ws.send(JSON.stringify({ type, data: payload }));
     }
   }
@@ -635,6 +647,7 @@ function maybeBotBid(room) {
   if (room && room.tutorial) return;
   if (!room || room.status !== "bidding") return;
   if (waitingForDealAnimation(room)) return;
+  if (botDealMissTimer.arm(room)) return;
   const bidder = rooms.currentBidder(room);
   const dealId = room.dealId;
   actionTimer.arm(room, bidder, 1000 + Math.floor(Math.random() * 1001), () => {
@@ -643,6 +656,7 @@ function maybeBotBid(room) {
     if (r.dealId !== dealId || waitingForDealAnimation(r)) { maybeBotBid(r); return; }
     const b = rooms.currentBidder(r);
     if (b !== bidder) { maybeBotBid(r); return; }
+    if (botDealMissTimer.arm(r)) return;
     // 손패 평가로 공약할지 패스할지 결정
     const decision = rooms.isBotControlled(b) ? rooms.botDecideBid(r, b) : null;
     let result;
@@ -731,6 +745,7 @@ function maybeBotPlay(room, delayMs) {
     const pick = rooms.botPickPlay(r, bot);
     if (!pick || !pick.cardId) return;
     const result = rooms.playCard(r, bot.clientId, pick.cardId, {
+      automated: true,
       declaredSuit: pick.declaredSuit,
       activateJokerCall: pick.activateJokerCall,
     });
@@ -833,6 +848,7 @@ httpServer.listen(PORT, () => {
 
 function shutdown(signal) {
   console.log(`[shutdown] ${signal} received`);
+  for (const room of Object.values(rooms.rooms)) recorder.end(room, 'server_shutdown');
   clearInterval(heartbeat);
   clearInterval(reclaimTimer);
   wss.close(() => {

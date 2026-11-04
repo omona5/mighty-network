@@ -26,6 +26,7 @@ const crypto = require("crypto");
 const Deck = require("./game/Deck");
 const RuleEngine = require("./game/RuleEngine");
 const Scoring = require("./game/Scoring");
+const BotPolicy = require("./game/BotPolicy");
 const { sortHand } = require("./game/Card");
 
 const MAX_PLAYERS = 5;
@@ -65,8 +66,9 @@ function makeToken() {
 }
 
 class RoomManager {
-  constructor() {
+  constructor({ recorder = null } = {}) {
     this.rooms = {};
+    this.recorder = recorder;
   }
 
   getRoom(roomId) {
@@ -146,7 +148,8 @@ class RoomManager {
 
   // 봇(자동 플레이어)을 방에 추가한다. 빈자리를 채워 5명을 맞추는 용도.
   // 봇은 항상 준비 상태이며 ws 연결이 없다.
-  addBot(room) {
+  addBot(room, policy) {
+    if (policy != null && !BotPolicy.NAMES.includes(policy)) return { error: "알 수 없는 봇 정책입니다." };
     if (room.status !== "waiting") {
       return { error: "대기 중일 때만 봇을 추가할 수 있습니다." };
     }
@@ -164,6 +167,7 @@ class RoomManager {
       connected: true,
       disconnectedAt: null,
       isBot: true,
+      botPolicy: policy || BotPolicy.NAMES[Math.floor(Math.random() * BotPolicy.NAMES.length)],
       sessionScore: 0,
       hand: [],
       wonCards: [],
@@ -215,6 +219,7 @@ class RoomManager {
     room.trickComplete = false;
     room.trickHistory = [];
     room.lastTrickWinner = null;
+    this.recorder?.begin(room);
     return { hands, kitty };
   }
 
@@ -224,7 +229,8 @@ class RoomManager {
   // startMinBid: 이번 입찰 라운드의 최소 공약(전원 패스로 낮춰진 경우 그 값)
   startBidding(room, startMinBid = MIN_BID) {
     room.minBid = startMinBid;
-    room.currentBidderIndex = 0;
+    const previousDeclarerIndex = room.players.findIndex(p => p.clientId === room.previousDeclarerClientId);
+    room.currentBidderIndex = previousDeclarerIndex >= 0 ? previousDeclarerIndex : 0;
     room.highestBid = null; // { clientId, nickname, targetScore, trumpSuit, noTrump }
     room.bids = [];
     room.passedClientIds = []; // 패스한 사람 — 더 이상 입찰 불가
@@ -237,6 +243,7 @@ class RoomManager {
     room.friendType = undefined; // 지정 전 undefined, "card"|"player"|"none"
     room.friendRevealed = false;
     room.discardedKitty = null; // 주공이 버린 3장 (점수 = 주공팀)
+    this.recorder?.record(room, 'bidding_start', { minBid: startMinBid });
   }
 
   // ===================== 바닥패 교환 =====================
@@ -264,9 +271,11 @@ class RoomManager {
       return { error: "바닥패가 3장이 아닙니다. (현재 " + kitty.length + ")" };
     }
     decl.hand = sortHand((decl.hand || []).concat(kitty));
+    const pickedUp = kitty.map(c => ({ ...c }));
     room.kitty = []; // 교환 중에는 손패로 이동
     room.discardedKitty = null;
     this.applyDebugJokerHand(room);
+    this.recorder?.record(room, 'kitty_pickup', { clientId: decl.clientId, cards: pickedUp });
     return { ok: true, handCount: decl.hand.length };
   }
 
@@ -286,6 +295,10 @@ class RoomManager {
     const decl = room.players.find((p) => p.clientId === clientId);
     if (!decl || !decl.hand) return { error: "주공 손패를 찾을 수 없습니다." };
 
+    // Validate the entire request before removing any card.
+    if (decl.hand.length !== 13 || ids.some(id => !decl.hand.some(c => c.id === id))) {
+      return { error: "13장 손패에서 보유한 카드 3장을 선택하세요." };
+    }
     const discarded = [];
     for (const id of ids) {
       const idx = decl.hand.findIndex((c) => c.id === id);
@@ -300,6 +313,7 @@ class RoomManager {
     room.kitty = discarded; // 점수 계산용 (묻힌 카드)
     sortHand(decl.hand);
     this.applyDebugJokerHand(room);
+    this.recorder?.record(room, 'kitty_discard', { clientId, cards: discarded });
     return { ok: true, discarded: room.discardedKitty, hand: decl.hand };
   }
 
@@ -390,7 +404,9 @@ class RoomManager {
       noTrump,
     };
     room.bids.push({ ...room.highestBid, pass: false });
-    return { ok: true, complete: this._finishOrAdvanceBidder(room) };
+    const complete = this._finishOrAdvanceBidder(room);
+    this.recorder?.record(room, 'bid', { ...room.highestBid, complete });
+    return { ok: true, complete };
   }
 
   // 패스. 성공 { ok, complete }, 실패 { error }.
@@ -403,7 +419,9 @@ class RoomManager {
       room.passedClientIds = (room.passedClientIds || []).concat([clientId]);
     }
     room.bids.push({ clientId, nickname: bidder.nickname, pass: true });
-    return { ok: true, complete: this._finishOrAdvanceBidder(room) };
+    const complete = this._finishOrAdvanceBidder(room);
+    this.recorder?.record(room, 'bid_pass', { clientId, complete });
+    return { ok: true, complete };
   }
 
   debugJokerCallId() {
@@ -460,6 +478,7 @@ class RoomManager {
     }
     if (!room.highestBid) {
       const cur = room.minBid || MIN_BID;
+      this.recorder?.record(room, 'all_pass', { minBid: cur, redeal: cur <= BID_FLOOR });
       if (cur > BID_FLOOR) return { lowerBid: true, newMin: cur - 1 };
       return { redeal: true };
     }
@@ -471,6 +490,7 @@ class RoomManager {
     room.targetScore = h.targetScore;
     // 이 판의 룰 설정을 확정 (마이티/조커콜이 기루다에 따라 결정됨)
     room.ruleConfig = RuleEngine.makeRuleConfig(room.declaredTrump, room.noTrump);
+    this.recorder?.record(room, 'contract', { ...h });
     return {
       declarerClientId: h.clientId,
       declarerNickname: decl ? decl.nickname : "",
@@ -505,6 +525,7 @@ class RoomManager {
       room.friendClientId = null;
       room.friendType = "none";
       room.friendRevealed = true;
+      this.recorder?.record(room, 'friend_choice', { clientId, friendType: 'none' });
       return { ok: true, friendType: "none" };
     }
 
@@ -518,6 +539,7 @@ class RoomManager {
       room.friendClientId = rawPlayer;
       room.friendType = "player";
       room.friendRevealed = true; // 플레이어 지정은 즉시 공개
+      this.recorder?.record(room, 'friend_choice', { clientId, friendType: 'player', friendClientId: rawPlayer });
       return { ok: true, friendType: "player", friendNickname: p.nickname };
     }
 
@@ -529,21 +551,28 @@ class RoomManager {
     room.friendClientId = owner ? owner.clientId : null;
     room.friendType = "card";
     room.friendRevealed = false;
+    this.recorder?.record(room, 'friend_choice', { clientId, friendType: 'card', friendCardId: cardId });
     return { ok: true, friendType: "card" };
   }
 
   // 봇이 주공일 때 프렌드로 지정할 카드 반환.
-  // 자기가 안 가진 카드 중 마이티>조커>아무 에이스 순으로 고른다(자기 자신 프렌드 방지).
+  // 학습 풀 공통 정책: 마이티 > 조커 > 기루 A/K/Q/J > 남은 높은 카드.
   botFriendCardId(room) {
     const decl = room.players.find((p) => p.clientId === room.declarerClientId);
     const hand = (decl && decl.hand) || [];
     const has = (id) => hand.some((c) => c.id === id);
     const mighty = room.ruleConfig ? room.ruleConfig.mightyCardId : "S_A";
-    const candidates = [mighty, "JOKER", "H_A", "D_A", "C_A", "S_A"];
+    const prefix = { SPADE: 'S', HEART: 'H', DIAMOND: 'D', CLUB: 'C' }[room.ruleConfig?.trumpSuit];
+    const candidates = [mighty, "JOKER", ...(prefix ? ['A', 'K', 'Q', 'J'].map(r => `${prefix}_${r}`) : [])];
     for (const id of candidates) {
       if (!has(id)) return id;
     }
-    return mighty; // 이론상 도달 불가
+    const missing = Deck.createDeck().filter(c => !has(c.id));
+    for (const rank of ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2']) {
+      const cards = missing.filter(c => c.rank === rank);
+      if (cards.length) return cards[Math.floor(Math.random() * cards.length)].id;
+    }
+    return missing[0]?.id || mighty;
   }
 
   // 봇 손패 평가: 각 무늬를 기루다로 가정했을 때 예상 획득 점수를 추정하고,
@@ -578,11 +607,12 @@ class RoomManager {
   botDecideBid(room, player) {
     if (DEBUG_FORCE_JOKER_HAND) return null; // 테스트: 봇은 패스, 사람 주공+하트 고정
     const ev = this._evaluateHandForBid(player.hand || []);
-    const myMax = Math.min(MAX_BID, Math.floor(ev.tricks));
+    const myMax = Math.min(MAX_BID, Math.floor(ev.tricks - 1.5));
     const roundMin = room.minBid || MIN_BID;
     if (!ev.suit || myMax < roundMin) return null; // 약한 패 → 패스
     const minAllowed = room.highestBid ? room.highestBid.targetScore + 1 : roundMin;
-    if (minAllowed > MAX_BID || myMax < minAllowed) return null; // 못 이기면 패스
+    const need = minAllowed + (room.highestBid ? 1 : 0);
+    if (minAllowed > MAX_BID || myMax < need) return null;
     // 이길 수 있으면 필요한 최소치만 보수적으로 부른다.
     return { targetScore: minAllowed, trumpSuit: ev.suit, noTrump: false };
   }
@@ -612,6 +642,7 @@ class RoomManager {
     if (!this.canDeclareDealMiss(p.hand, false)) {
       return { error: "딜미스(노게임) 조건이 아닙니다. (손패 점수 0.5 이하)" };
     }
+    this.recorder?.record(room, 'deal_miss', { clientId, score: RuleEngine.dealMissScore(p.hand) });
     return { ok: true, nickname: p.nickname, score: RuleEngine.dealMissScore(p.hand) };
   }
 
@@ -639,6 +670,7 @@ class RoomManager {
     room.players.forEach((p) => {
       p.wonCards = []; // 이 판에서 획득한 카드들
     });
+    this.recorder?.record(room, 'play_start');
   }
 
   // 현재 차례인 플레이어
@@ -751,6 +783,9 @@ class RoomManager {
         winnerClientId,
         winnerNickname: winner.nickname,
         cards,
+        trickNumber: room.trickNumber,
+        // Snapshot every public play, including joker declarations and calls.
+        table: room.tableCards.map(entry => ({ ...entry, card: { ...entry.card } })),
       });
       room.lastTrickWinner = { clientId: winnerClientId, nickname: winner.nickname };
       room.trickComplete = true; // 테이블은 다음 리드 때 비움 (화면에 잠시 보이도록)
@@ -765,6 +800,20 @@ class RoomManager {
     } else {
       // 다음 플레이어로 턴 넘김 (순환)
       room.currentTurnIndex = (room.currentTurnIndex + 1) % room.players.length;
+    }
+    this.recorder?.record(room, 'play', {
+      clientId, seat: room.players.indexOf(player),
+      controller: options.automated ? (player.isBot ? 'bot' : 'auto') : (player.isBot ? 'bot' : 'human'),
+      botPolicy: options.automated || player.isBot ? player.botPolicy || 'GreedyBot' : null,
+      trickNumber: trickResult ? room.trickHistory.at(-1).trickNumber : room.trickNumber,
+      playIndex: room.tableCards.length - 1, ...entry,
+    });
+    if (trickResult) {
+      const trick = room.trickHistory.at(-1);
+      this.recorder?.record(room, 'trick_end', { ...trick,
+        points: trick.cards.reduce((sum, c) => sum + c.point, 0),
+        outcomes: trick.table.map(t => ({ clientId: t.clientId, won: t.clientId === trick.winnerClientId })),
+      });
     }
     return { card, player, trickResult };
   }
@@ -781,12 +830,15 @@ class RoomManager {
     result = Scoring.applySessionScores(room, result);
     room.status = "finished";
     room.lastResult = result;
+    room.previousDeclarerClientId = room.declarerClientId;
     room.currentTurnIndex = null;
+    this.recorder?.end(room, 'finished', result);
     return result;
   }
 
   // 결과 확인 후 대기방으로 복귀 (다음 판 준비)
   returnToWaiting(room) {
+    this.recorder?.end(room, 'returned_to_lobby');
     room.status = "waiting";
     room.lastResult = null;
     room.kitty = undefined;
@@ -824,6 +876,12 @@ class RoomManager {
   // 봇이 낼 카드(+리드 옵션)를 고른다.
   // 반환: { cardId, declaredSuit?, activateJokerCall? } 또는 null
   botPickPlay(room, player) {
+    if (room.tutorial) return this.tutorialPickPlay(room, player);
+    return BotPolicy.pickPlay(room, player, player.botPolicy || 'GreedyBot');
+  }
+
+  // Scripted tutorial retains its existing pacing and joker demonstrations.
+  tutorialPickPlay(room, player) {
     if (!player.hand || player.hand.length === 0) return null;
     // 직전 트릭 완성 직후면 테이블을 비운 뒤 리드로 취급
     const tableCards = room.trickComplete ? [] : room.tableCards || [];
@@ -966,6 +1024,7 @@ class RoomManager {
       }
       // 사람(비봇)이 없으면 방 삭제
       if (this.rooms[roomId].players.every((p) => p.isBot)) {
+        this.recorder?.end(room, 'no_humans');
         delete this.rooms[roomId];
         affected.push(null);
         continue;
@@ -1050,6 +1109,7 @@ class RoomManager {
         // 사람(비봇)이 한 명도 안 남으면 방을 삭제한다. (봇만 남겨두지 않음)
         const humans = room.players.filter((p) => !p.isBot);
         if (humans.length === 0) {
+          this.recorder?.end(room, 'no_humans');
           delete this.rooms[roomId];
           return null;
         }
@@ -1083,6 +1143,7 @@ class RoomManager {
       currentTurnNickname: turnP ? turnP.nickname : null,
       lastTrickWinnerNickname: room.lastTrickWinner ? room.lastTrickWinner.nickname : null,
       trickComplete: !!room.trickComplete,
+      tutorialHoldTable: !!room.tutorial && room.tutorial.holdTable !== false,
       trickNumber: room.trickNumber || 0,
       tableWinningCardId: (() => {
         const table = room.tableCards || [];
@@ -1159,6 +1220,7 @@ class RoomManager {
         isReady: p.isReady,
         connected: p.connected,
         isBot: p.isBot,
+        botPolicy: p.isBot ? p.botPolicy || 'GreedyBot' : null,
         botControlled: this.isBotControlled(p) && !p.isBot, // 사람인데 봇이 대신 플레이 중
         disconnectedAt: !p.isBot && !p.connected ? p.disconnectedAt : null,
         reconnectExpiresAt:

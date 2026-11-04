@@ -970,6 +970,553 @@ MonoBehaviour:
       on the same team. Playing it reveals your identity to everyone.'
     m_Metadata:
       m_Items: []
+  - m_Id: 7262043226742784
+    m_Localized: "1 / 2 \xB7 Try playing"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714304
+    m_Localized: "The 10 face-up cards at the bottom are your hand. The other four
+      players\u2019 hands are face down.\n\nLet\u2019s learn the rules by playing
+      cards. Read each explanation and press Confirm to continue."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714305
+    m_Localized: Follow the first suit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714306
+    m_Localized: "The lead player started this trick with \u2663A. If you have the
+      same suit as the first card, ordinary cards must follow that suit.\n\nOnce
+      there are at least two cards on the table, a yellow border marks the strongest
+      card so far.\n\nPlay \u26632 this time."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714307
+    m_Localized: "Play \u26632 to follow clubs."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714308
+    m_Localized: Ace is highest in the same suit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714309
+    m_Localized: "Everyone played clubs, so \u2663A won.\n\nWithin a suit, cards
+      rank A > K > Q > J > 10 > 9 > \u2026 > 2. The trick winner leads the next trick."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714310
+    m_Localized: "Trump \xB7 the strongest suit"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714311
+    m_Localized: "Trump is the strongest suit for this round. Hearts are trump this
+      round. You can check trump in the round information at the top.\n\nThis trick
+      started with \u2666K, but you have no diamonds. Without the lead suit, you
+      may play another suit. Try \u26654."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714312
+    m_Localized: "You have no diamonds. Play the trump card \u26654."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714313
+    m_Localized: "\u26654 overtook \u2666K"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714314
+    m_Localized: "\u26654 is lower in rank than \u2666K, but hearts are trump, so
+      \u26654 is stronger. The yellow border moved to \u26654.\n\nOne player still
+      has a card to play. Press Confirm to see it."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714315
+    m_Localized: Higher trump wins
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714316
+    m_Localized: "The last bot played \u26656. Higher ranks win within the trump
+      suit, so \u26656 won.\n\nThat bot will lead the next trick."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714317
+    m_Localized: Mighty and Joker
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714318
+    m_Localized: "Mighty is always the strongest card. It is usually \u2660A, but
+      becomes \u2666A when spades are trump.\n\nJoker is usually second to Mighty.
+      Mighty and Joker do not have to follow the first suit.\n\nHearts are trump
+      this round, so \u2660A is Mighty."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714319
+    m_Localized: Play Mighty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714320
+    m_Localized: "The bot led clubs. Even though you have clubs, Mighty is an exception
+      and may be played.\n\nPlay \u2660A to see the strongest card in action."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714321
+    m_Localized: "Play \u2660A, this round\u2019s Mighty."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714322
+    m_Localized: "Friend revealed \xB7 Mighty saved the team"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714323
+    m_Localized: "The last bot played \u2660A, Mighty! Mighty beat \u2665K and collected
+      3 point cards.\n\nThat bot is the Mighty friend you chose. Playing \u2660A
+      reveals their identity and shows a purple friend badge. Their points now count
+      toward the declarer\u2019s team.\n\nThis is how a hidden friend helps the declarer.
+      Now play three more tricks using your own judgment."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714324
+    m_Localized: "A\xB7K\xB7Q\xB7J\xB710 are point cards"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714325
+    m_Localized: "Look at the five cards on the table. Each A, K, Q, J and 10 is
+      worth 1 point, making 20 points in a full round.\n\nYou earned 4 points from
+      \u2660A, \u2663K, \u2663Q and \u2663J.\n\nPress Confirm to collect the point
+      cards and clear the other cards."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714326
+    m_Localized: Lead with a Joker Call!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714327
+    m_Localized: "You won the previous trick, so you lead. This round\u2019s Joker
+      Call card is \u26633.\n\nJoker is second to Mighty, but loses its power when
+      drawn out by a Joker Call. Calling when you lead forces the opponent holding
+      Joker to play it.\n\nSelect \u26633, then choose \u201CUse Joker Call\u201D."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714328
+    m_Localized: "\u26633 \u2192 \u201CUse Joker Call\u201D"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714329
+    m_Localized: You drew out the Joker
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714330
+    m_Localized: "The Joker drawn out by the call lost its power. \u266310, the highest
+      club in this trick, won.\n\nJoker also loses its power on the first and last
+      tricks."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714331
+    m_Localized: First practice recap
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714332
+    m_Localized: "Basic strength: Mighty > Joker > trump > lead suit\nWithin a suit:
+      A > K > Q > J > 10 > \u2026 > 2\n\nOrdinary cards must follow suit; Mighty
+      and Joker are exceptions. Joker loses its power on the first and last tricks
+      and when called.\n\nCollect A, K, Q, J and 10 for points. Now let\u2019s move
+      to the second practice round."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714333
+    m_Localized: "2 / 2 \xB7 Bid to become declarer"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714334
+    m_Localized: 'Before play, players compete to become declarer by proposing a
+      trump suit and a target score. This is a bid.
+
+
+      You have a strong hand
+      with many hearts. Choose 13 points and hearts, then submit your bid. The bots
+      will all pass.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714335
+    m_Localized: Bid 13 points with hearts as trump.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714336
+    m_Localized: You became declarer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714337
+    m_Localized: 'All the bots passed, so you became declarer.
+
+
+      Your team
+      must collect at least 13 points with hearts as trump. Press Confirm to pick
+      up the three kitty cards.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714338
+    m_Localized: Exchange the three kitty cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714339
+    m_Localized: "You received three kitty cards and now have 13 cards. Discard three
+      to return to 10.\n\nSelect \u26602, \u26662 and \u26632, then press \u201CDiscard
+      3\u201D. Click a selected card again to deselect it."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714340
+    m_Localized: "Select \u26602, \u26662 and \u26632 \u2192 \u201CDiscard 3\u201D"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714341
+    m_Localized: Your hand is ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714342
+    m_Localized: "After discarding three cards, you have 10 again. The kitty lets
+      the declarer improve their hand.\n\nDiscarded point cards count toward the
+      declarer team\u2019s score. None of your three discards were point cards."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714343
+    m_Localized: Choose your friend
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714344
+    m_Localized: "The declarer can name a card and make its holder their friend.\n\nCall
+      the holder of Mighty, a card you do not have, onto your team. Choose \u201CMighty\u201D."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714345
+    m_Localized: "Choose \u201CMighty\u201D to declare your friend."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714346
+    m_Localized: "Mighty\u2019s holder is on your team"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714347
+    m_Localized: "The player holding \u2660A became your friend. Even the declarer
+      does not know who it is until that player plays \u2660A.\n\nChoosing a player
+      directly reveals the friend immediately. No Friend means taking on the declarer
+      role alone."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714348
+    m_Localized: "The declarer\u2019s first card"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714349
+    m_Localized: "The declarer leads the first trick. Hearts are trump in this round.\n\nPlay
+      \u2665A, the highest heart, to begin."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714350
+    m_Localized: "Play \u2665A to start the first trick."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714351
+    m_Localized: "You won the first trick with \u2665A"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714352
+    m_Localized: "Everyone played hearts, so the highest heart, \u2665A, won.\n\nYou
+      still hold strong trumps such as \u2665Q, \u2665J and \u266510, but no \u2665K.
+      You also do not know who your friend is yet. Let\u2019s play the next trick."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714353
+    m_Localized: Choose your own cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714354
+    m_Localized: 'Use what you learned to choose a card. Every legal card is allowed.
+
+
+      After
+      each trick, we will look at what actually happened.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714355
+    m_Localized: Choose any card you can legally play.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714356
+    m_Localized: Practice complete!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714357
+    m_Localized: 'Congratulations! You tried following suit, trump, Mighty and friend,
+      point cards and Joker Call.
+
+
+      You also practiced bidding, exchanging
+      the kitty and choosing a friend as declarer, followed by three free-play tricks.
+
+
+      A
+      real round has 10 tricks. The declarer team wins by reaching its target; defenders
+      win by preventing that. Keep practicing in single player!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714358
+    m_Localized: Start single player
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714359
+    m_Localized: Mighty tutorial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714360
+    m_Localized: 'Mighty is a five-player game where two teams collect point cards.
+
+
+      Each
+      player plays one card. Whoever plays the strongest card takes all five cards.
+      This is one trick.
+
+
+      Learn the rules by playing two short practice rounds.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714361
+    m_Localized: Trick result
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714362
+    m_Localized: Mighty was played and beat all other cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714363
+    m_Localized: Joker had its power in this trick and won.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714364
+    m_Localized: Trump beat the first suit and won.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714365
+    m_Localized: The highest card of the same suit won.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714366
+    m_Localized: You chose a legal card yourself. The trick winner leads the next
+      trick.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714367
+    m_Localized: "Mighty does not have to follow suit. This lesson practices following
+      suit with ordinary cards, so try \u26632."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714368
+    m_Localized: "\u26633 is legal too, but save it for the Joker Call lesson. Play
+      \u26632 this time."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714369
+    m_Localized: "The first card is a club. You have clubs, so ordinary cards must
+      follow clubs. Try \u26632."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714370
+    m_Localized: "This lesson shows the power of trump. You have no diamonds, so
+      you can play \u26654."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714371
+    m_Localized: "This lesson practices Mighty, the strongest card. Try \u2660A."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714372
+    m_Localized: "This lesson practices Joker Call. Select \u26633 and choose \u201CUse
+      Joker Call\u201D."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714373
+    m_Localized: Practice becoming declarer with a heart-heavy hand. Bid 13 points
+      with hearts as trump.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714374
+    m_Localized: "Discard three cards to return to 10. Select \u26602, \u26662 and
+      \u26632 this time."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714375
+    m_Localized: "This lesson calls the Mighty holder as friend. Choose \u201CMighty\u201D."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714376
+    m_Localized: "The declarer leads the first trick. Play \u2665A, the highest heart,
+      this time."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714377
+    m_Localized: Follow the current lesson instructions.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714378
+    m_Localized: You have the first suit, so you cannot play an ordinary card of
+      another suit.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714379
+    m_Localized: Joker Call is active, so you must play Joker.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714380
+    m_Localized: Free play 1 / 3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714381
+    m_Localized: Free play 2 / 3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714382
+    m_Localized: Free play 3 / 3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714383
+    m_Localized: You won this trick and collected 0 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714384
+    m_Localized: A bot won this trick and collected 0 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714385
+    m_Localized: You won this trick and collected 1 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714386
+    m_Localized: A bot won this trick and collected 1 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714387
+    m_Localized: You won this trick and collected 2 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714388
+    m_Localized: A bot won this trick and collected 2 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714389
+    m_Localized: You won this trick and collected 3 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714390
+    m_Localized: A bot won this trick and collected 3 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714391
+    m_Localized: You won this trick and collected 4 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714392
+    m_Localized: A bot won this trick and collected 4 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714393
+    m_Localized: You won this trick and collected 5 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7262043247714394
+    m_Localized: A bot won this trick and collected 5 point cards.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7630984121917440
+    m_Localized: Win a trick with Mighty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7630984168054784
+    m_Localized: "\u2660A is the strongest card, so you won this trick."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7630984168054785
+    m_Localized: Minimize
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7630984168054786
+    m_Localized: Expand
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7630984168054787
+    m_Localized: The trick winner leads the next trick.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835623235584
+    m_Localized: Mighty has three roles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401408
+    m_Localized: 'The three roles in Mighty are declarer, friend and citizen.
+
+
+      The
+      declarer leads the game, elected by bidding a target score. Use a strong hand
+      and work with your friend to reach that target and win.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401409
+    m_Localized: "Friend \xB7 a hidden teammate"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401410
+    m_Localized: "The friend is a hidden member of the declarer\u2019s team, chosen
+      by the declarer. Until the friend card (such as Mighty) is played, their identity
+      stays hidden from all other players, including the declarer.\n\nThe friend
+      knows their own role and helps the declarer while hidden among the citizens.
+      When revealed, all their points, including earlier points, count toward the
+      declarer\u2019s team. They win together by reaching the target."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401411
+    m_Localized: "Citizens \xB7 stop the declarer\u2019s team"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401412
+    m_Localized: "The citizens are the other three players, excluding the declarer
+      and friend.\n\nCollect point cards to prevent the declarer\u2019s team (declarer
+      + friend) from reaching its target. The game also calls citizens the defending
+      team.\n\nIn this practice round, become the declarer and play alongside a hidden
+      friend."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401413
+    m_Localized: "Lead the next trick with \u2665Q"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401414
+    m_Localized: "You won the previous trick, so you lead again.\n\nPlay \u2665Q.
+      Another player holds \u2665K, which is stronger than \u2665Q."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401415
+    m_Localized: "Play \u2665Q to start the next trick."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401416
+    m_Localized: "A citizen\u2019s \u2665K is winning"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401417
+    m_Localized: "A citizen played \u2665K, beating your \u2665Q. If the trick ended
+      now, the citizens would take the points.\n\nThe last player has not played
+      yet. Press Confirm to see their card."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401418
+    m_Localized: Preparing the first practice round...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401419
+    m_Localized: Preparing the second practice round...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7647835648401420
+    m_Localized: "Play \u2665Q to see how your hidden friend helps you."
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

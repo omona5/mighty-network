@@ -120,7 +120,7 @@ public class PlayChoicePopup : MonoBehaviour
         Open();
     }
 
-    public void ShowJokerCallPick(string cardId, Action<bool> onPick, Action cancel)
+    public void ShowJokerCallPick(string cardId, Action<bool> onPick, Action cancel, bool emphasizeCall = false)
     {
         EnsureReady();
         onCancel = cancel;
@@ -131,11 +131,17 @@ public class PlayChoicePopup : MonoBehaviour
         LayoutElement ple = preview.gameObject.AddComponent<LayoutElement>();
         ple.preferredWidth = IconSpriteAtlas.DisplayCard.x;
         ple.preferredHeight = IconSpriteAtlas.DisplayCard.y;
-        MakeTextButton(row, "조커콜 사용", 240f, 88f, () =>
+        var callButton = MakeTextButton(row, "조커콜 사용", 240f, 88f, () =>
         {
             Hide();
             if (onPick != null) onPick(true);
         });
+        if (emphasizeCall)
+        {
+            var outline = callButton.gameObject.AddComponent<UnityEngine.UI.Outline>();
+            outline.effectColor = new Color(0.25f, 0.95f, 1f, 0.95f);
+            outline.effectDistance = new Vector2(3f, -3f);
+        }
         MakeTextButton(row, "일반으로 내기", 240f, 88f, () =>
         {
             Hide();

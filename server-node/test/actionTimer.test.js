@@ -56,3 +56,31 @@ try {
   assert.equal(jobs.at(-1).ms, 2000);
 } finally { Date.now = realNow; }
 console.log('Announcement timers: human, bot replacement and election wait passed.');
+
+const timedRoom = rooms.createRoom(null);
+const human = rooms.addPlayer(timedRoom, 'Timed', { clientId: 'timed' }).player;
+const notices = [];
+const phaseTimer = new ActionTimer(id => rooms.getRoom(id), {
+  schedule: (fn, ms) => ({ fn, ms }), cancel: () => {},
+  onArmed: (r, timing) => notices.push(timing),
+});
+try {
+  Date.now = () => 10000;
+  timedRoom.status = 'bidding';
+  phaseTimer.arm(timedRoom, human, 700, () => {});
+  assert.equal(notices.at(-1).actionDeadline, 55000, 'bidding allows 45 seconds');
+  Date.now = () => 45000;
+  phaseTimer.arm(timedRoom, human, 700, () => {});
+  assert.equal(notices.length, 1, 'repeat state does not restart or announce clock');
+  const snapshot = phaseTimer.snapshot(timedRoom);
+  assert.equal(snapshot.actionDeadline - snapshot.serverTime, 10000);
+  assert.equal(snapshot.actionClientId, human.clientId);
+  timedRoom.status = 'playing';
+  assert.equal(phaseTimer.snapshot(timedRoom).actionDeadline, 0, 'stale phase hides countdown');
+  phaseTimer.arm(timedRoom, human, 700, () => {});
+  assert.equal(notices.at(-1).actionDeadline, 75000, 'card play allows 30 seconds');
+  human.connected = false;
+  phaseTimer.arm(timedRoom, human, 700, () => {});
+  assert.equal(notices.at(-1).actionDeadline, 0, 'bot replacement hides human countdown');
+} finally { Date.now = realNow; }
+console.log('Phase durations and countdown snapshots passed.');

@@ -21,6 +21,7 @@ public class CardPlayAnimator : MonoBehaviour
         public bool isDeclarer;
         public bool isFriend;
         public bool isFriendSecret;
+        public bool isMighty;
         public string declaredSuit;
         public Action onComplete;
     }
@@ -39,6 +40,9 @@ public class CardPlayAnimator : MonoBehaviour
         queue.Clear();
         StopAllCoroutines();
         CleanupActiveFlight();
+        if (flyLayer != null)
+            for (int i = flyLayer.childCount - 1; i >= 0; i--)
+                Destroy(flyLayer.GetChild(i).gameObject);
         busy = false;
     }
 
@@ -88,7 +92,8 @@ public class CardPlayAnimator : MonoBehaviour
         bool isFriend,
         bool isFriendSecret,
         string declaredSuit,
-        Action onComplete)
+        Action onComplete,
+        bool isMighty = false)
     {
         if (cardPrefab == null || card == null || destCard == null)
         {
@@ -106,6 +111,7 @@ public class CardPlayAnimator : MonoBehaviour
             isDeclarer = isDeclarer,
             isFriend = isFriend,
             isFriendSecret = isFriendSecret,
+            isMighty = isMighty,
             declaredSuit = declaredSuit,
             onComplete = onComplete,
         });
@@ -198,21 +204,120 @@ public class CardPlayAnimator : MonoBehaviour
             List<RectTransform> badgeRts = AttachFlyBadges(rt, req);
             rt.SetAsLastSibling();
             LayoutFlyBadges(badgeRts, rt.sizeDelta.y);
-            Sfx.CardPlay();
+            bool isJoker = req.card.id == "JOKER" && !req.isMighty;
+            CanvasGroup reveal = null;
+            RectTransform[] echoes = null;
+            CanvasGroup[] echoAlpha = null;
+            if (isJoker)
+            {
+                reveal = flyView.GetComponent<CanvasGroup>();
+                if (reveal == null) reveal = flyView.gameObject.AddComponent<CanvasGroup>();
+                reveal.alpha = 0f;
+                reveal.blocksRaycasts = false;
+                reveal.interactable = false;
+                rt.anchoredPosition = endLocal + Vector2.up * 12f;
+                rt.sizeDelta = req.endSize;
+                rt.localScale = Vector3.one * 0.96f;
+                echoes = new RectTransform[2];
+                echoAlpha = new CanvasGroup[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    // Children are automatically cleaned up with the flight on cancellation.
+                    CardView echo = Instantiate(cardPrefab, rt);
+                    echo.name = "JokerEcho" + i;
+                    echo.Clicked = null;
+                    echo.SetFlightMode(true);
+                    echo.SetCard(req.card);
+                    echo.SetPlayable(true);
+                    echoes[i] = echo.GetComponent<RectTransform>();
+                    echoes[i].anchorMin = echoes[i].anchorMax = echoes[i].pivot = Vector2.one * 0.5f;
+                    echoes[i].sizeDelta = req.endSize;
+                    echoes[i].localScale = Vector3.one;
+                    echoes[i].anchoredPosition = Vector2.zero;
+                    foreach (Graphic graphic in echo.GetComponentsInChildren<Graphic>(true))
+                        graphic.raycastTarget = false;
+                    echoAlpha[i] = echo.GetComponent<CanvasGroup>();
+                    if (echoAlpha[i] == null) echoAlpha[i] = echo.gameObject.AddComponent<CanvasGroup>();
+                    echoAlpha[i].alpha = 0f;
+                    echoAlpha[i].blocksRaycasts = false;
+                    echoAlpha[i].interactable = false;
+                }
+            }
+            else Sfx.CardPlay();
 
             float t = 0f;
-            while (t < duration)
+            float flightDuration = isJoker ? 0.7f : req.isMighty ? 0.42f : duration;
+            while (t < flightDuration)
             {
                 if (flyView == null || destCard == null)
                     yield break;
                 t += Time.unscaledDeltaTime;
-                float u = Mathf.Clamp01(t / duration);
+                float u = Mathf.Clamp01(t / flightDuration);
                 float e = 1f - Mathf.Pow(1f - u, 3f);
-                rt.anchoredPosition = Vector2.LerpUnclamped(startLocal, endLocal, e);
-                rt.sizeDelta = Vector2.LerpUnclamped(req.startSize, req.endSize, e);
+                if (isJoker)
+                {
+                    float split = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(u / 0.32f));
+                    float merge = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 1f, u));
+                    float spread = split * (1f - merge);
+                    reveal.alpha = Mathf.Lerp(0.3f, 1f, Mathf.Clamp01(u / 0.25f));
+                    rt.anchoredPosition = endLocal + Vector2.up * (req.endSize.y * 0.16f * (1f - merge));
+                    rt.localScale = Vector3.one * Mathf.Lerp(1.06f, 1f, merge);
+                    rt.sizeDelta = req.endSize;
+                    for (int i = 0; i < echoes.Length; i++)
+                    {
+                        float side = i == 0 ? -1f : 1f;
+                        echoes[i].anchoredPosition = new Vector2(side * req.endSize.x * 0.65f * spread,
+                            req.endSize.y * 0.08f * spread);
+                        echoes[i].localRotation = Quaternion.Euler(0, 0, -side * 14f * spread);
+                        echoAlpha[i].alpha = 0.48f * spread;
+                    }
+                }
+                else if (req.isMighty)
+                {
+                    // Gather above the table, briefly hang, then accelerate into impact.
+                    Vector2 raised = endLocal + Vector2.up * req.endSize.y * 0.45f;
+                    if (u < 0.65f)
+                    {
+                        float rise = 1f - Mathf.Pow(1f - u / 0.65f, 3f);
+                        rt.anchoredPosition = Vector2.Lerp(startLocal, raised, rise);
+                        rt.sizeDelta = Vector2.Lerp(req.startSize, req.endSize * 1.28f, rise);
+                        rt.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(rise * Mathf.PI) * -9f);
+                    }
+                    else
+                    {
+                        float slam = Mathf.Pow((u - 0.65f) / 0.35f, 3f);
+                        rt.anchoredPosition = Vector2.Lerp(raised, endLocal, slam);
+                        rt.sizeDelta = Vector2.Lerp(req.endSize * 1.28f, req.endSize, slam);
+                        rt.localRotation = Quaternion.identity;
+                    }
+                }
+                else
+                {
+                    rt.anchoredPosition = Vector2.LerpUnclamped(startLocal, endLocal, e);
+                    rt.sizeDelta = Vector2.LerpUnclamped(req.startSize, req.endSize, e);
+                }
                 LayoutFlyBadges(badgeRts, rt.sizeDelta.y);
                 flyView.RefreshDropShadow();
                 yield return null;
+            }
+
+            if (req.isMighty && rt != null && destCard != null)
+            {
+                rt.anchoredPosition = endLocal;
+                rt.sizeDelta = req.endSize;
+                Sfx.CardLand(0.7f);
+                MightyImpactEffect.Play(flyLayer, destCard.position, req.endSize.x);
+                // Short squash and recoil, without moving the table or resetting its glow.
+                for (float settle = 0f; settle < 0.14f; settle += Time.unscaledDeltaTime)
+                {
+                    if (rt == null || destCard == null) yield break;
+                    float decay = 1f - settle / 0.14f;
+                    float pulse = Mathf.Sin(settle / 0.14f * Mathf.PI * 3f) * decay;
+                    rt.localScale = new Vector3(1f + 0.07f * pulse, 1f - 0.07f * pulse, 1f);
+                    rt.anchoredPosition = endLocal + new Vector2(pulse * 3f, 0f);
+                    yield return null;
+                }
+                rt.localScale = Vector3.one;
             }
 
             if (rt != null)
@@ -220,7 +325,8 @@ public class CardPlayAnimator : MonoBehaviour
                 rt.anchoredPosition = endLocal;
                 rt.sizeDelta = req.endSize;
             }
-            Sfx.CardLand();
+            if (!req.isMighty && !isJoker) Sfx.CardLand();
+            else if (isJoker) Sfx.CardLand(1.2f);
         }
         finally
         {

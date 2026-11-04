@@ -14,17 +14,20 @@ public sealed class EmoteChatView : MonoBehaviour
     private readonly Vector3[] corners = new Vector3[4];
     private Action<int> send;
     private Func<string, RectTransform> anchor;
+    private Func<RectTransform> handAnchor;
     private float nextSendAt;
     private bool available;
     private sealed class Bubble
     {
-        public RectTransform rect, tail;
+        public RectTransform rect;
+        public EmoteBubbleGraphic background;
         public UnityEngine.UI.Image icon;
         public float until;
         public bool self;
     }
 
-    public static EmoteChatView Create(Canvas canvas, Action<int> send, Func<string, RectTransform> anchor)
+    public static EmoteChatView Create(Canvas canvas, Action<int> send, Func<string, RectTransform> anchor,
+        Func<RectTransform> handAnchor)
     {
         var go = new GameObject("EmoteChat", typeof(RectTransform));
         go.transform.SetParent(ResponsiveCanvas.Content(canvas), false);
@@ -33,6 +36,7 @@ public sealed class EmoteChatView : MonoBehaviour
         Stretch(view.root);
         view.send = send;
         view.anchor = anchor;
+        view.handAnchor = handAnchor;
         view.Build();
         return view;
     }
@@ -134,13 +138,9 @@ public sealed class EmoteChatView : MonoBehaviour
         {
             bubble = new Bubble();
             bubble.rect = Rect("EmoteBubble", root, new Vector2(154, 154));
-            Image(bubble.rect, new Color(1f, 0.98f, 0.91f));
-            var outline = bubble.rect.gameObject.AddComponent<UnityEngine.UI.Outline>();
-            outline.effectColor = new Color(0.15f, 0.12f, 0.1f, 0.9f);
-            outline.effectDistance = new Vector2(3, -3);
-            bubble.tail = Rect("Tail", bubble.rect, new Vector2(20, 20));
-            Image(bubble.tail, new Color(1f, 0.98f, 0.91f));
-            bubble.tail.localEulerAngles = new Vector3(0, 0, 45);
+            bubble.background = bubble.rect.gameObject.AddComponent<EmoteBubbleGraphic>();
+            bubble.background.color = new Color(1f, 0.98f, 0.91f, 0.15f);
+            bubble.background.raycastTarget = false;
             bubble.icon = Icon(bubble.rect, index, new Vector2(142, 132));
             bubbles.Add(clientId, bubble);
         }
@@ -159,10 +159,25 @@ public sealed class EmoteChatView : MonoBehaviour
         bool portrait = ResponsiveCanvas.IsPortrait;
         var safe = ResponsiveCanvas.SafeArea;
         float width = Mathf.Max(1, ResponsiveCanvas.ViewWidth), height = Mathf.Max(1, ResponsiveCanvas.ViewHeight);
-        trigger.anchorMin = trigger.anchorMax = new Vector2(safe.xMin / width, (portrait ? safe.yMax : safe.yMin) / height);
-        trigger.pivot = new Vector2(0, portrait ? 1 : 0);
-        trigger.anchoredPosition = new Vector2(16, portrait ? -16 : 16);
+        trigger.anchorMin = trigger.anchorMax = new Vector2(safe.xMin / width, safe.yMin / height);
+        trigger.pivot = Vector2.zero;
+        trigger.anchoredPosition = new Vector2(16, 16);
         trigger.localScale = Vector3.one * (portrait ? 1.2f : 1f);
+        if (portrait)
+        {
+            var hand = handAnchor?.Invoke();
+            if (hand != null)
+            {
+                hand.GetWorldCorners(corners);
+                float handTop = root.InverseTransformPoint((corners[1] + corners[2]) * 0.5f).y;
+                float safeBottom = root.rect.yMin + root.rect.height * safe.yMin / height;
+                float safeTop = root.rect.yMin + root.rect.height * safe.yMax / height;
+                float buttonHeight = trigger.rect.height * trigger.localScale.y;
+                trigger.anchoredPosition = new Vector2(16,
+                    Mathf.Clamp(handTop + 16, safeBottom + 16,
+                        Mathf.Max(safeBottom + 16, safeTop - buttonHeight - 16)) - safeBottom);
+            }
+        }
         panel.localScale = Vector3.one * Mathf.Min(portrait ? 1.4f : 1f, (root.rect.width - 40) / 656f);
         bool ready = available && Time.unscaledTime >= nextSendAt;
         triggerButton.interactable = ready;
@@ -182,7 +197,7 @@ public sealed class EmoteChatView : MonoBehaviour
             local.y += (above ? 1 : -1) * (half + 16);
             local.x = Mathf.Clamp(local.x, root.rect.xMin + half + 8, root.rect.xMax - half - 8);
             bubble.rect.anchoredPosition = new Vector2(local.x, local.y);
-            bubble.tail.anchoredPosition = new Vector2(0, above ? -half + 2 : half - 2);
+            bubble.background.SetTailBelow(above);
         }
         if (picker.gameObject.activeSelf)
         {

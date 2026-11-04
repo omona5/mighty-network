@@ -47,7 +47,7 @@ async function testClipboard() {
   const port = reservation.address().port;
   await new Promise(resolve => reservation.close(resolve));
   const server = spawn(process.execPath, ['server.js'], {
-    cwd: path.resolve(__dirname, '..'), env: { ...process.env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe']
+    cwd: path.resolve(__dirname, '..'), env: { ...process.env, GAME_LOG_DIR: path.join(require('node:os').tmpdir(), 'mighty-test-games', require('node:crypto').randomUUID()), PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe']
   });
   const sockets = [];
   let diagnostics = '';

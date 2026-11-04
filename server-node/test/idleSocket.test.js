@@ -11,7 +11,7 @@ const WebSocket = require('ws');
   await new Promise(resolve => reservation.close(resolve));
   const server = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, PORT: String(port), TURN_TIMEOUT_MS: '150' },
+    env: { ...process.env, GAME_LOG_DIR: path.join(require('node:os').tmpdir(), 'mighty-test-games', require('node:crypto').randomUUID()), PORT: String(port), TURN_TIMEOUT_MS: '150' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let diagnostics = '';

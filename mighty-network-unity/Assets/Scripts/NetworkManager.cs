@@ -91,6 +91,10 @@ public partial class NetworkManager : MonoBehaviour
 
     private Vector2 menuScroll;
     private float guiPanelHeight;
+    private float menuContentHeight;
+    private GUIStyle resultHeadingStyle;
+    private float menuContentWidth;
+    private string menuLayoutKey;
     private Vector2 finishedScroll;
     private Rect GuiSafeArea
     {
@@ -102,7 +106,6 @@ public partial class NetworkManager : MonoBehaviour
                 safe.width / scale, safe.height / scale);
         }
     }
-    private Vector2 waitingPlayersScroll;
     private GUIStyle waitingPlayerStyle;
     private bool compactUi;
     private float finishedAutoLobbyAt = -1f; // realtimeSinceStartup 기준, <=0 이면 비활성
@@ -298,6 +301,7 @@ public partial class NetworkManager : MonoBehaviour
         UpdateEmotes();
         UpdateTutorial();
         UpdateBiddingWait();
+        UpdateActionTimer();
         if (singlePlayerStarting && Time.realtimeSinceStartup >= singlePlayerDeadline)
         {
             singlePlayerStarting = false;
@@ -474,6 +478,9 @@ public partial class NetworkManager : MonoBehaviour
                 break;
             }
 
+            case "action_timer":
+                ReceiveActionTimer(JsonUtility.FromJson<GameStateMsg>(json).data);
+                break;
             case "game_state":
             {
                 GameStateMsg m = JsonUtility.FromJson<GameStateMsg>(json);
@@ -481,6 +488,7 @@ public partial class NetworkManager : MonoBehaviour
                 string prevStatus = lastPhaseStatus;
                 UpdateBidDefault(currentState, m.data);
                 currentState = m.data;
+                ReceiveActionTimer(m.data);
                 if (prevStatus != "choosing_friend" || currentState.status != "choosing_friend"
                     || currentState.declarerClientId != myClientId)
                     ClearFriendChoice();
@@ -753,7 +761,7 @@ public partial class NetworkManager : MonoBehaviour
     private void OnHandCardClicked(CardData card)
     {
         if (TutorialBlocksInput) return;
-        if (!TutorialAllowsCard(card)) return;
+        if (!TutorialAllowsCard(card)) { ShowTutorialCardFeedback(card); return; }
         if (SettingsPanel.IsOpen) return;
         if (card == null) return;
         if (electionPresenting || kittyPickupStarted || Time.unscaledTime < playIntroUntil) return;
@@ -820,7 +828,7 @@ public partial class NetworkManager : MonoBehaviour
                 playChoicePopup.ShowJokerCallPick(
                     cardId,
                     use => PlayCard(cardId, null, use),
-                    ClearPendingPlay);
+                    ClearPendingPlay, tutorialState != null && tutorialState.step == "call");
                 return;
             }
         }
@@ -1804,6 +1812,7 @@ public partial class NetworkManager : MonoBehaviour
 
     private void DeclareDealMiss()
     {
+        if (!inRoom || currentState == null || currentState.status != "bidding" || !myCanDealMiss) return;
         Send(JsonUtility.ToJson(new DealMissMsg()));
         Log("[declare_deal_miss] 전송");
     }
@@ -1811,6 +1820,11 @@ public partial class NetworkManager : MonoBehaviour
     private void ChooseFriend(string friendCardId)
     {
         if (!CanChooseFriend()) return;
+        if (tutorialState != null && tutorialState.step == "friend" && friendCardId != currentState.mightyCardId)
+        {
+            tutorialOverlay.Feedback("이번 연습에서는 마이티를 가진 사람을 프렌드로 지정합니다. 「마이티」를 선택하세요.");
+            return;
+        }
         if (string.IsNullOrWhiteSpace(friendCardId))
         {
             Log("프렌드 카드 id를 입력하세요. (노프렌드는 '노프렌드' 버튼)");
@@ -1825,6 +1839,11 @@ public partial class NetworkManager : MonoBehaviour
     private void ChooseFriendPlayer(string friendClientId)
     {
         if (!CanChooseFriend()) return;
+        if (tutorialState != null && tutorialState.step == "friend")
+        {
+            tutorialOverlay.Feedback("이번 연습에서는 마이티를 가진 사람을 프렌드로 지정합니다. 「마이티」를 선택하세요.");
+            return;
+        }
         if (string.IsNullOrEmpty(friendClientId))
         {
             Log("프렌드 플레이어를 선택하세요.");
@@ -1906,6 +1925,15 @@ public partial class NetworkManager : MonoBehaviour
             return;
         }
 
+        // Tutorial collection is an explicit queue item after the last card lands.
+        // Never replay that card or let the next trick replace it before collection.
+        if (state.tutorialCollect)
+        {
+            pendingTableAnimStates.Enqueue(state);
+            if (!tableAnimPipelineRunning) StartCoroutine(CoProcessTableAnimQueue());
+            return;
+        }
+
         int slotCount = HandView.TableTrickSlots;
         if (state.players != null && state.players.Length > 0)
             slotCount = state.players.Length;
@@ -1960,6 +1988,12 @@ public partial class NetworkManager : MonoBehaviour
             GameState state = pendingTableAnimStates.Dequeue();
             if (state == null || state.tableCards == null || state.tableCards.Length == 0)
                 continue;
+
+            if (state.tutorialCollect)
+            {
+                MaybeBeginTrickWin(state);
+                continue;
+            }
 
             int slotCount = HandView.TableTrickSlots;
             if (state.players != null && state.players.Length > 0)
@@ -2038,7 +2072,7 @@ public partial class NetworkManager : MonoBehaviour
                 entries[n - 1].isFriend,
                 entries[n - 1].isFriendSecret,
                 entries[n - 1].declaredSuit,
-                () => { done = true; });
+                () => { done = true; }, lastCard.id == state.mightyCardId);
 
             float timeout = Time.unscaledTime + 3f;
             while (!done && Time.unscaledTime < timeout)
@@ -2057,6 +2091,7 @@ public partial class NetworkManager : MonoBehaviour
     private void MaybeBeginTrickWin(GameState state)
     {
         if (state == null || !state.trickComplete) return;
+        if (state.tutorialHoldTable) return;
         if (string.IsNullOrEmpty(state.lastTrickWinnerNickname)) return;
         if (trickWinAnimator != null && trickWinAnimator.IsBusy) return;
 
@@ -2172,6 +2207,9 @@ public partial class NetworkManager : MonoBehaviour
                 isFriendSecret = p != null && IsSecretFriendSeat(p, state),
                 declaredSuit = t != null ? t.declaredSuit : null,
                 jokerCallActivated = t != null && t.jokerCallActivated,
+                isPowerlessJoker = state.tutorialHoldTable && t != null && t.card != null && t.card.id == "JOKER"
+                    && (tableCards[0].jokerCallActivated || state.trickNumber == 1
+                        || (state.trickComplete && state.trickNumber == 2)),
             };
         }
         return entries;
@@ -2188,11 +2226,13 @@ public partial class NetworkManager : MonoBehaviour
     private void RefreshHandPlayability()
     {
         if (handView == null) return;
+        handView.SetTutorialGuidance(tutorialState != null ? tutorialState.cardIds : null,
+            tutorialState != null ? ShowTutorialCardFeedback : (System.Action<CardData>)null);
 
         if (currentState != null && currentState.status == "exchanging_kitty"
             && currentState.declarerClientId == myClientId)
         {
-            handView.SetAllPlayable(true);
+            handView.ApplyPlayability(TutorialAllowsCard);
             RefreshDiscardRaise();
             return;
         }
@@ -2616,6 +2656,29 @@ public partial class NetworkManager : MonoBehaviour
         GUILayout.EndArea();
     }
 
+    private double actionDeadlineLocal;
+    private string actionTimerClientId;
+
+
+    private void ReceiveActionTimer(GameState timing)
+    {
+        if (timing == null || !inRoom || timing.roomId != myRoomId) return;
+        actionTimerClientId = timing.actionClientId;
+        actionDeadlineLocal = Time.realtimeSinceStartupAsDouble
+            + System.Math.Max(0d, timing.actionDeadline - timing.serverTime) / 1000d;
+    }
+
+    private void UpdateActionTimer()
+    {
+        if (opponentHandsView == null) return;
+        int seconds = 0;
+        if (inRoom && currentState != null && tutorialState == null && !IsDealInProgress()
+            && actionTimerClientId == myClientId && !SettingsPanel.IsOpen
+            && ((currentState.status == "bidding" && currentState.currentBidderClientId == myClientId)
+                || (currentState.status == "playing" && currentState.currentTurnClientId == myClientId)))
+            seconds = (int)System.Math.Ceiling(actionDeadlineLocal - Time.realtimeSinceStartupAsDouble);
+        opponentHandsView.SetActionCountdown(seconds >= 1 && seconds <= 10 ? seconds : 0);
+    }
     private void OnGUI()
     {
         if (NicknameInput.IsOpen) return;
@@ -2633,6 +2696,8 @@ public partial class NetworkManager : MonoBehaviour
                 Vector3.one * UiFonts.MenuScale);
             GUI.skin = MightyGuiSkin.Get(uiFont, CompactChoice ? 13 : UiFonts.GameMenuSize, CompactChoice);
             DrawMenu();
+            if (victoryFireworks != null) victoryFireworks.DrawForeground();
+            DrawDealMissButton();
         }
         finally
         {
@@ -2717,10 +2782,22 @@ public partial class NetworkManager : MonoBehaviour
             : !inRoom ? 540f : phase == "waiting" ? 600f
             : isFinished ? 720f : myBidTurn ? 420f : 640f;
         float panelW = Mathf.Min(desiredW, availableW);
+        string layoutKey = phase + ":" + inRoom + ":" + compactUi + ":" + GameSettings.Language;
+        if (menuLayoutKey != layoutKey || !Mathf.Approximately(menuContentWidth, panelW))
+        {
+            menuLayoutKey = layoutKey;
+            menuContentWidth = panelW;
+            menuContentHeight = 0f;
+            menuScroll = Vector2.zero;
+        }
         float desiredH = !inRoom ? (compactUi ? 480f : 420f)
-            : phase == "waiting" ? (compactUi ? 480f : 420f)
+            : phase == "waiting" ? (compactUi ? 560f : 540f)
             : isFinished ? 680f
             : myBidTurn ? 360f : 560f;
+        // Fit both growing and shrinking content, with equal breathing room above/below.
+        // Results own a bounded detail scroll area, so keep their height independent.
+        if (!isFinished && menuContentHeight > 0f)
+            desiredH = menuContentHeight + GUI.skin.box.padding.vertical + 32f;
         float panelH = Mathf.Min(availableH, desiredH);
         bool tableChoice = inGame && !isFinished;
         // Keep the bottom hand and the seat HUD visible while choosing a bid/friend.
@@ -2730,9 +2807,11 @@ public partial class NetworkManager : MonoBehaviour
         float panelX = safe.xMin + (safe.width - panelW) * 0.5f;
         float panelY = safeTop + (safe.height - panelH) * 0.5f;
         if (tableChoice) panelY = safeTop + safe.height * 0.44f - panelH * 0.5f;
-        // Reserve the actual box padding and a scrollbar gutter before sizing rows.
+        // Reserve equal gutters so the controls stay centered even when scrolling.
         guiColGap = 8f;
-        float contentWidth = panelW - GUI.skin.box.padding.horizontal - 22f;
+        float scrollGutter = Mathf.Max(16f, GUI.skin.verticalScrollbar.fixedWidth)
+            + GUI.skin.verticalScrollbar.margin.left;
+        float contentWidth = Mathf.Max(1f, panelW - GUI.skin.box.padding.horizontal - scrollGutter * 2f);
         guiColW = Mathf.Max(1f, (contentWidth - guiColGap) * 0.5f);
         guiBtnH = GuiControlHeight;
         // Full-screen backgrounds belong to menus; covering the table here hid
@@ -2745,10 +2824,13 @@ public partial class NetworkManager : MonoBehaviour
         }
         GUILayout.BeginArea(new Rect(panelX, panelY, panelW, panelH), GUI.skin.box);
         menuScroll = GUILayout.BeginScrollView(menuScroll, false, false);
-        GUILayout.BeginVertical(GUILayout.Width(contentWidth));
+        GUILayout.Space(16f);
+        GUILayout.BeginHorizontal();
+        GUILayout.FlexibleSpace();
+        GUILayout.BeginVertical(GUILayout.Width(contentWidth), GUILayout.ExpandHeight(false));
 
         // 공약 선택 중·대기실에서는 서버 URL 숨김
-        if (!myBidTurn && !tableChoice)
+        if (!myBidTurn && !tableChoice && !isFinished)
         {
             GUILayout.Label(inGame ? "MIGHTY  ·  TABLE" : "MIGHTY  ·  LOBBY");
             GUILayout.Space(6);
@@ -2770,13 +2852,14 @@ public partial class NetworkManager : MonoBehaviour
             {
                 GUILayout.BeginHorizontal();
                 if (UiButton.Toggle(!joinMode, L10n.Text("방 만들기"), GUI.skin.button, GUILayout.Height(btnH))) joinMode = false;
+                GUILayout.Space(guiColGap);
                 if (UiButton.Toggle(joinMode, L10n.Text("방 참여"), GUI.skin.button, GUILayout.Height(btnH))) joinMode = true;
                 GUILayout.EndHorizontal();
             }
             GUILayout.BeginHorizontal();
             GUILayout.Label(L10n.Text("닉네임:"), GUILayout.Width(labelW));
             if (GUILayout.Button(nickname, GUI.skin.textField,
-                GUILayout.Width(guiColW * 2f + guiColGap - labelW), GUILayout.Height(fieldH)))
+                GUILayout.ExpandWidth(true), GUILayout.Height(fieldH)))
             {
                 Sfx.UiClick();
                 NicknameInput.Open(nickname, value => nickname = value);
@@ -2827,6 +2910,10 @@ public partial class NetworkManager : MonoBehaviour
         }
 
         GUILayout.EndVertical();
+        if (Event.current.type == EventType.Repaint)
+            menuContentHeight = GUILayoutUtility.GetLastRect().height;
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
         GUILayout.EndScrollView();
         GUILayout.EndArea();
     }
@@ -2854,12 +2941,11 @@ public partial class NetworkManager : MonoBehaviour
         {
             if (compactUi)
             {
-                float listHeight = Mathf.Min(5, Mathf.Max(1, count)) * 32f + GUI.skin.box.padding.vertical;
-                waitingPlayersScroll = GUILayout.BeginScrollView(
-                    waitingPlayersScroll, GUI.skin.box, GUILayout.Height(listHeight));
+                // Five seats fit naturally; avoid a second scroll area inside the lobby.
+                GUILayout.BeginVertical(GUI.skin.box);
                 foreach (PlayerInfo p in currentState.players)
                     GUILayout.Label(CompactPlayerLabel(p), WaitingPlayerStyle(), GUILayout.MinHeight(28f));
-                GUILayout.EndScrollView();
+                GUILayout.EndVertical();
             }
             else
             {
@@ -2904,10 +2990,8 @@ public partial class NetworkManager : MonoBehaviour
         }
 
         GUILayout.Space(8);
-        GUILayout.BeginHorizontal();
-        if (UiButton.Layout(L10n.Text("메뉴"), GUILayout.Width(col), GUILayout.Height(btnH)))
+        if (UiButton.Centered(L10n.Text("메뉴"), col, btnH))
             OpenGameMenu();
-        GUILayout.EndHorizontal();
     }
 
     private string ReadyButtonLabel()
@@ -2997,42 +3081,63 @@ public partial class NetworkManager : MonoBehaviour
                 bidScoreInput = raiseMin.ToString();
             GUILayout.Space(4);
             GUILayout.BeginHorizontal();
-            GUILayout.Label(L10n.Text("공약:"), GUILayout.Width(60f));
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(L10n.Text("공약:"), GUILayout.Height(GuiControlHeight));
+            GUILayout.Space(guiColGap);
             bidScoreInput = GUILayout.TextField(bidScoreInput, 2, GUILayout.Width(64f), GUILayout.Height(GuiControlHeight));
-            GUILayout.Label(L10n.Text("기루다:"), GUILayout.Width(80f));
+            GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
+            GUILayout.Label(L10n.Text("기루다:"));
             GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            float suitSide = Mathf.Min(IconSpriteAtlas.DisplaySquare.x,
+                (guiColW * 2f + guiColGap - (trumpOptions.Length - 1) * guiColGap) / trumpOptions.Length);
             for (int i = 0; i < trumpOptions.Length; i++)
             {
+                if (i > 0) GUILayout.Space(guiColGap);
                 IconSpriteAtlas.Slice slice = trumpOptions[i] == "NT"
                     ? IconSpriteAtlas.GetNoTrump()
                     : IconSpriteAtlas.GetSuit(trumpOptions[i]);
-                if (IconGui.ToggleButton(slice, trumpIndex == i, IconSpriteAtlas.DisplaySquare.x, IconSpriteAtlas.DisplaySquare.y))
+                if (IconGui.ToggleButton(slice, trumpIndex == i, suitSide, suitSide))
                     trumpIndex = i;
             }
+            GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
+            GUILayout.Space(8f);
 
             GUILayout.BeginHorizontal();
+            Color bidButtonColor = GUI.backgroundColor;
+            if (tutorialState != null && tutorialState.step == "bid") GUI.backgroundColor = new Color(0.25f, 0.95f, 1f);
             if (UiButton.Layout(L10n.Text("공약 제출 (") + raiseMin + "+)", GUILayout.Width(guiColW), GUILayout.Height(GuiControlHeight))) SendBid();
+            GUI.backgroundColor = bidButtonColor;
             GUILayout.Space(guiColGap);
             if (UiButton.Layout(L10n.Text("패스"), GUILayout.Width(guiColW), GUILayout.Height(GuiControlHeight))) PassBid();
             GUILayout.EndHorizontal();
         }
         else GUILayout.Label(L10n.Text("(다른 사람 입찰을 기다리는 중...)"));
 
-        if (myCanDealMiss)
-        {
-            GUILayout.Space(4);
-            GUI.color = new Color(1f, 0.5f, 0.5f);
-            if (UiButton.Layout(L10n.Text("딜미스 (손패≤0.5점 · 다시 돌리기)"))) DeclareDealMiss();
-            GUI.color = Color.white;
-        }
-
         GUILayout.Space(6);
-        if (UiButton.Layout(L10n.Text("메뉴"), GUILayout.Width(guiColW), GUILayout.Height(GuiControlHeight))) OpenGameMenu();
+        if (UiButton.Centered(L10n.Text("메뉴"), guiColW, GuiControlHeight)) OpenGameMenu();
     }
 
     // ---- 바닥패 교환 화면 ----
+    // Separate from the turn-only bidding panel; available as soon as the hand arrives.
+    private void DrawDealMissButton()
+    {
+        if (!inRoom || currentState == null || currentState.status != "bidding"
+            || !myCanDealMiss || tutorialState != null) return;
+        Rect safe = GuiSafeArea;
+        // Leave room for the 148px menu HUD on narrow portrait screens.
+        float width = Mathf.Min(200f, Mathf.Max(1f, safe.width - 184f));
+        string description = L10n.Text("딜미스 (손패≤0.5점 · 다시 돌리기)");
+        string caption = description.Split('(')[0].Trim();
+        Color previous = GUI.color;
+        GUI.color = new Color(1f, 0.65f, 0.65f);
+        if (UiButton.Rect(new Rect(safe.xMin + 12f, safe.yMin + 12f, width, GuiControlHeight),
+            new GUIContent(caption, description))) DeclareDealMiss();
+        GUI.color = previous;
+    }
+
     private void DrawKittyExchange()
     {
         GUILayout.Label(L10n.Text("바닥패 교환"));
@@ -3096,8 +3201,11 @@ public partial class NetworkManager : MonoBehaviour
             }
             GUILayout.Label(L10n.Text("프렌드를 지정하세요:"));
             GUILayout.BeginHorizontal();
+            Color friendButtonColor = GUI.backgroundColor;
+            if (tutorialState != null && tutorialState.step == "friend") GUI.backgroundColor = new Color(0.25f, 0.95f, 1f);
             if (UiButton.Layout(L10n.Text("마이티"), GUILayout.Height(GuiControlHeight)))
                 ChooseFriend(currentState.mightyCardId);
+            GUI.backgroundColor = friendButtonColor;
             GUILayout.Space(guiColGap);
             if (UiButton.Layout(L10n.Text("조커"), GUILayout.Height(GuiControlHeight)))
                 ChooseFriend("JOKER");
@@ -3160,9 +3268,40 @@ public partial class NetworkManager : MonoBehaviour
     }
 
     // ---- 결과 화면 (한 판 종료) ----
+    private GameFinishedData fireworksResult;
+    private VictoryFireworks victoryFireworks;
+
     private void DrawFinished()
     {
-        GUILayout.Label(L10n.Text("한 판 종료"));
+        GameFinishedData r = lastResult;
+        if (r != null && r != fireworksResult && Event.current.type == EventType.Repaint)
+        {
+            fireworksResult = r;
+            if (IWonFinished(r))
+                victoryFireworks = VictoryFireworks.Play(FindFirstObjectByType<Canvas>(),
+                    () => this != null && inRoom && currentState != null
+                        && currentState.status == "finished" && lastResult == r);
+        }
+        if (r != null)
+        {
+            bool declarerTeam = r.declarerTeam != null
+                && System.Array.Exists(r.declarerTeam, p => p != null && p.clientId == myClientId);
+            bool won = (r.winner == "declarer") == declarerTeam;
+            string team = GameSettings.Language == "en"
+                ? (declarerTeam ? "Declarer team" : "Defender team")
+                : (declarerTeam ? "주공팀" : "수비팀");
+            string verdict = GameSettings.Language == "en"
+                ? (won ? " wins!" : " loses!") : (won ? " 승리!" : " 패배!");
+            if (resultHeadingStyle == null) resultHeadingStyle = new GUIStyle(GUI.skin.label);
+            resultHeadingStyle.font = GUI.skin.font;
+            resultHeadingStyle.fontSize = compactUi ? 24 : 28;
+            resultHeadingStyle.alignment = TextAnchor.MiddleCenter;
+            resultHeadingStyle.wordWrap = true;
+            resultHeadingStyle.normal.textColor = won
+                ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.55f, 0.5f);
+            GUILayout.Label(team + verdict, resultHeadingStyle, GUILayout.MinHeight(48f));
+            GUILayout.Space(8f);
+        }
 
         // 버튼은 위에 고정 — 상세 내용이 길어도 잘리지 않게
         if (finishedAutoLobbyAt > 0f)
@@ -3184,7 +3323,6 @@ public partial class NetworkManager : MonoBehaviour
         GUILayout.EndHorizontal();
         GUILayout.Space(6);
 
-        GameFinishedData r = lastResult;
         if (r == null)
         {
             GUILayout.Label(L10n.Text("(결과 수신 대기...)"));

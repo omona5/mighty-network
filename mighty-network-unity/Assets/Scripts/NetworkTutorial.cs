@@ -8,9 +8,13 @@ public partial class NetworkManager
         public int round;
         public string step, title, body, hint;
         public string[] cardIds;
-        public bool paused, complete;
+        public bool paused, complete, inspectTable;
     }
     [System.Serializable] private class TutorialMessage { public TutorialState data; }
+    [System.Serializable] private class TutorialReset { public TutorialRound data; }
+    [System.Serializable] private class TutorialRound { public int round; }
+    private int tutorialPreparingRound = 1;
+    private bool tutorialShowingPreparation;
     private TutorialState tutorialState;
     private TutorialOverlay tutorialOverlay;
     private bool tutorialStarting;
@@ -27,6 +31,12 @@ public partial class NetworkManager
     {
         if (type == "tutorial_reset")
         {
+            var reset = JsonUtility.FromJson<TutorialReset>(json);
+            tutorialPreparingRound = reset.data != null ? Mathf.Max(1, reset.data.round) : 1;
+            tutorialState = null;
+            tutorialRequestTime = Time.realtimeSinceStartup;
+            tutorialWaitMessage = -1;
+            tutorialShowingPreparation = false;
             StopAllCoroutines();
             pendingTableAnimStates.Clear();
             tableAnimPipelineRunning = false;
@@ -45,6 +55,8 @@ public partial class NetworkManager
             lastTrickResolveKey = lastPhaseStatus = lastElectionAnnounceKey = lastBidAnnounceKey = "";
             lastPassedCount = -1;
             choosingToastVisible = false;
+            electionPresenting = false;
+            playIntroUntil = passToastUntil = 0f;
             pendingPlayCardId = null;
             tutorialDisplayedRevision = -1;
             if (tutorialOverlay != null) tutorialOverlay.Hide();
@@ -77,6 +89,12 @@ public partial class NetworkManager
             || (card != null && System.Array.IndexOf(tutorialState.cardIds, card.id) >= 0);
     }
 
+    private void ShowTutorialCardFeedback(CardData card)
+    {
+        if (TutorialBlocksInput || card == null || tutorialState == null) return;
+        Send("{\"type\":\"tutorial_card_hint\",\"data\":{\"cardId\":\"" + card.id + "\"}}");
+    }
+
     private void UpdateTutorial()
     {
         if (tutorialRequested && tutorialState == null)
@@ -86,16 +104,30 @@ public partial class NetworkManager
             int message = timeout ? 1 : 0;
             if (tutorialWaitMessage == message && tutorialOverlay.IsVisible) return;
             tutorialWaitMessage = message;
-            tutorialOverlay.Show(timeout ? "튜토리얼 연결을 확인해 주세요" : "연습 화면을 준비하고 있습니다",
-                timeout ? "서버에서 튜토리얼 응답을 받지 못했습니다. 최신 서버를 실행한 뒤 다시 시도해 주세요."
-                    : "고정된 손패와 봇 4명을 준비하고 있습니다. 연결되면 첫 번째 설명이 표시됩니다.",
+            if (!timeout) ShowTutorialPreparation();
+            else tutorialOverlay.Show("튜토리얼 연결을 확인해 주세요",
+                "서버에서 튜토리얼 응답을 받지 못했습니다. 최신 서버를 실행한 뒤 다시 시도해 주세요.",
                 "", true, false, RetryTutorial, RetryTutorial, ExitTutorial);
             return;
         }
         if (tutorialState == null) return;
         if (tutorialOverlay == null) tutorialOverlay = gameObject.AddComponent<TutorialOverlay>();
+        if (IsDealInProgress())
+        {
+            tutorialPreparingRound = tutorialState.round;
+            ShowTutorialPreparation();
+            return;
+        }
+        if (tutorialShowingPreparation)
+        {
+            tutorialShowingPreparation = false;
+            tutorialDisplayedRevision = -1;
+            tutorialOverlay.Hide();
+        }
         // Let cards settle before putting the explanation over the table.
         bool busy = IsDealInProgress() || tableAnimPipelineRunning
+            || electionPresenting || Time.unscaledTime < playIntroUntil
+            || (trickWinAnimator != null && trickWinAnimator.IsBusy)
             || (kittyView != null && kittyView.IsBusy);
         if (busy && tutorialState.paused) { tutorialOverlay.Hide(); return; }
         if (tutorialDisplayedRevision == tutorialState.revision
@@ -110,11 +142,15 @@ public partial class NetworkManager
             {
                 if (tutorialState == null) return;
                 Send("{\"type\":\"tutorial_ack\",\"data\":{\"revision\":" + displayedRevision + "}}");
-            }, () => Send("{\"type\":\"tutorial_restart\"}"), () =>
-            {
-                LeaveRoom();
-                UnityEngine.SceneManagement.SceneManager.LoadScene(GameScenes.Title);
-            });
+            }, () => Send("{\"type\":\"tutorial_restart\"}"), ExitTutorial,
+            StartPracticeAfterTutorial, tutorialState.inspectTable);
+    }
+
+    private void ShowTutorialPreparation()
+    {
+        tutorialShowingPreparation = true;
+        tutorialOverlay.ShowPreparation(tutorialPreparingRound == 2
+            ? "두 번째 연습 판을 준비중입니다..." : "첫 번째 연습 판을 준비중입니다...");
     }
 
     private void RetryTutorial()
@@ -127,6 +163,16 @@ public partial class NetworkManager
     private void ExitTutorial()
     {
         LeaveRoom();
+        RoomNavigation.SetMode("");
         UnityEngine.SceneManagement.SceneManager.LoadScene(GameScenes.Title);
+    }
+
+    private void StartPracticeAfterTutorial()
+    {
+        LeaveRoom();
+        GameScenes.StartTutorial = false;
+        GameScenes.StartSinglePlayer = true;
+        RoomNavigation.SetMode("singleplayer");
+        UnityEngine.SceneManagement.SceneManager.LoadScene(GameScenes.Game);
     }
 }

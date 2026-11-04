@@ -8,9 +8,13 @@ public sealed class TutorialOverlay : MonoBehaviour
     private GameObject root;
     private RectTransform panel;
     private TextMeshProUGUI heading, body, hint;
-    private UnityEngine.UI.Button confirm, restart, exit;
+    private UnityEngine.UI.Button confirm, restart, exit, minimize;
     private UnityEngine.UI.Image dim;
     private bool modal;
+    private bool inspecting;
+    private bool collapsed;
+    private bool showConfirm;
+    private bool preparing;
     private Vector2 lastSize;
     private Canvas hostCanvas;
     private TMP_SpriteAsset roleSprites;
@@ -18,24 +22,60 @@ public sealed class TutorialOverlay : MonoBehaviour
 
     public void Show(string title, string text, string task, bool paused, bool complete,
         UnityEngine.Events.UnityAction acknowledge, UnityEngine.Events.UnityAction retry,
-        UnityEngine.Events.UnityAction leave)
+        UnityEngine.Events.UnityAction leave, UnityEngine.Events.UnityAction practice = null,
+        bool inspectTable = false)
     {
         EnsureUi();
+        preparing = false;
+        Color panelColor = MightyTheme.Panel;
+        panelColor.a = 1f;
+        panel.GetComponent<UnityEngine.UI.Image>().color = panelColor;
+        heading.color = MightyTheme.Accent;
         modal = paused;
+        inspecting = paused && inspectTable;
+        collapsed = false;
+        showConfirm = paused && (!complete || practice != null);
         root.SetActive(true);
-        dim.color = paused ? new Color(0, 0, 0, 0.68f) : Color.clear;
         dim.raycastTarget = paused;
         heading.text = RoleText(title);
         body.text = RoleText(text);
         hint.text = RoleText(task);
-        body.gameObject.SetActive(paused);
-        hint.gameObject.SetActive(!paused);
-        confirm.gameObject.SetActive(paused && !complete);
-        restart.gameObject.SetActive(paused);
+        LocalizedLabel.Bind(confirm.GetComponentInChildren<TextMeshProUGUI>(), complete ? "싱글플레이 시작" : "확인");
         foreach (var button in new[] { confirm, restart, exit }) button.onClick.RemoveAllListeners();
-        confirm.onClick.AddListener(() => { Sfx.UiClick(); acknowledge?.Invoke(); });
+        confirm.onClick.AddListener(() => { Sfx.UiClick(); if (complete) practice?.Invoke(); else acknowledge?.Invoke(); });
         restart.onClick.AddListener(() => { Sfx.UiClick(); retry?.Invoke(); });
         exit.onClick.AddListener(() => { Sfx.UiClick(); leave?.Invoke(); });
+        RefreshPresentation();
+    }
+
+    public void ShowPreparation(string message)
+    {
+        EnsureUi();
+        preparing = true;
+        modal = inspecting = collapsed = false;
+        root.SetActive(true);
+        dim.color = Color.clear;
+        dim.raycastTarget = true;
+        panel.GetComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.92f);
+        heading.color = Color.white;
+        heading.text = L10n.Text(message);
+        body.gameObject.SetActive(false);
+        hint.gameObject.SetActive(false);
+        foreach (var button in new[] { confirm, restart, exit, minimize }) button.gameObject.SetActive(false);
+        Layout();
+    }
+
+    private void RefreshPresentation()
+    {
+        dim.color = modal && !inspecting && !collapsed ? new Color(0, 0, 0, 0.68f) : Color.clear;
+        // Minimizing only changes presentation; the lesson still blocks game input.
+        body.gameObject.SetActive(modal && !collapsed);
+        hint.gameObject.SetActive(!modal);
+        confirm.gameObject.SetActive(showConfirm && !collapsed);
+        restart.gameObject.SetActive(modal && !collapsed);
+        exit.gameObject.SetActive(!collapsed);
+        minimize.gameObject.SetActive(modal && !inspecting);
+        LocalizedLabel.Bind(minimize.GetComponentInChildren<TextMeshProUGUI>(), collapsed ? "펼치기" : "최소화");
         Layout();
     }
 
@@ -75,6 +115,8 @@ public sealed class TutorialOverlay : MonoBehaviour
         confirm = Button("Confirm", "확인");
         restart = Button("Restart", "처음부터");
         exit = Button("Exit", "타이틀로");
+        minimize = Button("Minimize", "최소화");
+        minimize.onClick.AddListener(() => { Sfx.UiClick(); collapsed = !collapsed; RefreshPresentation(); });
     }
 
     private TextMeshProUGUI Label(string name, int size, Color color)
@@ -92,18 +134,27 @@ public sealed class TutorialOverlay : MonoBehaviour
     private string RoleText(string text)
     {
         string value = L10n.Text(text) ?? "";
+        // Result feedback combines independently localized paragraphs (counts,
+        // actual winner and rule explanation), while authored lessons use full entries.
+        if (value == text && text != null)
+            value = string.Join("\n\n", System.Array.ConvertAll(
+                text.Split(new[] { "\n\n" }, System.StringSplitOptions.None), L10n.Text));
         if (roleSprites == null) return value;
         // Inline glyphs wrap and scale with the sentence in either language.
         return System.Text.RegularExpressions.Regex.Replace(value,
-            "주공|(?<!노)프렌드|프랜드|\\b[Dd]eclarer\\b|\\b[Ff]riend\\b", match =>
-            "<sprite index=" + ((match.Value == "주공" || match.Value.ToLowerInvariant() == "declarer") ? "0" : "1")
-                + ">" + match.Value);
+            "회색 프렌드|\\b[Gg]ray friend\\b|주공|(?<!노)프렌드|프랜드|\\b[Dd]eclarer\\b|\\b[Ff]riend\\b", match =>
+            {
+                string word = match.Value;
+                if (word == "회색 프렌드") return "회색 <sprite index=2>프렌드";
+                if (word.ToLowerInvariant() == "gray friend") return word.Substring(0, 5) + "<sprite index=2>" + word.Substring(5);
+                return "<sprite index=" + ((word == "주공" || word.ToLowerInvariant() == "declarer") ? "0" : "1") + ">" + word;
+            });
     }
 
     private void CreateRoleSprites()
     {
-        var slices = new[] { IconSpriteAtlas.GetDeclarer(), IconSpriteAtlas.GetFriend() };
-        if (!slices[0].IsValid || !slices[1].IsValid) return;
+        var slices = new[] { IconSpriteAtlas.GetDeclarer(), IconSpriteAtlas.GetFriend(), IconSpriteAtlas.GetFriendSecret() };
+        if (!slices[0].IsValid || !slices[1].IsValid || !slices[2].IsValid) return;
         var defaultSprites = TMP_Settings.defaultSpriteAsset;
         if (defaultSprites == null || defaultSprites.material == null) return;
         // Clone a current-format asset: newly created TMP assets have an empty
@@ -123,7 +174,7 @@ public sealed class TutorialOverlay : MonoBehaviour
                 new UnityEngine.TextCore.GlyphRect((int)r.x, (int)r.y, (int)r.width, (int)r.height), 1, 0);
             roleSprites.spriteGlyphTable.Add(glyph);
             roleSprites.spriteCharacterTable.Add(new TMP_SpriteCharacter((uint)(0xE000 + i), glyph)
-                { name = i == 0 ? "declarer" : "friend", scale = 1 });
+                { name = i == 0 ? "declarer" : i == 1 ? "friend" : "friend_secret", scale = 1 });
         }
         roleSprites.UpdateLookupTables();
     }
@@ -153,16 +204,23 @@ public sealed class TutorialOverlay : MonoBehaviour
         Rect safe = Screen.safeArea;
         float scale = Mathf.Clamp(Mathf.Min(safe.width / 390f, safe.height / 550f), 0.6f, 1.4f);
         float width = Mathf.Min(620f, safe.width / scale - 24f);
-        float height = modal ? Mathf.Min(420f, safe.height / scale - 24f) : 104f;
+        bool sideInspection = inspecting && safe.width > safe.height * 1.2f;
+        if (sideInspection) width = Mathf.Min(360f, safe.width * 0.27f / scale - 12f);
+        float height = modal ? Mathf.Min(inspecting && !sideInspection ? 300f : 420f, safe.height / scale - 24f) : 104f;
+        if (collapsed) height = 74f;
+        if (preparing) height = 74f;
         panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
         float canvasScale = Mathf.Max(0.001f, hostCanvas.scaleFactor);
         panel.localScale = Vector3.one * scale / canvasScale;
         panel.sizeDelta = new Vector2(width, height);
-        panel.anchoredPosition = modal ? safe.center - lastSize * 0.5f
+        panel.anchoredPosition = modal && !inspecting && !collapsed ? safe.center - lastSize * 0.5f
             : new Vector2(safe.center.x - Screen.width * 0.5f, safe.yMax - Screen.height * 0.5f - height * scale * 0.5f - 8f);
+        if (sideInspection) panel.anchoredPosition = new Vector2(
+            safe.xMin + 8f + width * scale * 0.5f - Screen.width * 0.5f, safe.center.y - Screen.height * 0.5f);
         panel.anchoredPosition /= canvasScale;
-        Place(heading.rectTransform, 18, -16, width - 36, 42);
-        Place(body.rectTransform, 18, -66, width - 36, height - 142);
+        Place(heading.rectTransform, 18, -16, width - (modal && !inspecting ? 128 : 36), 42);
+        Place((RectTransform)minimize.transform, width - 98, -14, 80, 44);
+        Place(body.rectTransform, 18, -66, width - 36, Mathf.Max(1f, height - 142));
         Place(hint.rectTransform, 18, -52, width - 132, 44);
         float buttonWidth = (width - 52) / 3;
         Place((RectTransform)confirm.transform, 18, -height + 62, buttonWidth, 44);

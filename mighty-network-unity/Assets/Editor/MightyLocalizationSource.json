@@ -911,6 +911,450 @@
     {
       "en": "The declarer is a bot, with a bid of 13 points and hearts as trump.\n\nThe declarer named the ace of spades as the friend card. You hold it, so you are on the same team. Playing it reveals your identity to everyone.",
       "ko": "이번 판의 주공은 봇이고, 공약은 하트 기루다·13점입니다.\n\n주공이 프렌드 카드로 ♠A를 지정했습니다. 그 카드를 가진 당신이 같은 팀입니다. ♠A를 내면 다른 사람들에게도 정체가 공개됩니다."
+    },
+    {
+      "ko": "1 / 2 · 플레이 해보기",
+      "en": "1 / 2 · Try playing"
+    },
+    {
+      "ko": "화면 아래의 앞면 카드 10장이 내 손패입니다. 다른 네 사람의 손패는 뒷면으로 보입니다.\n\n이번에는 카드를 직접 내면서 규칙을 배워봅시다. 설명을 읽고 확인을 누르면 연습이 진행됩니다.",
+      "en": "The 10 face-up cards at the bottom are your hand. The other four players’ hands are face down.\n\nLet’s learn the rules by playing cards. Read each explanation and press Confirm to continue."
+    },
+    {
+      "ko": "첫 카드의 무늬",
+      "en": "Follow the first suit"
+    },
+    {
+      "ko": "이번 트릭은 선 플레이어가 ♣A로 시작했습니다. 첫 카드와 같은 무늬가 손에 있으면 일반 카드는 그 무늬를 따라 내야 합니다.\n\n바닥에 카드가 2장 이상 놓이면 현재 가장 강한 카드에 노란색 테두리가 표시됩니다.\n\n이번에는 ♣2를 내보세요.",
+      "en": "The lead player started this trick with ♣A. If you have the same suit as the first card, ordinary cards must follow that suit.\n\nOnce there are at least two cards on the table, a yellow border marks the strongest card so far.\n\nPlay ♣2 this time."
+    },
+    {
+      "ko": "♣2를 내서 클로버 무늬를 따라가세요.",
+      "en": "Play ♣2 to follow clubs."
+    },
+    {
+      "ko": "같은 무늬에서는 A가 가장 강합니다",
+      "en": "Ace is highest in the same suit"
+    },
+    {
+      "ko": "모두 클로버를 냈으므로 ♣A가 이겼습니다.\n\n같은 무늬에서는 A > K > Q > J > 10 > 9 > … > 2 순서로 강합니다. 트릭을 이긴 사람이 다음 트릭의 첫 카드를 냅니다.",
+      "en": "Everyone played clubs, so ♣A won.\n\nWithin a suit, cards rank A > K > Q > J > 10 > 9 > … > 2. The trick winner leads the next trick."
+    },
+    {
+      "ko": "기루다 · 으뜸 무늬",
+      "en": "Trump · the strongest suit"
+    },
+    {
+      "ko": "기루다는 이번 판에서 가장 강한 힘을 가지는 무늬를 의미합니다. 이번 판의 기루다는 하트입니다. 기루다 정보는 상단의 판 정보에서 확인할 수 있습니다.\n\n이번 트릭은 ♦K로 시작했지만 내 손에는 다이아몬드가 없습니다. 첫 카드의 무늬가 없으면 다른 무늬를 낼 수 있습니다. ♥4를 내보세요.",
+      "en": "Trump is the strongest suit for this round. Hearts are trump this round. You can check trump in the round information at the top.\n\nThis trick started with ♦K, but you have no diamonds. Without the lead suit, you may play another suit. Try ♥4."
+    },
+    {
+      "ko": "다이아몬드가 없으므로 기루다 ♥4를 내보세요.",
+      "en": "You have no diamonds. Play the trump card ♥4."
+    },
+    {
+      "ko": "♥4가 ♦K를 앞섰습니다",
+      "en": "♥4 overtook ♦K"
+    },
+    {
+      "ko": "♥4는 ♦K보다 숫자는 낮지만, 하트가 기루다이므로 더 강합니다. 노란색 테두리도 ♥4로 옮겨졌습니다.\n\n아직 한 사람이 카드를 내지 않았습니다. 확인을 눌러 마지막 카드를 확인하세요.",
+      "en": "♥4 is lower in rank than ♦K, but hearts are trump, so ♥4 is stronger. The yellow border moved to ♥4.\n\nOne player still has a card to play. Press Confirm to see it."
+    },
+    {
+      "ko": "더 높은 기루다가 이깁니다",
+      "en": "Higher trump wins"
+    },
+    {
+      "ko": "마지막 봇이 ♥6을 냈습니다. 같은 기루다끼리는 숫자가 높은 카드가 강하므로 ♥6이 이겼습니다.\n\n이 봇이 다음 트릭을 시작합니다.",
+      "en": "The last bot played ♥6. Higher ranks win within the trump suit, so ♥6 won.\n\nThat bot will lead the next trick."
+    },
+    {
+      "ko": "마이티와 조커",
+      "en": "Mighty and Joker"
+    },
+    {
+      "ko": "마이티는 언제나 가장 강한 카드입니다. 보통 ♠A이며, 스페이드가 기루다이면 ♦A가 됩니다.\n\n조커는 보통 마이티 다음으로 강합니다. 마이티와 조커는 첫 카드의 무늬를 따르지 않아도 됩니다.\n\n이번 판은 하트 기루다이므로 ♠A가 마이티입니다.",
+      "en": "Mighty is always the strongest card. It is usually ♠A, but becomes ♦A when spades are trump.\n\nJoker is usually second to Mighty. Mighty and Joker do not have to follow the first suit.\n\nHearts are trump this round, so ♠A is Mighty."
+    },
+    {
+      "ko": "마이티를 내보세요",
+      "en": "Play Mighty"
+    },
+    {
+      "ko": "봇이 클로버로 시작했습니다. 클로버가 손에 있어도 마이티는 예외로 낼 수 있습니다.\n\n♠A를 내서 가장 강한 카드의 힘을 확인해 보세요.",
+      "en": "The bot led clubs. Even though you have clubs, Mighty is an exception and may be played.\n\nPlay ♠A to see the strongest card in action."
+    },
+    {
+      "ko": "이번 판의 마이티 ♠A를 내보세요.",
+      "en": "Play ♠A, this round’s Mighty."
+    },
+    {
+      "ko": "프렌드 공개 · 마이티로 팀을 도왔습니다",
+      "en": "Friend revealed · Mighty saved the team"
+    },
+    {
+      "ko": "마지막 봇이 ♠A, 마이티를 냈습니다! 마이티가 ♥K를 이기고 점수 카드 3장을 가져왔습니다.\n\n마이티 프렌드로 지정했던 바로 그 봇입니다. ♠A를 내면서 정체가 공개되고 보라색 프렌드 마크가 표시됩니다. 프렌드가 얻은 점수는 주공팀 점수로 합산됩니다.\n\n이처럼 프렌드는 정체를 숨긴 채 주공을 돕습니다. 이제 추가로 3트릭을 직접 판단해서 플레이해 봅시다.",
+      "en": "The last bot played ♠A, Mighty! Mighty beat ♥K and collected 3 point cards.\n\nThat bot is the Mighty friend you chose. Playing ♠A reveals their identity and shows a purple friend badge. Their points now count toward the declarer’s team.\n\nThis is how a hidden friend helps the declarer. Now play three more tricks using your own judgment."
+    },
+    {
+      "ko": "A·K·Q·J·10은 점수 카드입니다",
+      "en": "A·K·Q·J·10 are point cards"
+    },
+    {
+      "ko": "바닥의 카드 5장을 살펴보세요. A·K·Q·J·10은 각각 1점입니다. 따라서, 한 판의 전체 점수는 20점입니다.\n\n이번에는 ♠A·♣K·♣Q·♣J로 4점을 얻었습니다.\n\n확인을 누르면 점수 카드가 내 쪽으로 이동하고 나머지 카드는 정리됩니다.",
+      "en": "Look at the five cards on the table. Each A, K, Q, J and 10 is worth 1 point, making 20 points in a full round.\n\nYou earned 4 points from ♠A, ♣K, ♣Q and ♣J.\n\nPress Confirm to collect the point cards and clear the other cards."
+    },
+    {
+      "ko": "내가 선이면 조커콜!",
+      "en": "Lead with a Joker Call!"
+    },
+    {
+      "ko": "앞 트릭을 이겼으므로 이번에는 내가 먼저 냅니다. 이번 판의 조커콜 카드는 ♣3입니다.\n\n조커는 마이티 다음으로 강한 카드이지만 조커콜로 끌어내진 조커는 힘을 잃습니다. 선에서 조커콜을 사용하면 조커를 가진 상대가 반드시 조커를 내야 합니다.\n\n♣3을 선택한 뒤 「조커콜 사용」을 누르세요.",
+      "en": "You won the previous trick, so you lead. This round’s Joker Call card is ♣3.\n\nJoker is second to Mighty, but loses its power when drawn out by a Joker Call. Calling when you lead forces the opponent holding Joker to play it.\n\nSelect ♣3, then choose “Use Joker Call”."
+    },
+    {
+      "ko": "♣3 → 「조커콜 사용」",
+      "en": "♣3 → “Use Joker Call”"
+    },
+    {
+      "ko": "조커를 끌어냈습니다",
+      "en": "You drew out the Joker"
+    },
+    {
+      "ko": "조커콜에 끌려 나온 조커는 힘을 잃었습니다. 이번 트릭은 가장 높은 클로버인 ♣10이 이겼습니다.\n\n조커는 첫 번째 트릭과 마지막 트릭에서도 힘을 잃습니다.",
+      "en": "The Joker drawn out by the call lost its power. ♣10, the highest club in this trick, won.\n\nJoker also loses its power on the first and last tricks."
+    },
+    {
+      "ko": "첫 번째 연습 정리",
+      "en": "First practice recap"
+    },
+    {
+      "ko": "기본 세기: 마이티 > 조커 > 기루다 > 첫 카드의 무늬\n같은 무늬: A > K > Q > J > 10 > … > 2\n\n일반 카드는 첫 무늬를 따라 내고, 마이티와 조커는 예외입니다. 조커는 첫·마지막 트릭과 조커콜에서 힘을 잃습니다.\n\nA·K·Q·J·10을 모아 점수를 얻습니다. 이제 두 번째 연습으로 넘어갑니다.",
+      "en": "Basic strength: Mighty > Joker > trump > lead suit\nWithin a suit: A > K > Q > J > 10 > … > 2\n\nOrdinary cards must follow suit; Mighty and Joker are exceptions. Joker loses its power on the first and last tricks and when called.\n\nCollect A, K, Q, J and 10 for points. Now let’s move to the second practice round."
+    },
+    {
+      "ko": "2 / 2 · 공약하고 주공 되기",
+      "en": "2 / 2 · Bid to become declarer"
+    },
+    {
+      "ko": "게임 시작 전에는 기루다와 목표 점수를 제시해 주공 자리를 두고 경쟁합니다. 이것을 공약이라고 합니다.\n\n이번에는 하트가 많은 강한 손패입니다. 13점과 ♥하트를 선택하고 공약을 제출하세요. 봇들은 모두 패스합니다.",
+      "en": "Before play, players compete to become declarer by proposing a trump suit and a target score. This is a bid.\n\nYou have a strong hand with many hearts. Choose 13 points and hearts, then submit your bid. The bots will all pass."
+    },
+    {
+      "ko": "13점 · ♥하트 기루다로 공약을 제출하세요.",
+      "en": "Bid 13 points with hearts as trump."
+    },
+    {
+      "ko": "당신이 주공이 되었습니다",
+      "en": "You became declarer"
+    },
+    {
+      "ko": "다른 봇들이 모두 패스하여 당신이 주공으로 확정되었습니다.\n\n이번 판의 목표는 ♥하트를 기루다로 하고 우리 팀이 13점 이상 얻는 것입니다. 확인을 누르면 바닥패 3장을 가져옵니다.",
+      "en": "All the bots passed, so you became declarer.\n\nYour team must collect at least 13 points with hearts as trump. Press Confirm to pick up the three kitty cards."
+    },
+    {
+      "ko": "바닥패 3장 교환",
+      "en": "Exchange the three kitty cards"
+    },
+    {
+      "ko": "바닥패 3장을 받아 손패가 13장이 되었습니다. 3장을 버려 다시 10장으로 만들어야 합니다.\n\n♠2·♦2·♣2를 선택하고 「3장 버리기」를 누르세요. 다시 누르면 선택이 해제됩니다.",
+      "en": "You received three kitty cards and now have 13 cards. Discard three to return to 10.\n\nSelect ♠2, ♦2 and ♣2, then press “Discard 3”. Click a selected card again to deselect it."
+    },
+    {
+      "ko": "♠2·♦2·♣2를 선택한 뒤 「3장 버리기」",
+      "en": "Select ♠2, ♦2 and ♣2 → “Discard 3”"
+    },
+    {
+      "ko": "손패를 정리했습니다",
+      "en": "Your hand is ready"
+    },
+    {
+      "ko": "3장을 버려 손패가 다시 10장이 되었습니다. 주공은 바닥패를 이용해 자신의 패를 정리할 수 있습니다.\n\n버린 점수 카드는 주공팀 점수에 포함됩니다. 이번에 버린 세 장은 점수 카드가 아닙니다.",
+      "en": "After discarding three cards, you have 10 again. The kitty lets the declarer improve their hand.\n\nDiscarded point cards count toward the declarer team’s score. None of your three discards were point cards."
+    },
+    {
+      "ko": "함께할 프렌드 선언",
+      "en": "Choose your friend"
+    },
+    {
+      "ko": "주공은 특정 카드를 가진 사람을 프렌드로 지정할 수 있습니다.\n\n이번에는 내가 가지지 않은 마이티의 주인을 우리 팀으로 불러봅시다. 「마이티」를 누르세요.",
+      "en": "The declarer can name a card and make its holder their friend.\n\nCall the holder of Mighty, a card you do not have, onto your team. Choose “Mighty”."
+    },
+    {
+      "ko": "「마이티」를 눌러 프렌드를 선언하세요.",
+      "en": "Choose “Mighty” to declare your friend."
+    },
+    {
+      "ko": "마이티의 주인이 같은 팀입니다",
+      "en": "Mighty’s holder is on your team"
+    },
+    {
+      "ko": "♠A를 가진 사람이 당신의 프렌드가 되었습니다. 그 사람이 ♠A를 내기 전까지는 주공도 정체를 알 수 없습니다.\n\n플레이어 지정은 특정 사람을 즉시 공개하며 프렌드로 선택합니다. 노프렌드는 혼자 주공팀으로 도전하는 선택입니다.",
+      "en": "The player holding ♠A became your friend. Even the declarer does not know who it is until that player plays ♠A.\n\nChoosing a player directly reveals the friend immediately. No Friend means taking on the declarer role alone."
+    },
+    {
+      "ko": "주공의 첫 카드",
+      "en": "The declarer’s first card"
+    },
+    {
+      "ko": "첫 트릭은 주공이 시작합니다. 이번 판의 기루다는 ♥하트입니다.\n\n가장 높은 하트인 ♥A를 내서 첫 트릭을 시작해 보세요.",
+      "en": "The declarer leads the first trick. Hearts are trump in this round.\n\nPlay ♥A, the highest heart, to begin."
+    },
+    {
+      "ko": "♥A를 내서 첫 트릭을 시작하세요.",
+      "en": "Play ♥A to start the first trick."
+    },
+    {
+      "ko": "♥A로 첫 트릭을 이겼습니다",
+      "en": "You won the first trick with ♥A"
+    },
+    {
+      "ko": "모두 하트를 냈으므로 가장 높은 ♥A가 이겼습니다.\n\n손에는 ♥Q·♥J·♥10 등 강한 기루다가 남아 있지만 ♥K는 없습니다. 프렌드가 누구인지도 아직 모릅니다. 다음 트릭을 이어가 봅시다.",
+      "en": "Everyone played hearts, so the highest heart, ♥A, won.\n\nYou still hold strong trumps such as ♥Q, ♥J and ♥10, but no ♥K. You also do not know who your friend is yet. Let’s play the next trick."
+    },
+    {
+      "ko": "직접 판단해서 플레이하기",
+      "en": "Choose your own cards"
+    },
+    {
+      "ko": "배운 규칙을 이용해 원하는 카드를 내보세요. 규칙상 가능한 카드라면 모두 선택할 수 있습니다.\n\n각 트릭이 끝나면 실제 결과를 함께 확인합니다.",
+      "en": "Use what you learned to choose a card. Every legal card is allowed.\n\nAfter each trick, we will look at what actually happened."
+    },
+    {
+      "ko": "낼 수 있는 카드 중 원하는 카드를 선택하세요.",
+      "en": "Choose any card you can legally play."
+    },
+    {
+      "ko": "연습 완료!",
+      "en": "Practice complete!"
+    },
+    {
+      "ko": "축하합니다! 무늬 따라내기, 기루다, 마이티와 프렌드, 점수 카드, 조커콜을 직접 경험했습니다.\n\n주공의 공약·바닥패 교환·프렌드 선언과 자유 플레이 3트릭도 마쳤습니다.\n\n실전에서는 한 판에 10트릭을 진행합니다. 주공팀은 공약한 점수 이상을 얻으면 승리하고, 수비팀은 이를 막으면 승리합니다. 이제 싱글플레이에서 자유롭게 연습해 보세요.",
+      "en": "Congratulations! You tried following suit, trump, Mighty and friend, point cards and Joker Call.\n\nYou also practiced bidding, exchanging the kitty and choosing a friend as declarer, followed by three free-play tricks.\n\nA real round has 10 tricks. The declarer team wins by reaching its target; defenders win by preventing that. Keep practicing in single player!"
+    },
+    {
+      "ko": "싱글플레이 시작",
+      "en": "Start single player"
+    },
+    {
+      "ko": "마이티 튜토리얼",
+      "en": "Mighty tutorial"
+    },
+    {
+      "ko": "마이티는 5명이 두 팀으로 나뉘어 점수 카드를 모으는 게임입니다.\n\n한 사람씩 카드 1장을 내고, 가장 강한 카드를 낸 사람이 바닥의 카드 5장을 가져갑니다. 이 한 번의 진행을 트릭이라고 합니다.\n\n두 번의 짧은 연습 게임을 직접 플레이하면서 규칙을 익혀 봅시다.",
+      "en": "Mighty is a five-player game where two teams collect point cards.\n\nEach player plays one card. Whoever plays the strongest card takes all five cards. This is one trick.\n\nLearn the rules by playing two short practice rounds."
+    },
+    {
+      "ko": "트릭 결과",
+      "en": "Trick result"
+    },
+    {
+      "ko": "마이티가 나와 다른 카드보다 강했습니다.",
+      "en": "Mighty was played and beat all other cards."
+    },
+    {
+      "ko": "이번 트릭에서는 조커의 힘이 유효하여 조커가 이겼습니다.",
+      "en": "Joker had its power in this trick and won."
+    },
+    {
+      "ko": "기루다가 첫 카드의 무늬보다 강해 이겼습니다.",
+      "en": "Trump beat the first suit and won."
+    },
+    {
+      "ko": "같은 무늬 중 가장 높은 카드가 이겼습니다.",
+      "en": "The highest card of the same suit won."
+    },
+    {
+      "ko": "규칙에 맞는 카드를 직접 선택했습니다. 트릭을 이긴 사람이 다음 트릭을 시작합니다.",
+      "en": "You chose a legal card yourself. The trick winner leads the next trick."
+    },
+    {
+      "ko": "마이티는 무늬를 따르지 않아도 됩니다. 지금은 일반 카드의 무늬 따라내기를 연습하므로 ♣2를 내보세요.",
+      "en": "Mighty does not have to follow suit. This lesson practices following suit with ordinary cards, so try ♣2."
+    },
+    {
+      "ko": "♣3도 낼 수 있지만 뒤의 조커콜 연습에 남겨둡니다. 이번에는 ♣2를 내보세요.",
+      "en": "♣3 is legal too, but save it for the Joker Call lesson. Play ♣2 this time."
+    },
+    {
+      "ko": "첫 카드가 클로버입니다. 손에 클로버가 있으므로 일반 카드는 클로버를 내야 합니다. ♣2를 내보세요.",
+      "en": "The first card is a club. You have clubs, so ordinary cards must follow clubs. Try ♣2."
+    },
+    {
+      "ko": "이번에는 기루다의 힘을 확인합니다. 다이아몬드가 없으므로 ♥4를 낼 수 있습니다.",
+      "en": "This lesson shows the power of trump. You have no diamonds, so you can play ♥4."
+    },
+    {
+      "ko": "이번에는 가장 강한 카드인 마이티를 연습합니다. ♠A를 내보세요.",
+      "en": "This lesson practices Mighty, the strongest card. Try ♠A."
+    },
+    {
+      "ko": "이번에는 조커콜을 연습합니다. ♣3을 선택하고 「조커콜 사용」을 눌러보세요.",
+      "en": "This lesson practices Joker Call. Select ♣3 and choose “Use Joker Call”."
+    },
+    {
+      "ko": "하트가 많은 패로 주공이 되는 연습입니다. 13점 · 하트 기루다로 공약을 제출하세요.",
+      "en": "Practice becoming declarer with a heart-heavy hand. Bid 13 points with hearts as trump."
+    },
+    {
+      "ko": "손패를 10장으로 만들기 위해 3장을 버려야 합니다. 이번에는 ♠2·♦2·♣2를 선택하세요.",
+      "en": "Discard three cards to return to 10. Select ♠2, ♦2 and ♣2 this time."
+    },
+    {
+      "ko": "이번 연습에서는 마이티를 가진 사람을 프렌드로 지정합니다. 「마이티」를 선택하세요.",
+      "en": "This lesson calls the Mighty holder as friend. Choose “Mighty”."
+    },
+    {
+      "ko": "주공은 첫 트릭을 시작합니다. 이번에는 가장 높은 하트인 ♥A를 내보세요.",
+      "en": "The declarer leads the first trick. Play ♥A, the highest heart, this time."
+    },
+    {
+      "ko": "현재 안내에 따라 진행해 주세요.",
+      "en": "Follow the current lesson instructions."
+    },
+    {
+      "ko": "첫 카드와 같은 무늬를 가지고 있으므로 다른 일반 무늬는 낼 수 없습니다.",
+      "en": "You have the first suit, so you cannot play an ordinary card of another suit."
+    },
+    {
+      "ko": "조커콜이 활성화되어 조커를 내야 합니다.",
+      "en": "Joker Call is active, so you must play Joker."
+    },
+    {
+      "ko": "자유 플레이 1 / 3",
+      "en": "Free play 1 / 3"
+    },
+    {
+      "ko": "자유 플레이 2 / 3",
+      "en": "Free play 2 / 3"
+    },
+    {
+      "ko": "자유 플레이 3 / 3",
+      "en": "Free play 3 / 3"
+    },
+    {
+      "ko": "당신이 이번 트릭을 이겨 점수 카드 0장을 가져갔습니다.",
+      "en": "You won this trick and collected 0 point cards."
+    },
+    {
+      "ko": "봇이 이번 트릭을 이겨 점수 카드 0장을 가져갔습니다.",
+      "en": "A bot won this trick and collected 0 point cards."
+    },
+    {
+      "ko": "당신이 이번 트릭을 이겨 점수 카드 1장을 가져갔습니다.",
+      "en": "You won this trick and collected 1 point cards."
+    },
+    {
+      "ko": "봇이 이번 트릭을 이겨 점수 카드 1장을 가져갔습니다.",
+      "en": "A bot won this trick and collected 1 point cards."
+    },
+    {
+      "ko": "당신이 이번 트릭을 이겨 점수 카드 2장을 가져갔습니다.",
+      "en": "You won this trick and collected 2 point cards."
+    },
+    {
+      "ko": "봇이 이번 트릭을 이겨 점수 카드 2장을 가져갔습니다.",
+      "en": "A bot won this trick and collected 2 point cards."
+    },
+    {
+      "ko": "당신이 이번 트릭을 이겨 점수 카드 3장을 가져갔습니다.",
+      "en": "You won this trick and collected 3 point cards."
+    },
+    {
+      "ko": "봇이 이번 트릭을 이겨 점수 카드 3장을 가져갔습니다.",
+      "en": "A bot won this trick and collected 3 point cards."
+    },
+    {
+      "ko": "당신이 이번 트릭을 이겨 점수 카드 4장을 가져갔습니다.",
+      "en": "You won this trick and collected 4 point cards."
+    },
+    {
+      "ko": "봇이 이번 트릭을 이겨 점수 카드 4장을 가져갔습니다.",
+      "en": "A bot won this trick and collected 4 point cards."
+    },
+    {
+      "ko": "당신이 이번 트릭을 이겨 점수 카드 5장을 가져갔습니다.",
+      "en": "You won this trick and collected 5 point cards."
+    },
+    {
+      "ko": "봇이 이번 트릭을 이겨 점수 카드 5장을 가져갔습니다.",
+      "en": "A bot won this trick and collected 5 point cards."
+    },
+    {
+      "ko": "마이티로 트릭 승리",
+      "en": "Win a trick with Mighty"
+    },
+    {
+      "ko": "♠A가 가장 강하므로 당신이 이 트릭을 이겼습니다.",
+      "en": "♠A is the strongest card, so you won this trick."
+    },
+    {
+      "ko": "최소화",
+      "en": "Minimize"
+    },
+    {
+      "ko": "펼치기",
+      "en": "Expand"
+    },
+    {
+      "ko": "트릭을 이긴 사람이 다음 트릭을 시작합니다.",
+      "en": "The trick winner leads the next trick."
+    },
+    {
+      "ko": "마이티에는 세 가지 역할이 있습니다",
+      "en": "Mighty has three roles"
+    },
+    {
+      "ko": "마이티에는 주공, 프렌드, 시민이라는 세 가지 역할이 있습니다.\n\n주공은 이번 게임을 이끌며, 특정 점수 이상 획득을 목표로 공약해 당선된 플레이어입니다. 강한 손패를 활용해 프렌드와 함께 목표 점수를 달성해야 승리합니다.",
+      "en": "The three roles in Mighty are declarer, friend and citizen.\n\nThe declarer leads the game, elected by bidding a target score. Use a strong hand and work with your friend to reach that target and win."
+    },
+    {
+      "ko": "프렌드 · 숨겨진 같은 팀",
+      "en": "Friend · a hidden teammate"
+    },
+    {
+      "ko": "프렌드는 주공이 선택한 숨겨진 주공팀의 일원입니다. 프렌드 카드(예: 마이티)를 내기 전까지는 주공을 포함한 다른 플레이어에게 정체가 공개되지 않습니다.\n\n프렌드는 자신의 역할을 알고 있으며, 시민들 사이에 숨어 주공을 도와야 합니다. 공개되면 이전에 모은 점수까지 주공팀 점수에 합산됩니다. 주공팀이 목표 점수를 달성하면 함께 승리합니다.",
+      "en": "The friend is a hidden member of the declarer’s team, chosen by the declarer. Until the friend card (such as Mighty) is played, their identity stays hidden from all other players, including the declarer.\n\nThe friend knows their own role and helps the declarer while hidden among the citizens. When revealed, all their points, including earlier points, count toward the declarer’s team. They win together by reaching the target."
+    },
+    {
+      "ko": "시민 · 주공팀의 목표를 막으세요",
+      "en": "Citizens · stop the declarer’s team"
+    },
+    {
+      "ko": "시민은 주공과 프렌드가 아닌 나머지 세 명의 플레이어입니다.\n\n주공팀(주공 + 프렌드)이 목표 점수를 달성하지 못하도록 점수 카드를 가져와야 합니다. 화면에서는 시민 팀을 수비팀이라고도 부릅니다.\n\n이번 연습에서는 직접 주공이 되어, 숨겨진 프렌드와 함께 플레이해 봅시다.",
+      "en": "The citizens are the other three players, excluding the declarer and friend.\n\nCollect point cards to prevent the declarer’s team (declarer + friend) from reaching its target. The game also calls citizens the defending team.\n\nIn this practice round, become the declarer and play alongside a hidden friend."
+    },
+    {
+      "ko": "♥Q로 다음 트릭 시작",
+      "en": "Lead the next trick with ♥Q"
+    },
+    {
+      "ko": "앞 트릭을 이겼으므로 다시 내가 먼저 냅니다.\n\n♥Q를 내보세요. 다른 플레이어에게 있는 ♥K는 ♥Q보다 강합니다.",
+      "en": "You won the previous trick, so you lead again.\n\nPlay ♥Q. Another player holds ♥K, which is stronger than ♥Q."
+    },
+    {
+      "ko": "♥Q를 내서 다음 트릭을 시작하세요.",
+      "en": "Play ♥Q to start the next trick."
+    },
+    {
+      "ko": "시민의 ♥K가 앞서고 있습니다",
+      "en": "A citizen’s ♥K is winning"
+    },
+    {
+      "ko": "시민이 ♥K를 내서 ♥Q를 앞섰습니다. 지금 트릭이 끝나면 점수를 시민 팀에게 빼앗깁니다.\n\n아직 마지막 플레이어가 카드를 내지 않았습니다. 확인을 눌러 마지막 카드를 살펴보세요.",
+      "en": "A citizen played ♥K, beating your ♥Q. If the trick ended now, the citizens would take the points.\n\nThe last player has not played yet. Press Confirm to see their card."
+    },
+    {
+      "ko": "첫 번째 연습 판을 준비중입니다...",
+      "en": "Preparing the first practice round..."
+    },
+    {
+      "ko": "두 번째 연습 판을 준비중입니다...",
+      "en": "Preparing the second practice round..."
+    },
+    {
+      "ko": "이번에는 ♥Q를 내서 숨겨진 프렌드가 어떻게 도와주는지 살펴봅시다.",
+      "en": "Play ♥Q to see how your hidden friend helps you."
     }
   ]
 }

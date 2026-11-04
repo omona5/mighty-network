@@ -49,6 +49,7 @@ assert.equal(winner(), 'D_K', 'resolved winner survives trick-number advancement
 room.trickComplete = false;
 room.ruleConfig = Rules.makeRuleConfig('HEART', false);
 const bot = room.players[1];
+bot.botPolicy = 'GreedyBot';
 const originalRandom = Math.random;
 try {
   for (const random of [0, 0.999]) {

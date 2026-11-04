@@ -15,6 +15,41 @@ public class OpponentHandsView : MonoBehaviour
     public CardView cardPrefab;
     public RectTransform root;
 
+    private TextMeshProUGUI countdownText;
+    private RectTransform countdownBox;
+    private RectTransform countdownName;
+    private RectTransform countdownPanel;
+    private Vector2 countdownPanelPosition;
+    private readonly Vector3[] countdownCorners = new Vector3[4];
+
+    public void SetActionCountdown(int seconds)
+    {
+        if (countdownBox == null || countdownName == null || countdownPanel == null) return;
+        bool visible = seconds > 0;
+        countdownBox.gameObject.SetActive(visible);
+        countdownPanel.anchoredPosition = countdownPanelPosition;
+        if (!visible) return;
+
+        countdownText.text = GameSettings.Language == "en"
+            ? "Time left: " + seconds + " s" : "남은 시간: " + seconds + " 초";
+        float badgeWidth = Mathf.Ceil(countdownText.GetPreferredValues(countdownText.text).x) + 24f;
+        RectTransform nameBox = countdownName.parent as RectTransform;
+        countdownBox.sizeDelta = new Vector2(badgeWidth, countdownName.sizeDelta.y + 8f);
+        // A separate sibling outside the player's box, aligned with the name row.
+        countdownBox.anchoredPosition = nameBox.anchoredPosition
+            + new Vector2(nameBox.rect.width * 0.5f + 12f, countdownName.anchoredPosition.y);
+
+        // Keep the pair inside the safe area on narrow screens without resizing the name box.
+        Canvas canvas = countdownPanel.GetComponentInParent<Canvas>();
+        if (canvas != null && root != null)
+        {
+            countdownBox.GetWorldCorners(countdownCorners);
+            float right = root.InverseTransformPoint(countdownCorners[2]).x;
+            float safeRight = root.rect.xMin + ResponsiveCanvas.SafeArea.xMax / canvas.scaleFactor - 16f;
+            float overflow = Mathf.Max(0f, right - safeRight);
+            countdownPanel.anchoredPosition = countdownPanelPosition - new Vector2(overflow, 0f);
+        }
+    }
     public struct SeatInfo
     {
         public string nickname;
@@ -593,6 +628,24 @@ public class OpponentHandsView : MonoBehaviour
             if (panelRt != null) panelRt.sizeDelta = new Vector2(boxW, boxH);
             textW = Mathf.Max(8f, boxW - inset - textRightReserve);
             nrt.sizeDelta = new Vector2(textW, lineH);
+            countdownName = nrt;
+            countdownPanel = panelRt;
+            countdownPanelPosition = panelRt != null ? panelRt.anchoredPosition : Vector2.zero;
+            GameObject badge = new GameObject("ActionCountdown", typeof(RectTransform), typeof(Image));
+            badge.transform.SetParent(parent, false);
+            countdownBox = badge.GetComponent<RectTransform>();
+            countdownBox.anchorMin = countdownBox.anchorMax = new Vector2(0.5f, 0.5f);
+            countdownBox.pivot = new Vector2(0f, 0.5f);
+            Image badgeImage = badge.GetComponent<Image>();
+            badgeImage.color = Color.black;
+            badgeImage.raycastTarget = false;
+            countdownText = UiTmp.Create(badge.transform, "Time", StatusFontSize, TextAnchor.MiddleCenter, Color.white);
+            countdownText.raycastTarget = false;
+            countdownText.textWrappingMode = TextWrappingModes.NoWrap;
+            countdownText.rectTransform.anchorMin = Vector2.zero;
+            countdownText.rectTransform.anchorMax = Vector2.one;
+            countdownText.rectTransform.offsetMin = countdownText.rectTransform.offsetMax = Vector2.zero;
+            badge.SetActive(false);
         }
 
         TextMeshProUGUI scoreText = UiTmp.Create(
