@@ -19,8 +19,15 @@ Pi SSH/IP는 준비되면 알려주면 된다.
 우선순위:
 
 1. **URL 쿼리** — `https://게임주소/?ws=wss://서버호스트`
-2. **WebGL 같은 호스트** — 페이지가 `https://x.com`이면 기본 `wss://x.com` (리버스 프록시 전제)
-3. **개발 기본값** — `ws://localhost:3000`
+2. **WebGL 운영 사이트** — `mighty-network.omona.dev` 또는 `omona5.github.io`에서 실행하면 `wss://game.omona.dev`에 연결한다.
+3. **그 외 WebGL 같은 호스트** — 페이지가 `https://x.com`이면 기본 `wss://x.com` (리버스 프록시 전제). 로컬/LAN의 호스트와 포트도 유지한다.
+4. **에디터/네이티브 개발 기본값** — `ws://localhost:3000`
+
+운영 주소는 `https://mighty-network.omona.dev/`이며 서버 주소를 쿼리에 자동 추가하지 않는다.
+이 정책은 C# 코드에 들어 있으므로 WebGL 재빌드가 필요하다. 새 빌드를 배포할 때 기존
+`index.html`의 `gamePageUrl`/`history.replaceState` 서버 쿼리 추가 코드는 가져오지 않는다.
+배포 저장소의 `CNAME`, `.nojekyll`은 유지하고, 루트 배포용 HTML의 base는 `./`로 설정한다.
+명시적으로 전달한 `?ws=`/`?server=`는 별도 서버를 테스트할 때 계속 사용할 수 있다.
 
 타이틀에서 자동 연결하고 연결 상태만 표시한다. 서버 연결 전에는 싱글/멀티플레이가
 비활성화되며, 5초 간격 자동 재접속과 수동「재접속 시도」버튼을 지원한다.

@@ -1,16 +1,19 @@
+using System;
 using UnityEngine;
 
 // ============================================================================
-// 서버 WebSocket URL 결정 우선순위 (WebGL/에디터 공통)
+// 서버 WebSocket URL 결정 우선순위
 //   1) URL 쿼리  ?ws=wss://host  또는  ?server=wss://host
-//   2) PlayerPrefs 키 "mighty.serverUrl"
-//   3) WebGL: 페이지와 같은 호스트 (https → wss, http → ws)
-//   4) Inspector 기본값 (개발용 ws://localhost:3000)
+//   2) WebGL 운영 사이트: ProductionUrl (서버 쿼리 자동 추가 없음)
+//   3) 그 외 WebGL: 페이지와 같은 호스트 (로컬/LAN 개발 유지)
+//   4) 에디터/네이티브: Inspector 기본값 (개발용 ws://localhost:3000)
+// Resolve()만 레거시 PlayerPrefs 값을 1번과 2번 사이에 적용한다.
 // ============================================================================
 public static class ServerUrlResolver
 {
     public const string PrefsKey = "mighty.serverUrl";
     public const string DefaultUrl = "ws://localhost:3000";
+    public const string ProductionUrl = "wss://game.omona.dev";
 
     // Automatic connection uses deployment configuration, not the retired URL field.
     public static string ResolveDefault(string inspectorDefault = DefaultUrl)
@@ -99,7 +102,11 @@ public static class ServerUrlResolver
 
     private static string FromPageHost()
     {
-        string abs = Application.absoluteURL;
+        return ResolvePageUrl(Application.absoluteURL);
+    }
+
+    internal static string ResolvePageUrl(string abs)
+    {
         if (string.IsNullOrEmpty(abs)) return null;
         try
         {
@@ -115,6 +122,12 @@ public static class ServerUrlResolver
             if (queryStart >= 0) hostEnd = Mathf.Min(hostEnd, queryStart);
             string hostPort = abs.Substring(hostStart, hostEnd - hostStart);
             if (string.IsNullOrEmpty(hostPort)) return null;
+
+            if (Uri.TryCreate(abs, UriKind.Absolute, out var page)
+                && (string.Equals(page.Host, "mighty-network.omona.dev", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(page.Host, "omona5.github.io", StringComparison.OrdinalIgnoreCase))
+                && (scheme == "https" || scheme == "http"))
+                return ProductionUrl;
 
             if (scheme == "https") return "wss://" + hostPort;
             if (scheme == "http") return "ws://" + hostPort;
